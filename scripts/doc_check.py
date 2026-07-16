@@ -29,6 +29,7 @@ def validate_title(title: str) -> tuple:
 
 
 def extract_keywords(title: str) -> list:
+    """从标题提取关键词"""
     parts = title.split('_')
     if len(parts) >= 3:
         keywords = parts[2:]
@@ -89,16 +90,8 @@ def main():
     if domain not in ALLOWED_DOMAINS:
         print(f"⚠️  一级领域 '{domain}' 不在标准列表中（{sorted(ALLOWED_DOMAINS)}），但可继续")
 
-    duplicate_result = check_duplicate_local(title)
-    if duplicate_result:
-        print(f"⚠️  发现 {len(duplicate_result)} 个可能重复的本地文档:")
-        for item in duplicate_result:
-            print(f"  - {item['path']}")
-            print(f"    标题: {item['title']}")
-            print(f"    匹配: {item['keyword']}")
-        print("请根据'同一概念判断'规则决定: 更新/合并/新建")
-    else:
-        print("✅ 未发现重复本地文档，可新建")
+    print()
+    print("请使用 flomo_memo_search 工具搜索 flomo 中是否有重复笔记")
 
 
 if __name__ == "__main__":
