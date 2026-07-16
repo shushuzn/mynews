@@ -1,0 +1,244 @@
+#!/usr/bin/env python3
+"""
+Pre-commit hook for mynews
+Validation rules:
+1. Only 11 approved top-level directories under answers/
+2. Only .md files checked (others skipped)
+3. Filename: Chinese/alphanumeric/_-(). allowed, no spaces, no special chars
+4. No path traversal (..)
+5. Exact depth: answers/domain/subdomain/file.md (exactly 4 parts/3 slashes)
+6. Document structure: must have ## 来源, ## 概述, ## 核心概念, ## 分类标签
+7. No non-standard sections (## 延伸阅读, ## 摘要, etc.)
+8. Source format: no URLs, no links, no parentheses, no colon-after-content
+9. Core concepts: must use ### subconcept format, no list items (-)
+10. Tags must be last section
+"""
+
+import subprocess
+import sys
+import re
+import os
+
+ALLOWED_TOP_DIRS = {
+    "医学", "安全", "技术", "政治", "教育科学", "法律",
+    "游戏", "社会科学", "管理", "经济", "自然科学"
+}
+
+ALLOWED_ROOT_FILES = {
+    "README.md", "SKILL.md", "AGENTS.md", "ROADMAP.md", "_sidebar.md",
+    "_welcome.md", "P0Audit.md", "setup_hooks.sh", ".gitignore"
+}
+
+FILENAME_PATTERN = re.compile(r'^[a-zA-Z0-9\u4e00-\u9fff()\.]+$')
+PATH_TRAVERSAL = re.compile(r'\.\.')
+
+FORBIDDEN_SECTIONS = {
+    "基本信息", "概念解释", "相关案例", "拓展思考", "起源",
+    "参考文献", "延伸阅读", "摘要", "引言", "结论", "开头",
+    "正文", "结语", "思考题", "应用场景"
+}
+
+REQUIRED_SECTIONS = ["来源", "概述", "核心概念", "分类标签"]
+
+LINK_PATTERN = re.compile(r'\[.+\]\(.+\)')
+COLON_AFTER_PATTERN = re.compile(r'\*\*[^:]+：')
+LIST_ITEM_PATTERN = re.compile(r'^- ', re.MULTILINE)
+
+
+def decode_git_path(path):
+    result = []
+    i = 0
+    while i < len(path):
+        if path[i] == '\\' and i+4 <= len(path) and path[i+1:i+4].isdigit():
+            octal_str = path[i+1:i+4]
+            result.append(int(octal_str, 8))
+            i += 4
+        else:
+            result.append(ord(path[i]))
+            i += 1
+    return bytes(result).decode('utf-8', errors='replace')
+
+
+def validate_filename(filename):
+    if not filename:
+        return False, "空文件名"
+    if ' ' in filename:
+        return False, "文件名包含空格"
+    if not FILENAME_PATTERN.match(filename):
+        return False, "文件名包含非法字符（允许：中文/字母/数字/_-().）"
+    return True, ""
+
+
+def validate_content(content):
+    errors = []
+
+    lines = content.split('\n')
+    sections_found = []
+    section_lines = {}
+
+    for i, line in enumerate(lines):
+        match = re.match(r'^\s*##\s+(.+)$', line)
+        if match:
+            section_name = match.group(1).strip()
+            sections_found.append((section_name, i))
+            section_lines[section_name] = i
+
+    for req in REQUIRED_SECTIONS:
+        if req not in [s[0] for s in sections_found]:
+            errors.append(f"缺少必需章节: ## {req}")
+
+    for section_name, _ in sections_found:
+        if section_name in FORBIDDEN_SECTIONS:
+            errors.append(f"使用非标准章节 ## {section_name} (禁止)")
+
+    if sections_found:
+        last_section = sections_found[-1][0]
+        if last_section != "分类标签":
+            errors.append(f"分类标签必须是文档最后一个章节，当前最后章节: ## {last_section}")
+
+        if "分类标签" in section_lines:
+            tags_line_num = section_lines["分类标签"]
+            next_section_line = len(lines)
+            for sname, sline in sections_found:
+                if sname == "分类标签":
+                    continue
+                if sline > tags_line_num and sline < next_section_line:
+                    next_section_line = sline
+
+            for i in range(tags_line_num + 1, next_section_line):
+                line = lines[i].strip()
+                if line and not line.startswith('#'):
+                    errors.append("## 分类标签 必须在一行内，禁止换行")
+                    break
+
+    if "来源" in section_lines:
+        source_start = section_lines["来源"]
+        source_end = section_lines.get("概述", len(lines))
+        source_content = '\n'.join(lines[source_start:source_end])
+
+        if LINK_PATTERN.search(source_content):
+            errors.append("## 来源 中禁止使用链接格式 [标题](链接)")
+        if re.search(r'[\(\)（）]', source_content):
+            errors.append("## 来源 中禁止使用括号（允许中文顿号分隔来源）")
+        if COLON_AFTER_PATTERN.search(source_content):
+            errors.append("## 来源 中禁止使用 **xxx：xxx 格式")
+
+    if "核心概念" in section_lines:
+        core_start = section_lines["核心概念"]
+        core_end = section_lines.get("分类标签", len(lines))
+        core_lines = lines[core_start:core_end]
+
+        in_code_block = False
+        has_list = False
+        for line in core_lines:
+            if line.strip().startswith('```'):
+                in_code_block = not in_code_block
+                continue
+            if not in_code_block and re.match(r'^-\s+', line):
+                has_list = True
+                break
+
+        if has_list:
+            errors.append("## 核心概念 中禁止使用列表格式 (- xxx)")
+
+    in_code_block = False
+    for line in lines:
+        if line.strip().startswith('```'):
+            in_code_block = not in_code_block
+            continue
+        if not in_code_block:
+            if re.match(r'^-\s+', line):
+                errors.append("文档正文禁止使用列表格式 (- xxx)")
+                break
+            if re.match(r'^\d+\.\s+', line):
+                errors.append("文档正文禁止使用有序列表格式 (1. xxx)")
+                break
+
+    return errors
+
+
+def main():
+    result = subprocess.run(
+        ["git", "diff-index", "--cached", "--name-only", "--diff-filter=AM", "HEAD"],
+        capture_output=True, text=True, encoding="utf-8"
+    )
+    staged_files = [f.strip().strip('"') for f in result.stdout.strip().split("\n") if f.strip()]
+
+    errors = []
+
+    for file in staged_files:
+        decoded_file = decode_git_path(file)
+
+        if not file.endswith(".md"):
+            continue
+
+        filename = os.path.basename(decoded_file)
+        if filename in ALLOWED_ROOT_FILES:
+            continue
+
+        if PATH_TRAVERSAL.search(decoded_file):
+            errors.append((file, "路径遍历 (..) 不允许"))
+            continue
+
+        parts = decoded_file.split(os.sep)
+
+        if len(parts) < 2:
+            errors.append((file, "缺少顶级目录"))
+            continue
+
+        if len(parts) != 4:
+            depth = len(parts) - 1
+            errors.append((file, f"路径深度必须是4层(answers/领域/二级领域/文件名.md)，当前{depth}层"))
+            continue
+
+        top_dir = parts[1]
+
+        if top_dir not in ALLOWED_TOP_DIRS:
+            errors.append((file, f"顶级目录 '{top_dir}' 不在白名单内"))
+            continue
+
+        valid, msg = validate_filename(filename)
+        if not valid:
+            errors.append((file, f"文件名问题: {msg}"))
+
+        if len(parts) == 4 and parts[0] == "answers":
+            try:
+                content_result = subprocess.run(
+                    ["git", "show", f":{file}"],
+                    capture_output=True, text=True, encoding="utf-8"
+                )
+                if content_result.returncode == 0:
+                    content_errors = validate_content(content_result.stdout)
+                    for err in content_errors:
+                        errors.append((file, f"内容格式: {err}"))
+            except Exception:
+                pass
+
+    if errors:
+        print("pre-commit hook 验证失败:")
+        print()
+        by_type = {}
+        for file, reason in errors:
+            if reason not in by_type:
+                by_type[reason] = []
+            by_type[reason].append(file)
+
+        for reason, files in by_type.items():
+            print(f"【{reason}】")
+            for f in files:
+                print(f"  - {f}")
+            print()
+
+        print("允许的顶级目录:", " ".join(sorted(ALLOWED_TOP_DIRS)))
+        print()
+        print("解决方案:")
+        print("1. 使用 python3 scripts/doc_check.py <标题> 检查并获取正确路径")
+        print("2. 文件名只允许: 中文/字母/数字/()/ .")
+        print("3. 路径格式: answers/领域/二级领域/文件名.md (必须4层)")
+        sys.exit(1)
+
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()
