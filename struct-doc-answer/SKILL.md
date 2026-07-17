@@ -144,8 +144,8 @@ description: Use when creating, generating, or producing structured theoretical/
 | 3 | `webfetch <URL>` | 获取完整内容（必须读完） |
 | 4 | 确定文件名 `领域_二级领域_知识点.md` | 文件名格式正确？三级结构？ |
 | 5 | 创建本地文档 `answers/领域/二级领域/文件名.md` | flomo 格式？标签在第一行？ |
-| 6 | `git add` → hook 验证 | 通过才能继续；hook 检测到同子目录相似标题会**警告** |
-| 7 | `flomo_memo_create` 上传 | 直接传本地文档内容 |
+| 6 | `git add -f <file>` → hook 验证 | `answers/` 在 `.gitignore` 中，必须用 `-f` 强制添加；hook 检测到同子目录相似标题会**警告** |
+| 7 | `flomo_memo_create` 上传 | 传之前将加粗标题中的 `_` 转义为 `\_`（flomo 会把 `_` 当斜体标记） |
 | 8 | `git reset HEAD~1` | 清除本地 commit（**不 push**） |
 
 **flomo 查重命中后的处理**：
@@ -345,9 +345,9 @@ answers/领域/二级领域/文件名.md
 | 1 | `flomo_memo_search` 查重 | **唯一权威查重方式**（必做） |
 | 2 | `webfetch` 获取原文 | 不得跳过 |
 | 3 | 创建本地文档（flomo 格式） | 第一行标签 + `**加粗**` 标题 |
-| 4 | `git add <file>` + `git commit` | hook 自动验证 |
+| 4 | `git add -f <file>` + `git commit` | `answers/` 在 `.gitignore` 中，必须 `-f`；hook 自动验证 |
 | 5 | 验证失败 | 修复格式重新 add/commit |
-| 6 | 验证通过 | `flomo_memo_create` 上传（直接传文档内容） |
+| 6 | 验证通过 | `flomo_memo_create` 上传（传之前将加粗标题 `_` 转义为 `\_`） |
 | 7 | `git reset HEAD~1` | 清除本地 commit（**永远不要 push**） |
 
 ### 9.4 ⚠️ answers 目录严格本地化（重要）
