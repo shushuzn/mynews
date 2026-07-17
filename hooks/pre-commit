@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 """
 Pre-commit hook for mynews
+
+USAGE:
+  文件路径: answers/领域/二级领域/知识点.md  (4层，不含空格)
+  文件名:  领域_二级领域_知识点.md         (3段式，段内不含空格)
+  标签:    第一行，≥3个，# 或 @ 前缀
+  标题:    **领域_二级领域_知识点**        (加粗，必须以 文件名前两段_ 开头)
+
 Validation rules:
 1. Only 11 approved top-level directories under answers/
 2. Only .md files checked (others skipped)
