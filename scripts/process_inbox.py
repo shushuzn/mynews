@@ -328,13 +328,10 @@ def process_file(filepath, args):
                 filename = parts[3]
                 name_no_ext = filename[:-3] if filename.endswith('.md') else filename
                 sub_parts = name_no_ext.split('_')
-                if len(sub_parts) < 3 or sub_parts[0] != parts[1] or sub_parts[1] != parts[2]:
-                    # 文件名漏了或前缀错了
+                if len(sub_parts) != 3 or sub_parts[0] != parts[1] or sub_parts[1] != parts[2]:
+                    # 文件名段数不对或前缀错了
                     old_path = full_path
-                    if len(sub_parts) < 3:
-                        new_filename = f"{parts[1]}_{parts[2]}_{filename}"
-                    else:
-                        new_filename = f"{parts[1]}_{parts[2]}_{'_'.join(sub_parts[2:])}.md"
+                    new_filename = f"{parts[1]}_{parts[2]}_{'_'.join(sub_parts[2:])}.md"
                     new_rel = f"answers/{parts[1]}/{parts[2]}/{new_filename}"
                     new_full = os.path.join(BASE_DIR, new_rel)
                     print(f"    [fix] 文件名修正: {filename} → {new_filename}")

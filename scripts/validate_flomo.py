@@ -45,7 +45,7 @@ def validate_filepath(filepath):
     filename = parts[3]
     name_no_ext = filename[:-3]
     name_parts = name_no_ext.split('_')
-    if len(name_parts) < 3:
+    if len(name_parts) != 3:
         errors.append(f"❌ 文件名必须三段式（领域_二级领域_知识点.md），当前 {len(name_parts)} 段: {filename}")
     return errors, parts[1], parts[2], filename
 
