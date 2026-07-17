@@ -18,7 +18,10 @@ import urllib.request
 import urllib.parse
 from pathlib import Path
 
-from mynews_utils import get_base_dir, get_opencode_bin, get_temp_dir, CrossPlatformLock
+from mynews_utils import (
+    get_base_dir, get_opencode_bin, get_temp_dir, CrossPlatformLock,
+    is_wechat_url, fetch_wechat_article
+)
 
 BASE_DIR = get_base_dir()
 INBOX_DIR = BASE_DIR / "_inbox"
@@ -100,6 +103,38 @@ def extract_source_info(filepath):
 
     actual_content = "\n".join(lines[content_start:]).strip()
     return source_url, source_type, feed_title, entry_id, actual_content
+
+
+def extract_wechat_if_needed(source_url, content, feed_title):
+    """
+    如果是微信公众号 URL 且内容为空或过短，尝试重新抓取
+    返回: (content, feed_title)
+    """
+    if not is_wechat_url(source_url):
+        return content, feed_title
+
+    # 如果已有有效内容（超过500字符），直接返回
+    if len(content) > 500:
+        print(f"  [wechat] 已有足够内容 ({len(content)} 字符)，跳过重新抓取")
+        return content, feed_title
+
+    print(f"  [wechat] 检测到微信公众号 URL，尝试重新抓取...")
+    print(f"    URL: {source_url[:60]}...")
+
+    text, source, error = fetch_wechat_article(source_url, use_cache=True)
+
+    if text:
+        print(f"  [wechat] 抓取成功 ({source})，内容长度: {len(text)} 字符")
+        # 从内容中提取标题
+        if not feed_title:
+            lines = text.strip().split("\n")
+            if lines:
+                feed_title = lines[0][:50]
+        return text, feed_title or source
+    else:
+        print(f"  [wechat] 抓取失败: {error}")
+        # 返回原始内容，让后续流程处理
+        return content, feed_title
 
 
 def move_to_failed(filepath, reason):
@@ -318,6 +353,9 @@ def process_file(filepath, args):
     """处理单个文件"""
     basename = Path(filepath).name
     source_url, source_type, feed_title, entry_id, content = extract_source_info(filepath)
+
+    # 微信公众号特殊处理：重新抓取正文
+    content, feed_title = extract_wechat_if_needed(source_url, content, feed_title)
 
     if not source_url:
         print(f"  No SOURCE_URL found, moving to failed")
