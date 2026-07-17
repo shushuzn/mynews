@@ -83,36 +83,39 @@ def validate_content(filepath, expected_domain, expected_subdomain, filename):
         if not title.startswith(file_prefix + '_'):
             errors.append(f"❌ 加粗标题 '{title}' 必须以 '{file_prefix}_' 开头")
 
-    # 检查来源行（必须是 "**来源**：xxx" 加粗格式）
+    # 检查来源行（必须是 "**来源**：xxx" 加粗格式，且位置正确）
+    # 位置：标签行（i=0） → 加粗标题 → 空行 → 来源行 → 空行 → 核心要点
     lines = content.split('\n')
-    source_line_found = False
+    found_bold_title_idx = -1
     for i, line in enumerate(lines):
-        stripped = line.strip()
-        if not stripped:
-            continue
-        if i == 0:
-            continue  # 标签行
-        if first_title_match and stripped == f"**{title}**":
-            continue  # 加粗标题
-        # 期望是 "**来源**：xxx" 加粗格式
-        if stripped.startswith("**来源**") or stripped.startswith("**来源:") or stripped.startswith("**来源："):
-            source_line_found = True
-            if "：" not in stripped and ":" not in stripped:
-                errors.append(f"❌ 来源行 '{stripped[:50]}' 缺少冒号")
+        if first_title_match and line.strip() == f"**{title}**":
+            found_bold_title_idx = i
             break
-        # 错例：用了 **出处**： 或不加粗的"来源："
-        if stripped.startswith("**出处") or stripped.startswith("**来源") is False and stripped.startswith("来源"):
-            if not stripped.startswith("**"):
-                errors.append(f"❌ 来源行 '{stripped[:50]}' 不加粗，必须是 '**来源**：xxx'（加粗）")
-            elif stripped.startswith("**出处"):
-                errors.append(f"❌ 来源行 '{stripped[:50]}' 用了错误标签 '出处'，应该是 '**来源**'")
-            source_line_found = True
-            break
-        # 第一个非空行不是来源
-        break
 
-    if not source_line_found:
-        errors.append("❌ 缺少 '**来源**：xxx' 加粗行（必须在加粗标题之后）")
+    if found_bold_title_idx < 0:
+        # 没有找到加粗标题（前面已经报错）
+        return errors
+
+    # 找加粗标题后的第一个非空行（跳过空行）
+    next_line_idx = -1
+    for i in range(found_bold_title_idx + 1, len(lines)):
+        if lines[i].strip():
+            next_line_idx = i
+            break
+
+    if next_line_idx < 0:
+        errors.append("❌ 加粗标题后没有任何内容（缺少空行后的来源行）")
+        return errors
+
+    source_line = lines[next_line_idx].strip()
+
+    if not (source_line.startswith("**来源**") or source_line.startswith("**来源：") or source_line.startswith("**来源:")):
+        errors.append(
+            f"❌ 加粗标题后第一行不是来源行（实际: '{source_line[:50]}'），"
+            f"必须是 '**来源**：xxx' 加粗格式"
+        )
+    elif "：" not in source_line and ":" not in source_line:
+        errors.append(f"❌ 来源行 '{source_line[:50]}' 缺少冒号")
 
     return errors
 
