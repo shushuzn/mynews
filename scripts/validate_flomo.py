@@ -84,7 +84,7 @@ def validate_content(filepath, expected_domain, expected_subdomain, filename):
             errors.append(f"❌ 加粗标题 '{title}' 必须以 '{file_prefix}_' 开头")
 
     # 检查来源行（必须是 "**来源**：xxx" 加粗格式，且位置正确）
-    # 位置：标签行（i=0） → 加粗标题 → 空行 → 来源行 → 空行 → 核心要点
+    # 位置：标签行（i=0） → 加粗标题 → 空行 → 来源行 → 空行 → 正文
     lines = content.split('\n')
     found_bold_title_idx = -1
     for i, line in enumerate(lines):
