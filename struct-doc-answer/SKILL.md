@@ -58,11 +58,7 @@ description: Use when creating, generating, or producing structured theoretical/
 
 **来源**：来源1、来源2
 
-**研究背景**：正文内容...
-
-**核心发现**：正文内容...
-
-**应用前景**：正文内容...
+正文段落直接写，不加粗，不分段标题。
 
 - 列表项 1
 - 列表项 2
@@ -70,10 +66,9 @@ description: Use when creating, generating, or producing structured theoretical/
 ```
 
 **说明**：
-- 加粗段落**用实际内容作标签**（如 `**研究背景**`、`**核心发现**`），不是"第一段加粗要点"等伪章节名
+- 正文直接写，不强制段落名
 - 来源行必须加粗：`**来源**：xxx`
-- 加粗段落长度：每段 1-5 句，避免长篇大论
-- 加粗段落数量：3-7 段，根据内容复杂度调整
+- 列表用 `-` 或 `1.`
 
 ### 2.1 允许的 flomo 语法
 
@@ -101,8 +96,8 @@ description: Use when creating, generating, or producing structured theoretical/
 
 每个文档通常包含：
 1. **标题**（`**领域_二级领域_知识点**`）— 第一个加粗段
-2. **来源行**（`来源：xxx、xxx`）
-3. **核心要点**（多个 `**加粗**` 段落，每个段落讲一个子主题）
+2. **来源行**（`**来源**：xxx、xxx`）
+3. **正文**（直接写，不强制段落名）
 4. **可选列表**（用 `-` 或 `1.` 列举要点）
 
 ### 2.4 标签规则
