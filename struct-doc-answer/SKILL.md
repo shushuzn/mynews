@@ -343,7 +343,7 @@ answers/领域/二级领域/文件名.md
 | 3 | 创建本地文档（flomo 格式） | 第一行标签 + `**加粗**` 标题 |
 | 4 | `git add -f <file>` + `git commit` | `answers/` 在 `.gitignore` 中，必须 `-f`；hook 自动验证 |
 | 5 | 验证失败 | `git reset HEAD` 清除 staged 状态，修复格式后重新 `git add -f` + commit |
-| 6 | 验证通过 | `memo_create` 上传（传之前将加粗标题 `_` 转义为 `\_`） |
+| 6 | 验证通过 | `memo_create` 上传（直接传本地文档内容，不需转义） |
 | 7 | `git reset HEAD~1` | 清除本地 commit（**永远不要 push**） |
 
 ### 9.4 ⚠️ answers 目录严格本地化（重要）
