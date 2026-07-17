@@ -5,7 +5,10 @@
 """
 
 import sys
-import os
+from pathlib import Path
+
+from mynews_utils import setup_windows_utf8
+setup_windows_utf8()
 
 # 唯一允许的一级领域（按文档数排序）
 ALLOWED_DOMAINS = {"医学", "安全", "技术", "政治", "教育科学", "法律", "游戏", "社会科学", "管理", "经济", "自然科学"}
@@ -14,27 +17,26 @@ def check_dir(domain: str, subdomain: str = None) -> dict:
     """
     检查目录是否存在，返回目录信息
     """
-    base = "answers"
+    base = Path("answers")
 
     if subdomain:
-        dir_path = f"{base}/{domain}/{subdomain}"
+        dir_path = base / domain / subdomain
     else:
-        dir_path = f"{base}/{domain}"
+        dir_path = base / domain
 
-    exists = os.path.isdir(dir_path)
+    exists = dir_path.is_dir()
     files = []
     subdirs = []
 
     if exists:
-        for item in os.listdir(dir_path):
-            item_path = os.path.join(dir_path, item)
-            if os.path.isdir(item_path):
-                subdirs.append(item)
-            elif item.endswith('.md'):
-                files.append(item)
+        for item in dir_path.iterdir():
+            if item.is_dir():
+                subdirs.append(item.name)
+            elif item.suffix == '.md':
+                files.append(item.name)
 
     return {
-        'path': dir_path,
+        'path': dir_path.as_posix(),
         'exists': exists,
         'files': files,
         'subdirs': subdirs

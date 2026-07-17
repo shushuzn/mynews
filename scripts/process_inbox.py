@@ -11,36 +11,39 @@ import os
 import sys
 import json
 import subprocess
-import glob
-import fcntl
 import time
 import argparse
 import shutil
+import re
+from pathlib import Path
 
-BASE_DIR = "/root/mynews"
-INBOX_DIR = os.path.join(BASE_DIR, "_inbox")
-DONE_DIR = os.path.join(BASE_DIR, "_inbox_done")
-FAILED_DIR = os.path.join(BASE_DIR, "_inbox_failed")
-PROCESSED_FILE = os.path.join(BASE_DIR, "data", "processed_urls.json")
-PROCESSING_FILE = os.path.join(BASE_DIR, "data", "processing_urls.json")
-SEEN_FILE = os.path.join(INBOX_DIR, ".seen_ids.json")
+from mynews_utils import get_base_dir, get_opencode_bin, get_temp_dir, CrossPlatformLock
+
+BASE_DIR = get_base_dir()
+INBOX_DIR = BASE_DIR / "_inbox"
+DONE_DIR = BASE_DIR / "_inbox_done"
+FAILED_DIR = BASE_DIR / "_inbox_failed"
+PROCESSED_FILE = BASE_DIR / "data" / "processed_urls.json"
+PROCESSING_FILE = BASE_DIR / "data" / "processing_urls.json"
+SEEN_FILE = INBOX_DIR / ".seen_ids.json"
 STALE_TIMEOUT = 1800
-EXEC_LOCK = os.path.join(BASE_DIR, "data", "opencode_run.lock")
+EXEC_LOCK = BASE_DIR / "data" / "opencode_run.lock"
 MAX_CONCURRENT = 1
-LOCK_FILE = "/tmp/inbox_processor.lock"
+LOCK_FILE = get_temp_dir() / "inbox_processor.lock"
 SUBAGENT_TIMEOUT = 900  # 15 分钟，单条文档处理全流程
-OPENCODE_BIN = "/root/.opencode/bin/opencode"
+OPENCODE_BIN = get_opencode_bin()
+PYTHON_BIN = sys.executable if sys.executable else ("python" if os.name == "nt" else "python3")
 
 # 确保所有目录存在
 for d in [INBOX_DIR, DONE_DIR, FAILED_DIR,
-          os.path.dirname(PROCESSED_FILE),
-          os.path.dirname(PROCESSING_FILE)]:
-    os.makedirs(d, exist_ok=True)
+          PROCESSED_FILE.parent,
+          PROCESSING_FILE.parent]:
+    d.mkdir(parents=True, exist_ok=True)
 
 
 def load_seen():
-    if os.path.exists(SEEN_FILE):
-        with open(SEEN_FILE) as f:
+    if SEEN_FILE.exists():
+        with SEEN_FILE.open(encoding="utf-8") as f:
             data = json.load(f)
             return set(data) if isinstance(data, list) else set(data.get("seen_ids", []))
     return set()
@@ -49,13 +52,14 @@ def load_seen():
 def save_seen(urls):
     existing = load_seen()
     updated = existing | set(urls)
-    with open(SEEN_FILE, "w") as f:
+    SEEN_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with SEEN_FILE.open("w", encoding="utf-8") as f:
         json.dump(sorted(list(updated)), f)
 
 
 def load_processed():
-    if os.path.exists(PROCESSED_FILE):
-        with open(PROCESSED_FILE) as f:
+    if PROCESSED_FILE.exists():
+        with PROCESSED_FILE.open(encoding="utf-8") as f:
             return set(json.load(f).get("processed_urls", []))
     return set()
 
@@ -63,19 +67,21 @@ def load_processed():
 def save_processed(urls):
     existing = load_processed()
     updated = existing | set(urls)
-    with open(PROCESSED_FILE, "w") as f:
+    PROCESSED_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with PROCESSED_FILE.open("w", encoding="utf-8") as f:
         json.dump({"processed_urls": sorted(list(updated))}, f, indent=2)
 
 
 def load_processing():
-    if os.path.exists(PROCESSING_FILE):
-        with open(PROCESSING_FILE) as f:
+    if PROCESSING_FILE.exists():
+        with PROCESSING_FILE.open(encoding="utf-8") as f:
             return json.load(f).get("processing_urls", {})
     return {}
 
 
 def save_processing_urls(processing_urls):
-    with open(PROCESSING_FILE, "w") as f:
+    PROCESSING_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with PROCESSING_FILE.open("w", encoding="utf-8") as f:
         json.dump({"processing_urls": processing_urls}, f, indent=2)
 
 
@@ -150,7 +156,7 @@ def build_prompt(source_type, source_url, content, filepath):
 **⚠️ 文件名三段式（hook 强制检查）**：
 文件名必须严格三段式 `<领域>_<二级领域>_<知识点>.md`，**不能省略前两段**！
 
-**重要 - 工作目录**：所有 shell 命令必须在 /root/mynews 目录下执行。
+**重要 - 工作目录**：所有 shell 命令必须在 {BASE_DIR} 目录下执行。
 
 **⚠️ 严禁操作**：
 - ❌ `git reset --hard` / 任何 git reset/clean/push
@@ -171,11 +177,11 @@ GitHub Commit 内容：
 SOURCE_URL: {source_url}
 
 **步骤**（只做 1-6 步，不调 flomo_memo_create，不做 git 操作）：
-1. `cd /root/mynews`
+1. `cd {BASE_DIR}`
 2. 调用 MCP 工具 `flomo_memo_search` 查重（搜主题关键词）
 3. 根据 commit 信息确定标题：`领域_二级领域_知识点` 三段式
-4. `python3 /root/mynews/scripts/title_to_path.py "<标题>"` 获取完整路径
-5. `python3 /root/mynews/scripts/check_dir.py <领域> <二级领域>` 确认目录存在
+4. `{PYTHON_BIN} {BASE_DIR / "scripts" / "title_to_path.py"} "<标题>"` 获取完整路径
+5. `{PYTHON_BIN} {BASE_DIR / "scripts" / "check_dir.py"} <领域> <二级领域>` 确认目录存在
 6. **创建本地文档** `answers/<领域>/<二级领域>/<知识点>.md`（flomo 格式：第一行标签 + `**加粗**` 标题，正文含来源、要点、相关事实）
 7. **不要调 `flomo_memo_create`**！由 process_inbox.py 审查通过后再调
 8. **不要做 `git add`、`git commit`、`git reset`**！由 process_inbox.py 接管
@@ -197,13 +203,13 @@ SOURCE_URL: {source_url}
 **任务（第 1 步：只创建文档，不上传 flomo）**：读取 inbox 文件 {filepath}，从中提取 SOURCE_URL，按 flomo 格式生成笔记。
 
 **步骤**（只做 1-7 步，不调 flomo_memo_create，不做 git 操作）：
-1. `cd /root/mynews`
+1. `cd {BASE_DIR}`
 2. 读取 inbox 文件 {filepath} 提取 SOURCE_URL（应是 {source_url}）
 3. 调用 MCP 工具 `flomo_memo_search` 查重（搜主题关键词 + 子领域）
 4. Webfetch SOURCE_URL 获取完整文章内容
 5. 从内容确定标题：`领域_二级领域_知识点` 三段式
-6. `python3 /root/mynews/scripts/title_to_path.py "<标题>"` 获取完整路径
-7. `python3 /root/mynews/scripts/check_dir.py <领域> <二级领域>` 确认目录存在
+6. `{PYTHON_BIN} {BASE_DIR / "scripts" / "title_to_path.py"} "<标题>"` 获取完整路径
+7. `{PYTHON_BIN} {BASE_DIR / "scripts" / "check_dir.py"} <领域> <二级领域>` 确认目录存在
 8. **创建本地文档** `answers/<领域>/<二级领域>/<知识点>.md`（flomo 格式：第一行标签 + `**加粗**` 标题，正文含来源、要点、相关事实）
 9. **不要调 `flomo_memo_create`**！由 process_inbox.py 审查通过后再调
 10. **不要做 `git add`、`git commit`、`git reset`**！由 process_inbox.py 接管
@@ -221,7 +227,7 @@ SOURCE_URL: {source_url}
 
 
 def process_file(filepath, args):
-    basename = os.path.basename(filepath)
+    basename = Path(filepath).name
     source_url, source_type, content = extract_source_info(filepath)
 
     if not source_url:
@@ -231,8 +237,9 @@ def process_file(filepath, args):
 
     if source_url in load_processed():
         print(f"  [{basename}] Already processed, removing")
-        if os.path.exists(filepath):
-            os.remove(filepath)
+        fp = Path(filepath)
+        if fp.exists():
+            fp.unlink()
         return True
 
     processing = load_processing()
@@ -257,7 +264,7 @@ def process_file(filepath, args):
     print(f"  Calling subagent (timeout {SUBAGENT_TIMEOUT}s)...")
     proc = subprocess.Popen(
         cmd,
-        cwd=BASE_DIR,
+        cwd=str(BASE_DIR),
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
@@ -284,7 +291,6 @@ def process_file(filepath, args):
     # 从 stdout 解析 subagent 创建的文件路径
     created_file = None
     if cleanup_success:
-        import re
         # 模式 1: 显式 CREATED_FILE: 标记
         m = re.search(r'CREATED_FILE:\s*(\S+\.md)', stdout)
         if m:
@@ -296,19 +302,18 @@ def process_file(filepath, args):
             if candidates:
                 created_file = candidates[0]
                 print(f"    [text detect] 创建文件: {created_file}")
-        # 模式 3: find 最新 answers/.../*.md
+        # 模式 3: 查找最新 answers/.../*.md
         if not created_file:
-            result = subprocess.run(
-                ["find", os.path.join(BASE_DIR, "answers"),
-                 "-name", "*.md", "-mmin", "-10", "-type", "f"],
-                capture_output=True, text=True
-            )
-            candidates = [c for c in result.stdout.strip().split("\n") if c]
-            if candidates:
-                # 取最近修改的
-                candidates.sort(key=lambda p: os.path.getmtime(p), reverse=True)
-                created_file = os.path.relpath(candidates[0], BASE_DIR)
-                print(f"    [fallback detect] 创建文件: {created_file}")
+            answers_dir = BASE_DIR / "answers"
+            if answers_dir.exists():
+                candidates = [
+                    p for p in answers_dir.rglob("*.md")
+                    if p.is_file() and (time.time() - p.stat().st_mtime) < 600
+                ]
+                if candidates:
+                    candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+                    created_file = candidates[0].relative_to(BASE_DIR).as_posix()
+                    print(f"    [fallback detect] 创建文件: {created_file}")
 
     if not created_file:
         error_msg = error_msg or "no_created_file_detected"
@@ -316,8 +321,8 @@ def process_file(filepath, args):
         print(f"    [error] 未检测到创建的文档")
 
     if cleanup_success and created_file:
-        full_path = os.path.join(BASE_DIR, created_file)
-        if not os.path.exists(full_path):
+        full_path = BASE_DIR / created_file
+        if not full_path.exists():
             cleanup_success = False
             error_msg = f"file_not_found: {created_file}"
             print(f"    [error] 文件不存在: {full_path}")
@@ -333,17 +338,17 @@ def process_file(filepath, args):
                     old_path = full_path
                     new_filename = f"{parts[1]}_{parts[2]}_{'_'.join(sub_parts[2:])}.md"
                     new_rel = f"answers/{parts[1]}/{parts[2]}/{new_filename}"
-                    new_full = os.path.join(BASE_DIR, new_rel)
+                    new_full = BASE_DIR / new_rel
                     print(f"    [fix] 文件名修正: {filename} → {new_filename}")
-                    os.rename(old_path, new_full)
+                    old_path.rename(new_full)
                     created_file = new_rel
                     full_path = new_full
 
             # ⚠️ 上传 flomo 前的格式审查（在 commit 前）
-            validate_script = os.path.join(BASE_DIR, "scripts", "validate_flomo.py")
-            if os.path.exists(validate_script):
+            validate_script = BASE_DIR / "scripts" / "validate_flomo.py"
+            if validate_script.exists():
                 val_result = subprocess.run(
-                    ["python3", validate_script, full_path],
+                    [sys.executable, str(validate_script), str(full_path)],
                     capture_output=True, text=True
                 )
                 if val_result.returncode == 0:
@@ -358,9 +363,9 @@ def process_file(filepath, args):
 
             if not cleanup_success:
                 # 审查失败：删除 subagent 创建的临时文件
-                if os.path.exists(full_path):
+                if full_path.exists():
                     try:
-                        os.remove(full_path)
+                        full_path.unlink()
                         print(f"    [cleanup] 删除审查失败的临时文件: {created_file}")
                     except Exception as e:
                         print(f"    [warn] 删除失败: {e}")
@@ -369,7 +374,7 @@ def process_file(filepath, args):
             # process_inbox 接管 git 操作
             add_result = subprocess.run(
                 ["git", "add", "-f", created_file],
-                cwd=BASE_DIR, capture_output=True, text=True
+                cwd=str(BASE_DIR), capture_output=True, text=True
             )
             if add_result.returncode != 0:
                 cleanup_success = False
@@ -377,11 +382,11 @@ def process_file(filepath, args):
                 print(f"    [error] git add 失败: {error_msg}")
             else:
                 # git commit
-                title = os.path.basename(created_file).replace(".md", "")
+                title = Path(created_file).name.replace(".md", "")
                 commit_msg = f"创建 {title}"
                 commit_result = subprocess.run(
                     ["git", "commit", "-m", commit_msg],
-                    cwd=BASE_DIR, capture_output=True, text=True
+                    cwd=str(BASE_DIR), capture_output=True, text=True
                 )
                 if commit_result.returncode != 0 or "验证失败" in commit_result.stderr:
                     print(f"    [warn] commit 失败:")
@@ -392,12 +397,12 @@ def process_file(filepath, args):
                     # git reset HEAD~1 (不 hard)
                     reset_result = subprocess.run(
                         ["git", "reset", "HEAD~1"],
-                        cwd=BASE_DIR, capture_output=True, text=True
+                        cwd=str(BASE_DIR), capture_output=True, text=True
                     )
                     if reset_result.returncode == 0:
                         print(f"    [git] add -f + commit + reset HEAD~1 OK")
                         # 第 2 步：审查通过 + git OK → 上传 flomo
-                        flomo_ok, flomo_info = upload_to_flomo(full_path, source_url)
+                        flomo_ok, flomo_info = upload_to_flomo(str(full_path), source_url)
                         if not flomo_ok:
                             print(f"    [flomo] 上传失败: {flomo_info}")
                             # flomo 失败但答案文件在 working tree
@@ -427,21 +432,21 @@ def _finish_file(filepath, source_url, cleanup_success, error_msg):
 
 
 def move_to_done(filepath):
-    dest = os.path.join(DONE_DIR, os.path.basename(filepath))
-    if os.path.exists(dest):
-        os.remove(dest)
-    shutil.move(filepath, dest)
+    dest = DONE_DIR / Path(filepath).name
+    if dest.exists():
+        dest.unlink()
+    shutil.move(str(filepath), str(dest))
     print(f"    [moved] → _inbox_done/")
 
 
 def move_to_failed(filepath, reason):
-    dest = os.path.join(FAILED_DIR, os.path.basename(filepath))
-    if os.path.exists(dest):
-        os.remove(dest)
-    shutil.move(filepath, dest)
+    dest = FAILED_DIR / Path(filepath).name
+    if dest.exists():
+        dest.unlink()
+    shutil.move(str(filepath), str(dest))
     # 写入失败原因
-    reason_file = dest + ".reason"
-    with open(reason_file, "w") as f:
+    reason_file = dest.with_suffix(dest.suffix + ".reason")
+    with reason_file.open("w", encoding="utf-8") as f:
         f.write(f"{reason}\n")
     print(f"    [moved] → _inbox_failed/ ({reason})")
 
@@ -450,7 +455,7 @@ def get_next_file(source_type_filter="all"):
     processed = load_processed()
     processing = load_processing()
 
-    files = sorted(glob.glob(os.path.join(INBOX_DIR, "*.md")))
+    files = sorted([str(p) for p in INBOX_DIR.glob("*.md")])
 
     for f in files:
         source_url, source_type, _ = extract_source_info(f)
@@ -479,7 +484,6 @@ def upload_to_flomo(filepath, source_url):
 
     # flomo 平台会把加粗标题里的 _ 解释为 markdown 斜体标记并转义为 \_
     # 解决方法：上传前把加粗标题里的 _ 替换为 \_（flomo 显示时会去掉 \）
-    import re
     def escape_underscore_in_bold(match):
         return "**" + match.group(1).replace("_", "\\_") + "**"
     content_escaped = re.sub(
@@ -509,13 +513,12 @@ def upload_to_flomo(filepath, source_url):
 
     cmd = [OPENCODE_BIN, "run", "--agent", "doc-generator", upload_prompt]
     proc = subprocess.Popen(
-        cmd, cwd=BASE_DIR,
+        cmd, cwd=str(BASE_DIR),
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
     )
     try:
         stdout, stderr = proc.communicate(timeout=300)
         if proc.returncode == 0:
-            import re
             m = re.search(r'FLOMO_ID:\s*(\S+)', stdout)
             if m:
                 print(f"    [flomo] 上传成功 id={m.group(1)}")
@@ -539,12 +542,11 @@ def main():
     parser.add_argument("--verbose", "-v", action="store_true", help="显示 subagent 输出")
     args = parser.parse_args()
 
-    lock_fd = open(LOCK_FILE, 'w')
     try:
-        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        lock = CrossPlatformLock(LOCK_FILE)
+        lock.acquire(blocking=False)
     except BlockingIOError:
         print("Another instance is running, exiting")
-        lock_fd.close()
         return
 
     print(f"mynews inbox processor")
@@ -570,8 +572,7 @@ def main():
         if count == 0:
             print("No new files to process")
     finally:
-        if os.path.exists(LOCK_FILE):
-            os.remove(LOCK_FILE)
+        lock.release()
 
 
 if __name__ == "__main__":

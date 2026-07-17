@@ -11,23 +11,25 @@ import urllib.request
 import os
 import base64
 import hashlib
-import fcntl
+from pathlib import Path
+
+from mynews_utils import get_base_dir, get_temp_dir, CrossPlatformLock
 
 MINIFLUX_URL = "http://127.0.0.1:8080"
 AUTH = ("admin", "admin123")
-STATE_FILE = "/root/mynews/data/processed_urls.json"
-PROCESSING_FILE = "/root/mynews/data/processing_urls.json"
-data_dir = os.path.dirname(PROCESSING_FILE)
-if data_dir and not os.path.exists(data_dir):
-    os.makedirs(data_dir, exist_ok=True)
+BASE_DIR = get_base_dir()
+STATE_FILE = BASE_DIR / "data" / "processed_urls.json"
+PROCESSING_FILE = BASE_DIR / "data" / "processing_urls.json"
 POLL_INTERVAL = 300  # 5分钟
 BATCH_SIZE = 100
 PROCESSING_TIMEOUT = 600  # 10分钟
-LOCK_FILE = "/tmp/miniflux_processor.lock"
-BASE_DIR = "/root/mynews"
-INBOX_DIR = os.path.join(BASE_DIR, "_inbox")
-SEEN_FILE = os.path.join(INBOX_DIR, ".seen_ids.json")
+LOCK_FILE = get_temp_dir() / "miniflux_processor.lock"
+INBOX_DIR = BASE_DIR / "_inbox"
+SEEN_FILE = INBOX_DIR / ".seen_ids.json"
 INBOX_MAX_FILES = 10000
+
+# 确保数据目录存在
+PROCESSING_FILE.parent.mkdir(parents=True, exist_ok=True)
 
 GITHUB_REPOS = [
     "leanprover-community/mathlib4",
@@ -50,7 +52,7 @@ def write_to_inbox(entry):
     else:
         filename = f"mf_{entry_id}.md"
 
-    filepath = os.path.join(INBOX_DIR, filename)
+    filepath = INBOX_DIR / filename
 
     lines = [
         f"# SOURCE_URL\n{url}",
@@ -83,30 +85,30 @@ def get_json(path):
 
 
 def load_processed():
-    if os.path.exists(STATE_FILE):
-        with open(STATE_FILE) as f:
+    if STATE_FILE.exists():
+        with STATE_FILE.open(encoding="utf-8") as f:
             return set(json.load(f).get("processed_urls", []))
     return set()
 
 
 def save_processed(urls):
-    os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
+    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
     existing = load_processed()
     updated = existing | set(urls)
-    with open(STATE_FILE, "w") as f:
+    with STATE_FILE.open("w", encoding="utf-8") as f:
         json.dump({"processed_urls": sorted(list(updated))}, f, indent=2)
 
 
 def load_processing():
-    if os.path.exists(PROCESSING_FILE):
-        with open(PROCESSING_FILE) as f:
+    if PROCESSING_FILE.exists():
+        with PROCESSING_FILE.open(encoding="utf-8") as f:
             return json.load(f).get("processing_urls", {})
     return {}
 
 
 def save_processing_urls(processing_urls):
-    os.makedirs(os.path.dirname(PROCESSING_FILE), exist_ok=True)
-    with open(PROCESSING_FILE, "w") as f:
+    PROCESSING_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with PROCESSING_FILE.open("w", encoding="utf-8") as f:
         json.dump({"processing_urls": processing_urls}, f, indent=2)
 
 
@@ -129,17 +131,17 @@ def cleanup_stale_processing():
 
 
 def load_seen():
-    if os.path.exists(SEEN_FILE):
-        with open(SEEN_FILE) as f:
+    if SEEN_FILE.exists():
+        with SEEN_FILE.open(encoding="utf-8") as f:
             return set(json.load(f))
     return set()
 
 
 def save_seen(urls):
-    os.makedirs(os.path.dirname(SEEN_FILE), exist_ok=True)
+    SEEN_FILE.parent.mkdir(parents=True, exist_ok=True)
     existing = load_seen()
     updated = existing | set(urls)
-    with open(SEEN_FILE, "w") as f:
+    with SEEN_FILE.open("w", encoding="utf-8") as f:
         json.dump(sorted(list(updated)), f, indent=2)
 
 
@@ -247,13 +249,10 @@ def process_entry(entry):
     title = entry.get("title", "untitled")
     entry_id = entry.get("id", "")
 
-    lock_fd = os.open(PROCESSING_FILE + ".lock", os.O_CREAT | os.O_RDWR)
-    try:
-        fcntl.flock(lock_fd, fcntl.LOCK_EX)
-
+    processing_lock = PROCESSING_FILE.parent / (PROCESSING_FILE.name + ".lock")
+    with CrossPlatformLock(processing_lock):
         processing = load_processing()
         if url in processing:
-            fcntl.flock(lock_fd, fcntl.LOCK_UN)
             print(f"  [{entry_id}] {title[:60]}")
             print(f"     URL: {url}")
             print(f"     Being processed by another instance, skipping")
@@ -261,7 +260,6 @@ def process_entry(entry):
 
         seen = load_seen()
         if url in seen:
-            fcntl.flock(lock_fd, fcntl.LOCK_UN)
             print(f"  [{entry_id}] {title[:60]}")
             print(f"     URL: {url}")
             print(f"     Already seen, skipping")
@@ -269,26 +267,17 @@ def process_entry(entry):
 
         processing[url] = time.time()
         save_processing_urls(processing)
-        fcntl.flock(lock_fd, fcntl.LOCK_UN)
-    except Exception:
-        fcntl.flock(lock_fd, fcntl.LOCK_UN)
-        raise
 
-    os.makedirs(INBOX_DIR, exist_ok=True)
+    INBOX_DIR.mkdir(parents=True, exist_ok=True)
     filepath = write_to_inbox(entry)
 
-    lock_fd2 = os.open(PROCESSING_FILE + ".lock", os.O_CREAT | os.O_RDWR)
-    try:
-        fcntl.flock(lock_fd2, fcntl.LOCK_EX)
+    with CrossPlatformLock(processing_lock):
         remove_processing(url)
         save_seen([url])
-        fcntl.flock(lock_fd2, fcntl.LOCK_UN)
-    finally:
-        os.close(lock_fd2)
 
     print(f"  [{entry_id}] {title[:60]}")
     print(f"     URL: {url}")
-    print(f"     Written to inbox: {os.path.basename(filepath)}")
+    print(f"     Written to inbox: {Path(filepath).name}")
     return True
 
 
@@ -301,24 +290,25 @@ def is_process_alive(pid):
 
 
 def trim_inbox():
+    if not INBOX_DIR.exists():
+        return
     files = sorted(
-        (os.path.join(INBOX_DIR, f) for f in os.listdir(INBOX_DIR) if f.endswith(".md")),
-        key=os.path.getmtime
+        [f for f in INBOX_DIR.iterdir() if f.is_file() and f.suffix == ".md"],
+        key=lambda p: p.stat().st_mtime
     )
     if len(files) > INBOX_MAX_FILES:
         to_delete = files[:len(files) - INBOX_MAX_FILES]
         for f in to_delete:
-            os.remove(f)
+            f.unlink()
         print(f"  Trimmed {len(to_delete)} oldest inbox files (limit {INBOX_MAX_FILES})")
 
 
 def main(daemon=False):
-    lock_fd = open(LOCK_FILE, 'w')
     try:
-        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        lock = CrossPlatformLock(LOCK_FILE)
+        lock.acquire(blocking=False)
     except BlockingIOError:
         print("Another instance is running, exiting")
-        lock_fd.close()
         return
 
     seen_count = len(load_seen())
@@ -343,8 +333,7 @@ def main(daemon=False):
                 break
             time.sleep(POLL_INTERVAL)
     finally:
-        if os.path.exists(LOCK_FILE):
-            os.remove(LOCK_FILE)
+        lock.release()
 
 
 if __name__ == "__main__":

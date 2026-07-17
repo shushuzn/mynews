@@ -8,10 +8,12 @@
 
 import sys
 import re
-import os
 from pathlib import Path
 
-BASE_DIR = "answers"
+from mynews_utils import setup_windows_utf8
+setup_windows_utf8()
+
+BASE_DIR = Path("answers")
 
 # 唯一允许的一级领域（按文档数排序）
 ALLOWED_DOMAINS = {"医学", "安全", "技术", "政治", "教育科学", "法律", "游戏", "社会科学", "管理", "经济", "自然科学"}
@@ -75,28 +77,27 @@ def title_to_path(title: str) -> tuple:
     domain = parts[0]
     subdomain = parts[1]
     filename_parts = parts[2:]
-    dir_path = f"{BASE_DIR}/{domain}/{subdomain}"
     filename = '_'.join(filename_parts) + ".md"
-    full_path = f"{dir_path}/{filename}"
-    return full_path, dir_path, filename
+    dir_path = BASE_DIR / domain / subdomain
+    full_path = dir_path / filename
+    return full_path.as_posix(), dir_path.as_posix(), filename
 
 
 def check_dir(domain: str, subdomain: str) -> dict:
-    dir_path = f"{BASE_DIR}/{domain}/{subdomain}"
-    exists = os.path.isdir(dir_path)
+    dir_path = BASE_DIR / domain / subdomain
+    exists = dir_path.is_dir()
     files = []
     subdirs = []
 
     if exists:
-        for item in os.listdir(dir_path):
-            item_path = os.path.join(dir_path, item)
-            if os.path.isdir(item_path):
-                subdirs.append(item)
-            elif item.endswith('.md'):
-                files.append(item)
+        for item in dir_path.iterdir():
+            if item.is_dir():
+                subdirs.append(item.name)
+            elif item.suffix == '.md':
+                files.append(item.name)
 
     return {
-        'path': dir_path,
+        'path': dir_path.as_posix(),
         'exists': exists,
         'files': files,
         'subdirs': subdirs
@@ -125,14 +126,14 @@ def main():
         print(f"❌ 一级领域 '{domain}' 不在允许列表中（仅允许：{sorted(ALLOWED_DOMAINS)}），禁止新建")
         sys.exit(1)
 
-    if not os.path.isdir(os.path.join(BASE_DIR, domain)):
+    if not (BASE_DIR / domain).is_dir():
         print(f"❌ 一级领域 '{domain}' 不存在，禁止新建")
         sys.exit(1)
 
     dir_result = check_dir(domain, subdomain)
 
     if not dir_result['exists']:
-        os.makedirs(dir_result['path'], exist_ok=True)
+        Path(dir_result['path']).mkdir(parents=True, exist_ok=True)
         print("✅ 目录已创建，重复检查跳过")
 
     duplicate_result = check_duplicate(title)

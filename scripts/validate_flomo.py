@@ -18,6 +18,10 @@ mynews 答案文档格式审查工具
 import sys
 import re
 import os
+from pathlib import Path
+
+from mynews_utils import setup_windows_utf8
+setup_windows_utf8()
 
 SIGNAL_TYPES = {'#趋势信号', '#知识基座', '#信号笔记', '#分析框架', '#知识载体'}
 FORBIDDEN_PATTERNS = [
@@ -36,7 +40,7 @@ def validate_filepath(filepath):
         return [f"❌ 文件必须 .md 后缀"]
     errors = []
     rel = os.path.relpath(filepath)
-    parts = rel.split('/')
+    parts = Path(rel).parts
     if len(parts) != 4 or parts[0] != 'answers':
         errors.append(f"❌ 路径必须 answers/领域/二级领域/文件名.md (4 层)，当前: {rel}")
         return errors

@@ -6,7 +6,7 @@
 
 import sys
 import re
-import os
+from pathlib import Path
 
 def title_to_path(title: str) -> str:
     """
@@ -28,11 +28,11 @@ def title_to_path(title: str) -> str:
     filename_parts = parts[2:]  # 知识点（可能多段）
 
     # 构建路径
-    dir_path = f"answers/{domain}/{subdomain}"
     filename = '_'.join(filename_parts) + ".md"
-    full_path = f"{dir_path}/{filename}"
+    dir_path = Path("answers") / domain / subdomain
+    full_path = dir_path / filename
 
-    return full_path, dir_path, filename
+    return full_path.as_posix(), dir_path.as_posix(), filename
 
 def validate_title(title: str) -> bool:
     """验证标题格式"""
