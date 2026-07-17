@@ -80,7 +80,7 @@ description: Use when creating, generating, or producing structured theoretical/
 
 **说明**：
 - 文件名：`领域_二级领域_知识点.md`（三段式）
-- 来源行：`**来源**：xxx`（加粗，必须在加粗标题后第一行）
+- 来源行：`**来源**：xxx`（加粗，必须是加粗标题后第一个非空行）
 - 概述和核心概念的内容直接写，**不**加 `##` 标题（flomo 不支持），也不强制段落名
 - 子概念用 `**子概念名**` 形式
 

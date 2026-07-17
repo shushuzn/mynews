@@ -1,0 +1,31 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "skills": {
+    "paths": ["."]
+  },
+  "permission": {
+    "edit": {
+      ".git/**": "deny",
+      "hooks/pre-commit": "deny",
+      "opencode.json": "deny",
+      "*": "allow"
+    },
+    "bash": {
+      "*chattr*": "deny",
+      "*chmod*444*": "deny",
+      "*chmod*555*": "deny",
+      "*>>*hooks*": "deny",
+      "*>>*pre-commit*": "deny",
+      "*> *hooks*": "deny",
+      "*> *pre-commit*": "deny",
+      "*mv*hooks*": "deny",
+      "*cp*hooks*": "deny",
+      "*ln*hooks*": "deny",
+      "sed*pre-commit*": "deny",
+      "awk*pre-commit*": "deny",
+      "cat>*pre-commit*": "deny",
+      "chmod * hooks*": "deny",
+      "chmod * pre-commit*": "deny"
+    }
+  }
+}
