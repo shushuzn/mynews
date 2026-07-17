@@ -118,17 +118,19 @@ def validate_content(content, filename):
                 found_title_idx = i
                 break
 
-        if found_title_idx >= 0:
-            next_line_idx = -1
-            for i in range(found_title_idx + 1, len(lines)):
-                if lines[i].strip():
-                    next_line_idx = i
-                    break
+        # 检查来源行
+        has_source = bool(re.search(r'\*\*来源[：:]\s*.+', content))
+        if not has_source:
+            errors.append("缺少来源行，必须是 '**来源**：xxx' 或 '**来源: xxx'")
 
-            if next_line_idx >= 0:
-                source_line = lines[next_line_idx].strip()
-                if not (source_line.startswith("**来源**") or source_line.startswith("**来源：") or source_line.startswith("**来源:")):
-                    errors.append(f"加粗标题后第一个非空行不是来源行（'{source_line[:40]}'），必须是 '**来源**：xxx'")
+        # 检查概念和子概念
+        has_concept = bool(re.search(r'^\*\*概念\*\*：', content, re.MULTILINE))
+        if not has_concept:
+            errors.append("缺少 '**概念**：xxx' 段落")
+
+        has_subconcept = bool(re.search(r'^\*\*子概念\*\*[：:]', content, re.MULTILINE))
+        if not has_subconcept:
+            errors.append("缺少 '**子概念**：' 段落")
 
     return errors
 

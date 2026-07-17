@@ -64,16 +64,9 @@ description: Use when creating, generating, or producing structured theoretical/
 
 **来源**：来源1、来源2
 
-<mark>核心概念</mark>第一句精确定义。<mark>核心数据或结论</mark>用高亮强调。第二句<u>背景与现实意义</u>。
+**概念**：<mark>核心概念</mark>第一句精确定义。<mark>核心数据或结论</mark>用高亮强调。第二句<u>背景与现实意义</u>。
 
-**子概念一**
-
-先给出精确定义，再解释核心逻辑或运作机制，<mark>关键术语</mark>用高亮。
-
-**子概念二**
-
-（同上结构）
-
+**子概念**：
 - <mark>关键发现一</mark>：高亮要展示核心数据
 - <mark>关键发现二</mark>：高亮关键实体名称
 ```
@@ -81,8 +74,8 @@ description: Use when creating, generating, or producing structured theoretical/
 **说明**：
 - 文件名：`领域_二级领域_知识点.md`（三段式）
 - 来源行：`**来源**：xxx`（加粗，必须是加粗标题后第一个非空行）
-- 概述和核心概念的内容直接写，**不**加 `##` 标题（flomo 不支持），也不强制段落名
-- 子概念用 `**子概念名**` 形式
+- 概念行：`**概念**：xxx`（来源行下面紧跟的第一段）
+- 子概念行：`**子概念**：xxx`（后面的要点列表）
 
 ### 2.1 允许的 flomo 语法
 
