@@ -299,6 +299,27 @@ def process_file(filepath, args):
                     print(f"    [fix] 文件名修正: {filename} → {new_filename}")
                     os.rename(old_path, new_full)
                     created_file = new_rel
+                    full_path = new_full
+
+            # ⚠️ 上传 flomo 前的格式审查（在 commit 前）
+            validate_script = os.path.join(BASE_DIR, "scripts", "validate_flomo.py")
+            if os.path.exists(validate_script):
+                val_result = subprocess.run(
+                    ["python3", validate_script, full_path],
+                    capture_output=True, text=True
+                )
+                if val_result.returncode == 0:
+                    print(f"    [validate] 格式审查通过")
+                else:
+                    print(f"    [validate] 格式审查失败:")
+                    print(f"    {val_result.stdout[:500]}")
+                    cleanup_success = False
+                    error_msg = f"format_validation_failed: {val_result.stdout[:200]}"
+            else:
+                print(f"    [warn] validate_flomo.py 不存在，跳过审查")
+
+            if not cleanup_success:
+                return _finish_file(filepath, source_url, cleanup_success, error_msg)
 
             # process_inbox 接管 git 操作
             add_result = subprocess.run(
@@ -334,6 +355,10 @@ def process_file(filepath, args):
                         print(f"    [warn] reset 失败: {reset_result.stderr[:200]}")
 
     remove_processing(source_url)
+    return _finish_file(filepath, source_url, cleanup_success, error_msg)
+
+
+def _finish_file(filepath, source_url, cleanup_success, error_msg):
     if cleanup_success:
         save_processed([source_url])
         try:
@@ -345,7 +370,6 @@ def process_file(filepath, args):
             move_to_failed(filepath, error_msg or "subagent_failed")
         except FileNotFoundError:
             print(f"    [note] inbox 文件已被 subagent 移走，跳过 move")
-
     return cleanup_success
 
 
