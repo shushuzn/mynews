@@ -136,47 +136,61 @@ def build_prompt(source_type, source_url, content, filepath):
     if source_type == "github_commit":
         return f"""{common}
 
-**任务**：处理以下 GitHub Commit 信息，生成结构化 flomo 笔记。
+**任务（第 1 步：只创建文档，不上传 flomo）**：处理以下 GitHub Commit 信息，生成结构化 flomo 笔记。
 
 GitHub Commit 内容：
 {content}
 
 SOURCE_URL: {source_url}
 
-**步骤**（每步用 shell 命令执行，所有命令都在 /root/mynews 目录）：
+**步骤**（只做 1-6 步，不调 flomo_memo_create，不做 git 操作）：
 1. `cd /root/mynews`
 2. 调用 MCP 工具 `flomo_memo_search` 查重（搜主题关键词）
 3. 根据 commit 信息确定标题：`领域_二级领域_知识点` 三段式
 4. `python3 /root/mynews/scripts/title_to_path.py "<标题>"` 获取完整路径
-5. `python3 /root/mynews/scripts/check_dir.py <领域> <二级领域>` 确认目录
-6. 创建本地文档 `answers/<领域>/<二级领域>/<知识点>.md`（flomo 格式：第一行标签 + `**加粗**` 标题）
-7. `cd /root/mynews && git add <完整路径> && git commit -m "<message>"`（hook 自动验证 flomo 格式）
-8. `cd /root/mynews && flomo_memo_create` 上传本地文档内容
-9. `cd /root/mynews && git reset HEAD~1` 清除本地 commit（**严禁用 --hard，会删工作树文件！**）
+5. `python3 /root/mynews/scripts/check_dir.py <领域> <二级领域>` 确认目录存在
+6. **创建本地文档** `answers/<领域>/<二级领域>/<知识点>.md`（flomo 格式：第一行标签 + `**加粗**` 标题，正文含来源、要点、相关事实）
+7. **不要调 `flomo_memo_create`**！由 process_inbox.py 审查通过后再调
+8. **不要做 `git add`、`git commit`、`git reset`**！由 process_inbox.py 接管
+9. **退出即可**
 
-不要提问，直接处理并报告处理结果。"""
+**重要**：
+- 文档必须用 flomo 格式（不是 4 章节）
+- 文件名三段式 `领域_二级领域_知识点.md`，不能省略前缀
+- 严禁 `git reset --hard`（会删工作树文件）
+- **不要调 `flomo_memo_create`**（审查失败时会造成 flomo 残留）
+- 退出前确保 answers/.../xxx.md 文件已存在
+- **退出时打印 `echo "CREATED_FILE: answers/领域/二级领域/知识点.md"`**（让 process_inbox.py 接管 git）
+
+不要提问，直接处理并报告。"""
 
     else:  # rss_entry
         return f"""{common}
 
-**任务**：读取 inbox 文件 {filepath}，从中提取 SOURCE_URL，按 flomo 格式生成笔记并上传。
+**任务（第 1 步：只创建文档，不上传 flomo）**：读取 inbox 文件 {filepath}，从中提取 SOURCE_URL，按 flomo 格式生成笔记。
 
-**步骤**（每步用 shell 命令执行，所有命令都在 /root/mynews 目录）：
+**步骤**（只做 1-7 步，不调 flomo_memo_create，不做 git 操作）：
 1. `cd /root/mynews`
 2. 读取 inbox 文件 {filepath} 提取 SOURCE_URL（应是 {source_url}）
 3. 调用 MCP 工具 `flomo_memo_search` 查重（搜主题关键词 + 子领域）
 4. Webfetch SOURCE_URL 获取完整文章内容
 5. 从内容确定标题：`领域_二级领域_知识点` 三段式
 6. `python3 /root/mynews/scripts/title_to_path.py "<标题>"` 获取完整路径
-7. `python3 /root/mynews/scripts/check_dir.py <领域> <二级领域>` 确认目录
-8. 创建本地文档 `answers/<领域>/<二级领域>/<知识点>.md`（flomo 格式：第一行标签 + `**加粗**` 标题）
-9. `cd /root/mynews && git add <完整路径> && git commit -m "<message>"`（hook 自动验证 flomo 格式）
-10. `cd /root/mynews && flomo_memo_create` 上传本地文档内容
-11. `cd /root/mynews && git reset HEAD~1` 清除本地 commit（**严禁用 --hard，会删工作树文件！**）
+7. `python3 /root/mynews/scripts/check_dir.py <领域> <二级领域>` 确认目录存在
+8. **创建本地文档** `answers/<领域>/<二级领域>/<知识点>.md`（flomo 格式：第一行标签 + `**加粗**` 标题，正文含来源、要点、相关事实）
+9. **不要调 `flomo_memo_create`**！由 process_inbox.py 审查通过后再调
+10. **不要做 `git add`、`git commit`、`git reset`**！由 process_inbox.py 接管
+11. **退出即可**
 
-**重要**：必须用完整路径（如 answers/科技/AI/xxx.md）执行 git add，不要用 git add -A。
+**重要**：
+- 必须用完整路径（如 answers/科技/AI/xxx.md）
+- 文件名三段式 `领域_二级领域_知识点.md`，不能省略前缀
+- 严禁 `git reset --hard`（会删工作树文件）
+- **不要调 `flomo_memo_create`**（审查失败时会造成 flomo 残留）
+- 退出前确保 answers/.../xxx.md 文件已存在
+- **退出时打印 `echo "CREATED_FILE: answers/领域/二级领域/知识点.md"`**（让 process_inbox.py 接管 git）
 
-不要提问，直接处理并报告处理结果。"""
+不要提问，直接处理并报告。"""
 
 
 def process_file(filepath, args):
@@ -319,6 +333,13 @@ def process_file(filepath, args):
                 print(f"    [warn] validate_flomo.py 不存在，跳过审查")
 
             if not cleanup_success:
+                # 审查失败：删除 subagent 创建的临时文件
+                if os.path.exists(full_path):
+                    try:
+                        os.remove(full_path)
+                        print(f"    [cleanup] 删除审查失败的临时文件: {created_file}")
+                    except Exception as e:
+                        print(f"    [warn] 删除失败: {e}")
                 return _finish_file(filepath, source_url, cleanup_success, error_msg)
 
             # process_inbox 接管 git 操作
@@ -351,6 +372,14 @@ def process_file(filepath, args):
                     )
                     if reset_result.returncode == 0:
                         print(f"    [git] add -f + commit + reset HEAD~1 OK")
+                        # 第 2 步：审查通过 + git OK → 上传 flomo
+                        flomo_ok, flomo_info = upload_to_flomo(full_path, source_url)
+                        if not flomo_ok:
+                            print(f"    [flomo] 上传失败: {flomo_info}")
+                            # flomo 失败但答案文件在 working tree
+                            # 不报错（已经过 validate 审查），但记录
+                        else:
+                            print(f"    [flomo] OK id={flomo_info}")
                     else:
                         print(f"    [warn] reset 失败: {reset_result.stderr[:200]}")
 
@@ -413,6 +442,56 @@ def get_next_file(source_type_filter="all"):
         if isinstance(entry_time, (int, float)) and time.time() - entry_time > STALE_TIMEOUT:
             return f
     return None
+
+
+def upload_to_flomo(filepath, source_url):
+    """第 2 步：调 subagent 上传 flomo（审查通过后调用）"""
+    print(f"  [step 2] 上传 flomo...")
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            content = f.read()
+    except Exception as e:
+        return False, f"read_file_failed: {e}"
+
+    upload_prompt = f"""**任务（第 2 步：上传 flomo）**：将以下文件内容上传到 flomo。
+
+文件路径: {filepath}
+
+文件内容:
+{content}
+
+**步骤**：
+1. 读取文件内容（已提供）
+2. 调用 MCP 工具 `flomo_memo_create` 上传，参数 content 必须是文件内容字符串
+3. 打印上传后的 memo id：`echo "FLOMO_ID: <id>"`
+4. 退出
+
+**重要**：
+- 只调 `flomo_memo_create` 一个工具
+- 不要做其他任何事（不要 git、不要修改文件）
+- 直接传文件内容字符串给 `flomo_memo_create`"""
+
+    cmd = [OPENCODE_BIN, "run", "--agent", "doc-generator", upload_prompt]
+    proc = subprocess.Popen(
+        cmd, cwd=BASE_DIR,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+    )
+    try:
+        stdout, stderr = proc.communicate(timeout=300)
+        if proc.returncode == 0:
+            import re
+            m = re.search(r'FLOMO_ID:\s*(\S+)', stdout)
+            if m:
+                print(f"    [flomo] 上传成功 id={m.group(1)}")
+                return True, m.group(1)
+            print(f"    [flomo] subagent done but no FLOMO_ID in stdout")
+            return True, "no_id_but_done"
+        return False, f"subagent_failed: {(stderr or 'unknown')[:200]}"
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.communicate()
+        return False, "upload_timeout"
+
 
 
 def main():
