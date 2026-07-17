@@ -11,6 +11,7 @@ import urllib.request
 import os
 import base64
 import hashlib
+import re
 from pathlib import Path
 
 from mynews_utils import get_base_dir, get_temp_dir, CrossPlatformLock
@@ -36,6 +37,31 @@ GITHUB_REPOS = [
 ]
 
 
+def fetch_wechat_article(url):
+    """获取微信公众号文章内容（通过 iPhone UA 绕过验证）"""
+    headers = {
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1"
+    }
+    req = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            html = resp.read().decode("utf-8")
+        
+        # 提取正文内容
+        content_match = re.search(r'<div class="rich_media_content[^"]*"[^>]*>(.*?)</div>', html, re.DOTALL)
+        if content_match:
+            content_html = content_match.group(1)
+            # 移除 HTML 标签
+            content = re.sub(r'<[^>]+>', '', content_html)
+            # 清理空白字符
+            content = re.sub(r'\s+', ' ', content).strip()
+            return content
+        return None
+    except Exception as e:
+        print(f"  [wechat] fetch error: {e}")
+        return None
+
+
 def write_to_inbox(entry):
     url = entry.get("url", "")
     title = entry.get("title", "untitled")
@@ -45,6 +71,14 @@ def write_to_inbox(entry):
     entry_id = entry.get("id", "")
 
     is_github = "/commit/" in url and "github.com" in url
+    is_wechat = "mp.weixin.qq.com" in url
+
+    # 微信公众号需要单独获取内容
+    if is_wechat and not content:
+        print(f"  [wechat] fetching content for: {title}")
+        content = fetch_wechat_article(url)
+        if not content:
+            content = f"# TITLE\n{title}\n\n请手动访问: {url}"
 
     if is_github:
         sha = str(entry_id).replace("gh_", "") if str(entry_id).startswith("gh_") else hashlib.md5(url.encode()).hexdigest()[:12]
@@ -57,7 +91,7 @@ def write_to_inbox(entry):
     lines = [
         f"# SOURCE_URL\n{url}",
         f"# SOURCE_TYPE\n{'github_commit' if is_github else 'rss_entry'}",
-        f"# FEED\n{feed_title}",
+        f"# FEED_TITLE\n{feed_title}",
         f"# ENTRY_ID\n{entry_id}",
         "",
         "---",
