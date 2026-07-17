@@ -126,3 +126,223 @@ class CrossPlatformLock:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.release()
         return False
+
+
+# ==================== 微信公众号抓取 ====================
+
+import time
+import json
+import re
+import hashlib
+
+# iPhone UA
+IPHONE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+
+# PC UA
+PC_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+# 备用 API（微信公众号文章中转服务）
+BACKUP_APIS = [
+    "https://www.newureader.com/",
+    "https://rss.aiown.cn/api/wxarticle?url=",
+]
+
+
+def is_wechat_url(url: str) -> bool:
+    """判断是否为微信公众号 URL"""
+    return "mp.weixin.qq.com" in url
+
+
+def get_cache_dir() -> Path:
+    """获取缓存目录"""
+    cache_dir = get_temp_dir() / "mynews_wx_cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir
+
+
+def get_cache_path(url: str) -> Path:
+    """根据 URL 生成缓存文件路径"""
+    url_hash = hashlib.md5(url.encode()).hexdigest()
+    return get_cache_dir() / f"{url_hash}.json"
+
+
+def fetch_with_retry(url: str, headers: dict, timeout: int = 15, max_retries: int = 3) -> tuple:
+    """
+    带重试的 HTTP 请求
+    返回: (content, error_msg)
+    """
+    import urllib.request
+
+    for attempt in range(max_retries):
+        try:
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                if resp.status == 200:
+                    return resp.read().decode("utf-8", errors="replace"), None
+                else:
+                    return None, f"HTTP {resp.status}"
+        except Exception as e:
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)  # 指数退避
+            else:
+                return None, str(e)
+    return None, "max retries exceeded"
+
+
+def extract_wechat_content(html: str) -> str:
+    """从微信公众号 HTML 中提取正文"""
+    import html as html_module
+
+    # 方法1: 提取 id=js_content（最可靠）
+    match = re.search(r'<div[^>]*\sid=["\']js_content["\'][^>]*>(.*)', html, re.DOTALL)
+    if match:
+        # 从匹配点开始，找到下一个 </div>
+        rest = match.group(1)
+        # 找到第一个 </div> 之前的内容
+        end_idx = rest.find('</div>')
+        if end_idx > 0:
+            content_html = rest[:end_idx]
+        else:
+            content_html = rest
+
+        # 清理 HTML
+        content_html = _clean_html_content(content_html)
+        if len(content_html) > 100:
+            return html_module.unescape(content_html)
+
+    # 方法2: 提取 rich_media_content
+    match = re.search(r'<div[^>]*class=["\'][^"\']*rich_media_content[^"\']*["\'][^>]*>(.*?)</div>', html, re.DOTALL)
+    if match:
+        content_html = _clean_html_content(match.group(1))
+        if len(content_html) > 100:
+            return html_module.unescape(content_html)
+
+    # 方法3: 提取 img-content 容器
+    match = re.search(r'<div[^>]*id=["\']img-content["\'][^>]*>(.*?)</div>', html, re.DOTALL)
+    if match:
+        content_html = _clean_html_content(match.group(1))
+        if len(content_html) > 100:
+            return html_module.unescape(content_html)
+
+    return ""
+
+
+def _clean_html_content(html_content: str) -> str:
+    """清理 HTML 内容，移除脚本、样式、图片等"""
+    import re
+
+    # 移除脚本和样式
+    html_content = re.sub(r'<script[^>]*>.*?</script>', '', html_content, flags=re.DOTALL)
+    html_content = re.sub(r'<style[^>]*>.*?</style>', '', html_content, flags=re.DOTALL)
+    html_content = re.sub(r'<!--.*?-->', '', html_content, flags=re.DOTALL)
+    # 移除图片
+    html_content = re.sub(r'<img[^>]*>', '', html_content)
+    # 移除视频
+    html_content = re.sub(r'<video[^>]*>.*?</video>', '', html_content, flags=re.DOTALL)
+    # 转换 HTML 标签为纯文本
+    html_content = re.sub(r'<br\s*/?>', '\n', html_content)
+    html_content = re.sub(r'</p>', '\n\n', html_content)
+    html_content = re.sub(r'<p[^>]*>', '', html_content)
+    html_content = re.sub(r'<section[^>]*>', '\n', html_content)
+    html_content = re.sub(r'</section>', '\n', html_content)
+    html_content = re.sub(r'<[^>]+>', '', html_content)
+    # 清理多余空白
+    html_content = re.sub(r'\n{3,}', '\n\n', html_content)
+    html_content = html_content.strip()
+
+    return html_content
+
+
+def fetch_wechat_article(url: str, use_cache: bool = True) -> tuple:
+    """
+    抓取微信公众号文章，支持多重降级策略
+
+    策略顺序:
+    1. 读取缓存
+    2. iPhone UA + 标准解析
+    3. PC UA + 标准解析
+    4. 备用 API 中转
+
+    返回: (content, source_info, error_msg)
+    """
+    # 检查缓存
+    cache_path = get_cache_path(url)
+    if use_cache and cache_path.exists():
+        try:
+            with open(cache_path, encoding="utf-8") as f:
+                cached = json.load(f)
+                if cached.get("content") and cached.get("content") != "FETCH_FAILED":
+                    return cached["content"], cached.get("source", ""), "cache"
+        except Exception:
+            pass
+
+    # 策略1: iPhone UA
+    print(f"    [wechat] 尝试 iPhone UA...")
+    headers = {"User-Agent": IPHONE_UA}
+    content, error = fetch_with_retry(url, headers)
+    if content:
+        text = extract_wechat_content(content)
+        if text and len(text) > 100:
+            # 保存缓存
+            with open(cache_path, "w", encoding="utf-8") as f:
+                json.dump({"content": text, "source": "iPhone UA", "url": url}, f)
+            return text, "iPhone UA", None
+
+    # 策略2: PC UA
+    print(f"    [wechat] 尝试 PC UA...")
+    headers = {"User-Agent": PC_UA}
+    content, error = fetch_with_retry(url, headers)
+    if content:
+        text = extract_wechat_content(content)
+        if text and len(text) > 100:
+            with open(cache_path, "w", encoding="utf-8") as f:
+                json.dump({"content": text, "source": "PC UA", "url": url}, f)
+            return text, "PC UA", None
+
+    # 策略3: 备用 API 中转
+    for api_base in BACKUP_APIS:
+        print(f"    [wechat] 尝试备用 API: {api_base}")
+        try:
+            api_url = f"{api_base}{url}"
+            headers = {"User-Agent": PC_UA}
+            content, error = fetch_with_retry(api_url, headers, timeout=20)
+            if content:
+                # 备用 API 可能直接返回文本或 JSON
+                try:
+                    data = json.loads(content)
+                    if isinstance(data, dict):
+                        text = data.get("content", "") or data.get("text", "") or data.get("data", "")
+                        if text:
+                            with open(cache_path, "w", encoding="utf-8") as f:
+                                json.dump({"content": text, "source": api_base, "url": url}, f)
+                            return text, api_base, None
+                except json.JSONDecodeError:
+                    # 直接返回文本
+                    text = extract_wechat_content(content)
+                    if text and len(text) > 100:
+                        with open(cache_path, "w", encoding="utf-8") as f:
+                            json.dump({"content": text, "source": api_base, "url": url}, f)
+                        return text, api_base, None
+        except Exception as e:
+            print(f"    [wechat] API {api_base} 失败: {e}")
+            continue
+
+    # 全部失败，保存失败标记
+    with open(cache_path, "w", encoding="utf-8") as f:
+        json.dump({"content": "FETCH_FAILED", "source": "failed", "url": url, "error": str(error)}, f)
+
+    return "", "", f"全部策略失败: {error}"
+
+
+def clear_cache(url: str = None):
+    """清除缓存，可指定单个 URL 或全部清除"""
+    cache_dir = get_cache_dir()
+    if url:
+        cache_path = get_cache_path(url)
+        if cache_path.exists():
+            cache_path.unlink()
+            print(f"已清除缓存: {url}")
+    else:
+        for f in cache_dir.glob("*.json"):
+            f.unlink()
+        print(f"已清除全部 {len(list(cache_dir.glob('*.json')))} 个缓存文件")
