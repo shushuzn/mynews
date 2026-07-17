@@ -146,7 +146,7 @@ description: Use when creating, generating, or producing structured theoretical/
 | 5 | 创建本地文档 `answers/领域/二级领域/文件名.md` | flomo 格式？标签在第一行？ |
 | 6 | `git add` → hook 验证 | 通过才能继续；hook 检测到同子目录相似标题会**警告** |
 | 7 | `flomo_memo_create` 上传 | 直接传本地文档内容 |
-| 8 | `git reset --hard HEAD~1` | 清除本地 commit（**不 push**） |
+| 8 | `git reset HEAD~1` | 清除本地 commit（**不 push**） |
 
 **flomo 查重命中后的处理**：
 - 完全同主题 → 在原 flomo 笔记上 `flomo_memo_update` 追加，而非新建
@@ -348,7 +348,7 @@ answers/领域/二级领域/文件名.md
 | 4 | `git add <file>` + `git commit` | hook 自动验证 |
 | 5 | 验证失败 | 修复格式重新 add/commit |
 | 6 | 验证通过 | `flomo_memo_create` 上传（直接传文档内容） |
-| 7 | `git reset --hard HEAD~1` | 清除本地 commit（**永远不要 push**） |
+| 7 | `git reset HEAD~1` | 清除本地 commit（**永远不要 push**） |
 
 ### 9.4 ⚠️ answers 目录严格本地化（重要）
 

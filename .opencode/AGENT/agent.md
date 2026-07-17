@@ -80,7 +80,7 @@ description: 为 mynews 项目创建结构化 flomo 格式知识文档
 | 8 | 创建本地文档 `answers/领域/二级领域/文件名.md` | flomo 格式？第一行标签？ |
 | 9 | `git add <完整路径> && git commit -m "<msg>"` | hook 自动验证 flomo 格式 |
 | 10 | `flomo_memo_create` 上传 | 传本地文档内容 |
-| 11 | `git reset --hard HEAD~1` | 清除本地 commit（**严禁 push**） |
+| 11 | `git reset HEAD~1` | 清除本地 commit（**严禁 push**） |
 
 **查重命中处理**：
 - 完全同主题 → 在原 flomo 笔记上 `flomo_memo_update` 追加

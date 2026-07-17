@@ -31,7 +31,7 @@ def search_in_answers(keywords: list, answers_dir: str = "answers") -> list:
 
     for md_file in answers_path.rglob("*.md"):
         content = md_file.read_text(encoding='utf-8')
-        title_match = re.search(r'^# (.+)', content, re.MULTILINE)
+        title_match = re.search(r'^\*\*([^*]+)\*\*$', content, re.MULTILINE)
         if not title_match:
             continue
         file_title = title_match.group(1).strip()
