@@ -37,12 +37,11 @@ def get_temp_dir() -> Path:
 
 def get_opencode_bin() -> str:
     """
-    查找 opencode 可执行文件路径。
+    查找 kimi 可执行文件路径。
     优先级：
     1. 环境变量 OPENCODE_BIN
-    2. ~/.opencode/bin/opencode（Linux/macOS）
-    3. ~/.opencode/bin/opencode.exe（Windows）
-    4. PATH 中的 opencode / opencode.exe
+    2. ~/.kimi-code/bin/kimi
+    3. PATH 中的 kimi
     """
     env_bin = os.environ.get("OPENCODE_BIN")
     if env_bin:
@@ -50,20 +49,19 @@ def get_opencode_bin() -> str:
 
     home = Path.home()
     candidates = [
-        home / ".opencode" / "bin" / "opencode",
-        home / ".opencode" / "bin" / "opencode.exe",
+        home / ".kimi-code" / "bin" / "kimi",
     ]
     for c in candidates:
         if c.exists():
             return str(c)
 
-    for name in ("opencode", "opencode.exe"):
+    for name in ("kimi", "kimi-code"):
         found = shutil.which(name)
         if found:
             return found
 
-    # 兜底：让调用方报错
-    return "opencode"
+    # 兜底
+    return "/root/.kimi-code/bin/kimi"
 
 
 def _is_process_alive(pid: int) -> bool:

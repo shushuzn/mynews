@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """
-mynews inbox 处理器
+mynews inbox 处理器 (kimi 版本)
 - 从 _inbox/ 读取条目（由 process_miniflux.py 生成）
-- 调用 doc-generator subagent 处理每条
+- 调用 kimi 处理每条
 - 成功后从 _inbox/ 移动到 _inbox_done/
 - 失败后从 _inbox/ 移动到 _inbox_failed/
-- 关键约束：answers 严禁 push 到远程；git reset 不能用 --hard（会删工作树）
 """
 import os
 import sys
@@ -15,6 +14,8 @@ import time
 import argparse
 import shutil
 import re
+import urllib.request
+import urllib.parse
 from pathlib import Path
 
 from mynews_utils import get_base_dir, get_opencode_bin, get_temp_dir, CrossPlatformLock
@@ -27,34 +28,17 @@ PROCESSED_FILE = BASE_DIR / "data" / "processed_urls.json"
 PROCESSING_FILE = BASE_DIR / "data" / "processing_urls.json"
 SEEN_FILE = INBOX_DIR / ".seen_ids.json"
 STALE_TIMEOUT = 1800
-EXEC_LOCK = BASE_DIR / "data" / "opencode_run.lock"
-MAX_CONCURRENT = 1
 LOCK_FILE = get_temp_dir() / "inbox_processor.lock"
-SUBAGENT_TIMEOUT = 900  # 15 分钟，单条文档处理全流程
-OPENCODE_BIN = get_opencode_bin()
+KIMI_TIMEOUT = 300  # 5 分钟
 PYTHON_BIN = sys.executable if sys.executable else ("python" if os.name == "nt" else "python3")
+FLOMO_API_URL = "https://flomoapp.com/mcp"
+FLOMO_TOKEN = "fmcp_tQUCgZl19bcH5slSicw2CotCJgw8V_1qdrHWs3w0Q8s"
 
 # 确保所有目录存在
 for d in [INBOX_DIR, DONE_DIR, FAILED_DIR,
           PROCESSED_FILE.parent,
           PROCESSING_FILE.parent]:
     d.mkdir(parents=True, exist_ok=True)
-
-
-def load_seen():
-    if SEEN_FILE.exists():
-        with SEEN_FILE.open(encoding="utf-8") as f:
-            data = json.load(f)
-            return set(data) if isinstance(data, list) else set(data.get("seen_ids", []))
-    return set()
-
-
-def save_seen(urls):
-    existing = load_seen()
-    updated = existing | set(urls)
-    SEEN_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with SEEN_FILE.open("w", encoding="utf-8") as f:
-        json.dump(sorted(list(updated)), f)
 
 
 def load_processed():
@@ -97,6 +81,8 @@ def extract_source_info(filepath):
 
     source_url = ""
     source_type = "rss_entry"
+    feed_title = ""
+    entry_id = ""
     content_start = 0
 
     for i, line in enumerate(lines):
@@ -104,131 +90,234 @@ def extract_source_info(filepath):
             source_url = lines[i + 1].strip()
         elif line.startswith("# SOURCE_TYPE") and i + 1 < len(lines):
             source_type = lines[i + 1].strip()
+        elif line.startswith("# FEED_TITLE") and i + 1 < len(lines):
+            feed_title = lines[i + 1].strip()
+        elif line.startswith("# ENTRY_ID") and i + 1 < len(lines):
+            entry_id = lines[i + 1].strip()
         elif line.startswith("---"):
             content_start = i + 1
             break
 
     actual_content = "\n".join(lines[content_start:]).strip()
-    return source_url, source_type, actual_content
+    return source_url, source_type, feed_title, entry_id, actual_content
 
 
-def build_prompt(source_type, source_url, content, filepath):
-    """构建 subagent prompt"""
-    common = f"""**mynews 项目 flomo 格式规范**（严格按 SKILL.md）：
+def move_to_failed(filepath, reason):
+    basename = Path(filepath).name
+    failed_path = FAILED_DIR / basename
+    if Path(filepath).exists():
+        shutil.move(filepath, failed_path)
+    print(f"  [{basename}] Moved to failed: {reason}")
 
-- 创建文档前先调 `flomo_get_format_guide` 确认格式，调 `flomo_tag_tree` 看已有标签
-- 本地文档直接写 flomo 格式，不是 4 章节 Markdown
-- 第一行必须是标签行：≥3 个 `#xxx` 或 `@xxx` 标签
-- 加粗标题用 `**xxx**`，不是 `#` 标题
-- 核心术语用 `<mark>高亮</mark>`，关键结论用 `<u>下划线</u>`
-- 禁止：# 标题、引用块、代码块、链接、图片、水平线、表格
-- 允许：**加粗**、`<mark>` 高亮、`<u>` 下划线、- 列表、1. 有序列表
-- answers 严禁 push 到远程
 
-**⚠️ 文档结构（严格按 SKILL.md flomo 格式）**：
+def move_to_done(filepath):
+    basename = Path(filepath).name
+    done_path = DONE_DIR / basename
+    if Path(filepath).exists():
+        shutil.move(filepath, done_path)
+
+
+def call_kimi(prompt, timeout=KIMI_TIMEOUT):
+    """调用 kimi 处理任务"""
+    cmd = ["kimi", "-p", prompt]
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            cwd=str(BASE_DIR),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        stdout, stderr = proc.communicate(timeout=timeout)
+        if proc.returncode == 0:
+            return stdout.strip(), stderr.strip()
+        return "", f"kimi error: {stderr[:500]}"
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.communicate()
+        return "", "kimi timeout"
+    except Exception as e:
+        return "", f"kimi exception: {e}"
+
+
+def search_flomo(keyword):
+    """搜索 flomo"""
+    payload = json.dumps({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+            "name": "memo_search",
+            "arguments": {"keywords": keyword}
+        }
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        FLOMO_API_URL,
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream",
+            "Authorization": f"Bearer {FLOMO_TOKEN}"
+        },
+        method="POST"
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = resp.read().decode("utf-8")
+            # Parse SSE format
+            for line in data.split("\n"):
+                if line.startswith("data:"):
+                    json_str = line[5:].strip()
+                    if json_str:
+                        result = json.loads(json_str)
+                        if "result" in result:
+                            return result["result"]
+            return None
+    except Exception as e:
+        print(f"    [flomo search] error: {e}")
+        return None
+
+
+def upload_flomo(content):
+    """上传到 flomo"""
+    # 转义 content 中的下划线
+    def escape_underscore_in_bold(match):
+        return "**" + match.group(1).replace("_", "\\_") + "**"
+    content_escaped = re.sub(
+        r'^\*\*([^*]+)\*\*$', escape_underscore_in_bold, content, flags=re.MULTILINE
+    )
+
+    payload = json.dumps({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+            "name": "memo_create",
+            "arguments": {"content": content_escaped}
+        }
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        FLOMO_API_URL,
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream",
+            "Authorization": f"Bearer {FLOMO_TOKEN}"
+        },
+        method="POST"
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = resp.read().decode("utf-8")
+            # Parse SSE format
+            for line in data.split("\n"):
+                if line.startswith("data:"):
+                    json_str = line[5:].strip()
+                    if json_str:
+                        result = json.loads(json_str)
+                        if "result" in result:
+                            memo = result["result"]
+                            if "id" in memo:
+                                return memo["id"]
+                            # Check structuredContent
+                            if "structuredContent" in memo and "id" in memo["structuredContent"]:
+                                return memo["structuredContent"]["id"]
+            return None
+    except Exception as e:
+        print(f"    [flomo upload] error: {e}")
+        return None
+
+
+def get_topic_keywords(source_type, content, feed_title):
+    """提取主题关键词用于查重"""
+    # 简单实现：从标题和内容提取关键词
+    lines = content.strip().split("\n")
+    title = ""
+    for line in lines:
+        if line.startswith("#"):
+            title = line.strip("# ").strip()
+            break
+    
+    if not title:
+        # 尝试从第一行获取
+        title = lines[0][:50] if lines else "unknown"
+    
+    return title, feed_title
+
+
+def build_prompt(source_type, source_url, content, feed_title, filepath):
+    """构建 kimi prompt"""
+    topic_title, topic_source = get_topic_keywords(source_type, content, feed_title)
+    
+    return f"""**mynews 任务**：处理以下信息，生成 flomo 格式笔记并创建本地文件。
+
+**信息内容**：
+SOURCE_URL: {source_url}
+来源: {feed_title or topic_source}
+类型: {source_type}
+
+{content[:2000]}
+
+**步骤**：
+1. 先用 MCP 工具 `memo_search` 搜索类似内容查重（搜索主题：{topic_title}）
+2. 根据内容确定领域、二级领域、知识点（三段式）
+3. 运行 `python3 scripts/check_dir.py <领域> <二级领域>` 确认目录存在
+4. 运行 `python3 scripts/title_to_path.py "<标题>"` 获取完整路径
+5. 创建 flomo 格式文件（见下方格式要求）
+6. 在文件开头加上 `# SOURCE_URL {source_url}` 行
+7. 运行 `python3 scripts/validate_flomo.py <文件路径>` 验证格式
+8. 打印创建的文件路径
+
+**⚠️ flomo 格式要求**：
 ```
-#信号笔记 #技术 #AI大模型
+#信号笔记 #领域 #二级领域
 
 **领域_二级领域_知识点**
 
-**来源**：来源1、来源2
+**来源**：{feed_title or topic_source}
 
-<mark>核心概念</mark>第一句精确定义。第二句<u>背景与现实意义</u>。第三句核心逻辑。
-
-**子概念一**
-先给出精确定义，再解释核心逻辑或运作机制。
-
-**子概念二**
-（同上）
-
-- <mark>关键发现一</mark>：说明内容
-- <mark>关键发现二</mark>：说明内容
+正文内容...
 ```
 
-**⚠️ 关键错误案例**：
-- ❌ 错例 1：用 `来源：xxx` 不加粗 → 必须是 `**来源**：xxx`（加粗）
-- ❌ 错例 2：用 `**出处**：` 标签 → 必须用 `**来源**`
-- ❌ 错例 3：加粗标题漏前缀 `技术_AI_`
-- ❌ 错例 4：第一行标签不含 `#信号类型`（五选一）
-- ❌ 错例 5：内容里出现 `[text](url)` markdown 链接
-- ❌ 错例 6：编造伪章节
-
-**⚠️ 文件名三段式（hook 强制检查）**：
-文件名必须严格三段式 `<领域>_<二级领域>_<知识点>.md`，**不能省略前两段**！
-
-**重要 - 工作目录**：所有 shell 命令必须在 {BASE_DIR} 目录下执行。
-
-**⚠️ 严禁操作**：
-- ❌ `git reset --hard` / 任何 git reset/clean/push
-- ❌ mv/rm/cp `_inbox/` 文件
-- ❌ 任何修改/删除 answers/ 下文件的命令
-- ❌ **不要调 `flomo_memo_create`**（由 process_inbox.py 审查通过后再调）
-
-**subagent 唯一职责**：创建本地文档 + 打印 `CREATED_FILE: <path>` 退出。其他一切由 process_inbox.py 完成。"""
-
-    if source_type == "github_commit":
-        return f"""{common}
-
-**任务（第 1 步：只创建文档，不上传 flomo）**：处理以下 GitHub Commit 信息，生成结构化 flomo 笔记。
-
-GitHub Commit 内容：
-{content}
-
-SOURCE_URL: {source_url}
-
-**步骤**（只做 1-6 步，不调 flomo_memo_create，不做 git 操作）：
-1. `cd {BASE_DIR}`
-2. 调用 MCP 工具 `flomo_memo_search` 查重（搜主题关键词）
-3. 根据 commit 信息确定标题：`领域_二级领域_知识点` 三段式
-4. `{PYTHON_BIN} {BASE_DIR / "scripts" / "title_to_path.py"} "<标题>"` 获取完整路径
-5. `{PYTHON_BIN} {BASE_DIR / "scripts" / "check_dir.py"} <领域> <二级领域>` 确认目录存在
-6. **创建本地文档** `answers/<领域>/<二级领域>/<知识点>.md`（flomo 格式：第一行标签 + `**加粗**` 标题，正文含来源、要点、相关事实）
-7. **不要调 `flomo_memo_create`**！由 process_inbox.py 审查通过后再调
-8. **不要做 `git add`、`git commit`、`git reset`**！由 process_inbox.py 接管
-9. **退出即可**
-
 **重要**：
-- 文档必须用 flomo 格式（不是 4 章节）
-- 文件名三段式 `领域_二级领域_知识点.md`，不能省略前缀
-- 严禁 `git reset --hard`（会删工作树文件）
-- **不要调 `flomo_memo_create`**（审查失败时会造成 flomo 残留）
-- 退出前确保 answers/.../xxx.md 文件已存在
-- **退出时打印 `echo "CREATED_FILE: answers/领域/二级领域/知识点.md"`**（让 process_inbox.py 接管 git）
+- 第一行必须有 ≥3 个标签（含 #信号笔记）
+- 标题必须是三段式 `领域_二级领域_知识点`
+- 用 `**加粗**` 而不是 `#` 标题
+- 禁止：链接、图片、表格、代码块
+- 文件路径必须是 `answers/领域/二级领域/xxx.md`
+- 验证通过后打印：`CREATED_FILE: <文件路径>`
+"""
 
-不要提问，直接处理并报告。"""
 
-    else:  # rss_entry
-        return f"""{common}
+def get_next_file(source_type_filter="all"):
+    """获取下一个待处理文件"""
+    processed = load_processed()
+    processing = load_processing()
 
-**任务（第 1 步：只创建文档，不上传 flomo）**：读取 inbox 文件 {filepath}，从中提取 SOURCE_URL，按 flomo 格式生成笔记。
+    files = sorted([str(p) for p in INBOX_DIR.glob("*.md")])
 
-**步骤**（只做 1-7 步，不调 flomo_memo_create，不做 git 操作）：
-1. `cd {BASE_DIR}`
-2. 读取 inbox 文件 {filepath} 提取 SOURCE_URL（应是 {source_url}）
-3. 调用 MCP 工具 `flomo_memo_search` 查重（搜主题关键词 + 子领域）
-4. Webfetch SOURCE_URL 获取完整文章内容
-5. 从内容确定标题：`领域_二级领域_知识点` 三段式
-6. `{PYTHON_BIN} {BASE_DIR / "scripts" / "title_to_path.py"} "<标题>"` 获取完整路径
-7. `{PYTHON_BIN} {BASE_DIR / "scripts" / "check_dir.py"} <领域> <二级领域>` 确认目录存在
-8. **创建本地文档** `answers/<领域>/<二级领域>/<知识点>.md`（flomo 格式：第一行标签 + `**加粗**` 标题，正文含来源、要点、相关事实）
-9. **不要调 `flomo_memo_create`**！由 process_inbox.py 审查通过后再调
-10. **不要做 `git add`、`git commit`、`git reset`**！由 process_inbox.py 接管
-11. **退出即可**
-
-**重要**：
-- 必须用完整路径（如 answers/科技/AI/xxx.md）
-- 文件名三段式 `领域_二级领域_知识点.md`，不能省略前缀
-- 严禁 `git reset --hard`（会删工作树文件）
-- **不要调 `flomo_memo_create`**（审查失败时会造成 flomo 残留）
-- 退出前确保 answers/.../xxx.md 文件已存在
-- **退出时打印 `echo "CREATED_FILE: answers/领域/二级领域/知识点.md"`**（让 process_inbox.py 接管 git）
-
-不要提问，直接处理并报告。"""
+    for f in files:
+        source_url, source_type, _, _, _ = extract_source_info(f)
+        if not source_url:
+            continue
+        if source_url in processed:
+            continue
+        if source_type_filter != "all" and source_type != source_type_filter:
+            continue
+        entry_time = processing.get(source_url)
+        if entry_time is None:
+            return f
+        if isinstance(entry_time, (int, float)) and time.time() - entry_time > STALE_TIMEOUT:
+            return f
+    return None
 
 
 def process_file(filepath, args):
+    """处理单个文件"""
     basename = Path(filepath).name
-    source_url, source_type, content = extract_source_info(filepath)
+    source_url, source_type, feed_title, entry_id, content = extract_source_info(filepath)
 
     if not source_url:
         print(f"  No SOURCE_URL found, moving to failed")
@@ -237,9 +326,7 @@ def process_file(filepath, args):
 
     if source_url in load_processed():
         print(f"  [{basename}] Already processed, removing")
-        fp = Path(filepath)
-        if fp.exists():
-            fp.unlink()
+        move_to_done(filepath)
         return True
 
     processing = load_processing()
@@ -258,288 +345,119 @@ def process_file(filepath, args):
     print(f"  Processing: {basename}")
     print(f"  Type: {source_type}, URL: {source_url[:60]}")
 
-    prompt = build_prompt(source_type, source_url, content, filepath)
-    cmd = [OPENCODE_BIN, "run", "--agent", "doc-generator", prompt]
+    # 构建 prompt 并调用 kimi
+    prompt = build_prompt(source_type, source_url, content, feed_title, filepath)
+    stdout, stderr = call_kimi(prompt, timeout=KIMI_TIMEOUT)
 
-    print(f"  Calling subagent (timeout {SUBAGENT_TIMEOUT}s)...")
-    proc = subprocess.Popen(
-        cmd,
-        cwd=str(BASE_DIR),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    cleanup_success = False
-    error_msg = None
-    stdout = ""
-    try:
-        stdout, stderr = proc.communicate(timeout=SUBAGENT_TIMEOUT)
-        if proc.returncode == 0:
-            print(f"    Subagent done")
-            if args.verbose and stdout:
-                print(f"    stdout: {stdout[:500]}")
-            cleanup_success = True
-        else:
-            error_msg = (stderr or "unknown")[:300]
-            print(f"    Subagent error: {error_msg}")
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        proc.communicate()
-        error_msg = f"timeout after {SUBAGENT_TIMEOUT}s"
-        print(f"    {error_msg}")
+    if args.verbose:
+        print(f"    stdout: {stdout[:500] if stdout else 'none'}")
+        if stderr:
+            print(f"    stderr: {stderr[:200]}")
 
-    # 从 stdout 解析 subagent 创建的文件路径
+    # 解析创建的文件路径
     created_file = None
-    if cleanup_success:
-        # 模式 1: 显式 CREATED_FILE: 标记
-        m = re.search(r'CREATED_FILE:\s*(\S+\.md)', stdout)
-        if m:
-            created_file = m.group(1).strip()
-            print(f"    [detect] 创建文件: {created_file}")
-        # 模式 2: stdout 文本中匹配 answers/领域/二级领域/xxx.md 模式
-        if not created_file:
-            candidates = re.findall(r'answers/[\u4e00-\u9fff]+/[\u4e00-\u9fff]+/[^\s\)]+\.md', stdout)
-            if candidates:
-                created_file = candidates[0]
-                print(f"    [text detect] 创建文件: {created_file}")
-        # 模式 3: 查找最新 answers/.../*.md
-        if not created_file:
-            answers_dir = BASE_DIR / "answers"
-            if answers_dir.exists():
-                candidates = [
-                    p for p in answers_dir.rglob("*.md")
-                    if p.is_file() and (time.time() - p.stat().st_mtime) < 600
-                ]
-                if candidates:
-                    candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-                    created_file = candidates[0].relative_to(BASE_DIR).as_posix()
-                    print(f"    [fallback detect] 创建文件: {created_file}")
+    for line in stdout.split("\n"):
+        if "CREATED_FILE:" in line:
+            created_file = line.split("CREATED_FILE:")[-1].strip()
+            break
+
+    # 也检查 stderr 或重新查找最近创建的文件
+    if not created_file:
+        for line in stderr.split("\n"):
+            if "CREATED_FILE:" in line:
+                created_file = line.split("CREATED_FILE:")[-1].strip()
+                break
 
     if not created_file:
-        error_msg = error_msg or "no_created_file_detected"
-        cleanup_success = False
+        # 查找最近创建的 answers 文件
+        answers_dir = BASE_DIR / "answers"
+        if answers_dir.exists():
+            candidates = [
+                p for p in answers_dir.rglob("*.md")
+                if p.is_file() and (time.time() - p.stat().st_mtime) < 300
+            ]
+            if candidates:
+                candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+                created_file = candidates[0].relative_to(BASE_DIR).as_posix()
+                print(f"    [fallback detect] 创建文件: {created_file}")
+
+    if not created_file:
         print(f"    [error] 未检测到创建的文档")
+        remove_processing(source_url)
+        move_to_failed(filepath, "no_created_file_detected")
+        return False
 
-    if cleanup_success and created_file:
-        full_path = BASE_DIR / created_file
-        if not full_path.exists():
-            cleanup_success = False
-            error_msg = f"file_not_found: {created_file}"
-            print(f"    [error] 文件不存在: {full_path}")
-        else:
-            # 修正三段式文件名（subagent 可能漏前缀）
-            parts = created_file.split('/')
-            if len(parts) == 4 and parts[0] == 'answers':
-                filename = parts[3]
-                name_no_ext = filename[:-3] if filename.endswith('.md') else filename
-                sub_parts = name_no_ext.split('_')
-                if len(sub_parts) != 3 or sub_parts[0] != parts[1] or sub_parts[1] != parts[2]:
-                    # 文件名段数不对或前缀错了
-                    old_path = full_path
-                    new_filename = f"{parts[1]}_{parts[2]}_{'_'.join(sub_parts[2:])}.md"
-                    new_rel = f"answers/{parts[1]}/{parts[2]}/{new_filename}"
-                    new_full = BASE_DIR / new_rel
-                    print(f"    [fix] 文件名修正: {filename} → {new_filename}")
-                    old_path.rename(new_full)
-                    created_file = new_rel
-                    full_path = new_full
+    # 验证文件格式
+    full_path = BASE_DIR / created_file
+    if not full_path.exists():
+        print(f"    [error] 创建的文件不存在: {created_file}")
+        remove_processing(source_url)
+        move_to_failed(filepath, "file_not_found")
+        return False
 
-            # ⚠️ 上传 flomo 前的格式审查（在 commit 前）
-            validate_script = BASE_DIR / "scripts" / "validate_flomo.py"
-            if validate_script.exists():
-                val_result = subprocess.run(
-                    [sys.executable, str(validate_script), str(full_path)],
-                    capture_output=True, text=True
-                )
-                if val_result.returncode == 0:
-                    print(f"    [validate] 格式审查通过")
-                else:
-                    print(f"    [validate] 格式审查失败:")
-                    print(f"    {val_result.stdout[:500]}")
-                    cleanup_success = False
-                    error_msg = f"format_validation_failed: {val_result.stdout[:200]}"
-            else:
-                print(f"    [warn] validate_flomo.py 不存在，跳过审查")
+    # 运行 validate_flomo.py 验证
+    validate_result = subprocess.run(
+        [PYTHON_BIN, str(BASE_DIR / "scripts" / "validate_flomo.py"), created_file],
+        cwd=str(BASE_DIR),
+        capture_output=True,
+        text=True,
+        timeout=60
+    )
 
-            if not cleanup_success:
-                # 审查失败：删除 subagent 创建的临时文件
-                if full_path.exists():
-                    try:
-                        full_path.unlink()
-                        print(f"    [cleanup] 删除审查失败的临时文件: {created_file}")
-                    except Exception as e:
-                        print(f"    [warn] 删除失败: {e}")
-                return _finish_file(filepath, source_url, cleanup_success, error_msg)
+    if validate_result.returncode != 0:
+        print(f"    [error] 格式验证失败")
+        if args.verbose:
+            print(f"    {validate_result.stdout[:300]}")
+            print(f"    {validate_result.stderr[:300]}")
+        remove_processing(source_url)
+        move_to_failed(filepath, "validate_failed")
+        return False
 
-            # process_inbox 接管 git 操作
-            add_result = subprocess.run(
-                ["git", "add", "-f", created_file],
-                cwd=str(BASE_DIR), capture_output=True, text=True
-            )
-            if add_result.returncode != 0:
-                cleanup_success = False
-                error_msg = f"git_add_failed: {add_result.stderr[:200]}"
-                print(f"    [error] git add 失败: {error_msg}")
-            else:
-                # git commit
-                title = Path(created_file).name.replace(".md", "")
-                commit_msg = f"创建 {title}"
-                commit_result = subprocess.run(
-                    ["git", "commit", "-m", commit_msg],
-                    cwd=str(BASE_DIR), capture_output=True, text=True
-                )
-                if commit_result.returncode != 0 or "验证失败" in commit_result.stderr:
-                    print(f"    [warn] commit 失败:")
-                    print(f"    {commit_result.stderr[:300]}")
-                    cleanup_success = False
-                    error_msg = f"commit_failed: {commit_result.stderr[:200]}"
-                else:
-                    # git reset HEAD~1 (不 hard)
-                    reset_result = subprocess.run(
-                        ["git", "reset", "HEAD~1"],
-                        cwd=str(BASE_DIR), capture_output=True, text=True
-                    )
-                    if reset_result.returncode == 0:
-                        print(f"    [git] add -f + commit + reset HEAD~1 OK")
-                        # 第 2 步：审查通过 + git OK → 上传 flomo
-                        flomo_ok, flomo_info = upload_to_flomo(str(full_path), source_url)
-                        if not flomo_ok:
-                            print(f"    [flomo] 上传失败: {flomo_info}")
-                            # flomo 失败但答案文件在 working tree
-                            # 不报错（已经过 validate 审查），但记录
-                        else:
-                            print(f"    [flomo] OK id={flomo_info}")
-                    else:
-                        print(f"    [warn] reset 失败: {reset_result.stderr[:200]}")
+    print(f"    [ok] 文档验证通过: {created_file}")
 
-    remove_processing(source_url)
-    return _finish_file(filepath, source_url, cleanup_success, error_msg)
+    # 上传到 flomo
+    with open(full_path, encoding="utf-8") as f:
+        file_content = f.read()
+    
+    # 移除开头的 SOURCE_URL 行再上传
+    content_lines = file_content.split("\n")
+    if content_lines and "# SOURCE_URL" in content_lines[0]:
+        content_lines = content_lines[1:]
+    flomo_content = "\n".join(content_lines).strip()
 
+    # 添加来源行
+    source_line = f"**来源**：{feed_title or source_url}"
+    if source_line not in flomo_content:
+        # 找到第一个空行后插入
+        lines = flomo_content.split("\n")
+        for i, line in enumerate(lines):
+            if not line.strip():
+                lines.insert(i, source_line)
+                break
+        flomo_content = "\n".join(lines)
 
-def _finish_file(filepath, source_url, cleanup_success, error_msg):
-    if cleanup_success:
-        save_processed([source_url])
-        try:
-            move_to_done(filepath)
-        except FileNotFoundError:
-            print(f"    [note] inbox 文件已被 subagent 移走，跳过 move")
+    flomo_id = upload_flomo(flomo_content)
+    if flomo_id:
+        print(f"    [flomo] 上传成功 id={flomo_id}")
     else:
-        try:
-            move_to_failed(filepath, error_msg or "subagent_failed")
-        except FileNotFoundError:
-            print(f"    [note] inbox 文件已被 subagent 移走，跳过 move")
-    return cleanup_success
+        print(f"    [flomo] 上传失败（文件已保存本地）")
 
+    # 移动到 done
+    remove_processing(source_url)
+    save_processed([source_url])
+    move_to_done(filepath)
 
-def move_to_done(filepath):
-    dest = DONE_DIR / Path(filepath).name
-    if dest.exists():
-        dest.unlink()
-    shutil.move(str(filepath), str(dest))
-    print(f"    [moved] → _inbox_done/")
-
-
-def move_to_failed(filepath, reason):
-    dest = FAILED_DIR / Path(filepath).name
-    if dest.exists():
-        dest.unlink()
-    shutil.move(str(filepath), str(dest))
-    # 写入失败原因
-    reason_file = dest.with_suffix(dest.suffix + ".reason")
-    with reason_file.open("w", encoding="utf-8") as f:
-        f.write(f"{reason}\n")
-    print(f"    [moved] → _inbox_failed/ ({reason})")
-
-
-def get_next_file(source_type_filter="all"):
-    processed = load_processed()
-    processing = load_processing()
-
-    files = sorted([str(p) for p in INBOX_DIR.glob("*.md")])
-
-    for f in files:
-        source_url, source_type, _ = extract_source_info(f)
-        if not source_url:
-            continue
-        if source_url in processed:
-            continue
-        if source_type_filter != "all" and source_type != source_type_filter:
-            continue
-        entry_time = processing.get(source_url)
-        if entry_time is None:
-            return f
-        if isinstance(entry_time, (int, float)) and time.time() - entry_time > STALE_TIMEOUT:
-            return f
-    return None
-
-
-def upload_to_flomo(filepath, source_url):
-    """第 2 步：调 subagent 上传 flomo（审查通过后调用）"""
-    print(f"  [step 2] 上传 flomo...")
-    try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            content = f.read()
-    except Exception as e:
-        return False, f"read_file_failed: {e}"
-
-    # flomo 平台会把加粗标题里的 _ 解释为 markdown 斜体标记并转义为 \_
-    # 解决方法：上传前把加粗标题里的 _ 替换为 \_（flomo 显示时会去掉 \）
-    def escape_underscore_in_bold(match):
-        return "**" + match.group(1).replace("_", "\\_") + "**"
-    content_escaped = re.sub(
-        r'^\*\*([^*]+)\*\*$', escape_underscore_in_bold, content, flags=re.MULTILINE
-    )
-
-    upload_prompt = f"""**任务（第 2 步：上传 flomo）**：将以下文件内容上传到 flomo。
-
-文件路径: {filepath}
-
-**⚠️ 重要 - 内容已预处理**：
-文件内容中所有加粗标题里的 `_` 已自动转义为 `\_`（避免 flomo 把 `_` 当斜体标记）。
-直接传下面 `content_escaped` 字符串给 `flomo_memo_create`。
-
-文件内容 (content_escaped):
-{content_escaped}
-
-**步骤**：
-1. 调用 MCP 工具 `flomo_memo_create` 上传，参数 content 必须是上面的 content_escaped 字符串
-2. 打印上传后的 memo id：`echo "FLOMO_ID: <id>"`
-3. 退出
-
-**重要**：
-- 只调 `flomo_memo_create` 一个工具
-- 不要做其他任何事（不要 git、不要修改文件）
-- **直接传 content_escaped 字符串给 `flomo_memo_create`**（已转义）"""
-
-    cmd = [OPENCODE_BIN, "run", "--agent", "doc-generator", upload_prompt]
-    proc = subprocess.Popen(
-        cmd, cwd=str(BASE_DIR),
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-    )
-    try:
-        stdout, stderr = proc.communicate(timeout=300)
-        if proc.returncode == 0:
-            m = re.search(r'FLOMO_ID:\s*(\S+)', stdout)
-            if m:
-                print(f"    [flomo] 上传成功 id={m.group(1)}")
-                return True, m.group(1)
-            print(f"    [flomo] subagent done but no FLOMO_ID in stdout")
-            return True, "no_id_but_done"
-        return False, f"subagent_failed: {(stderr or 'unknown')[:200]}"
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        proc.communicate()
-        return False, "upload_timeout"
-
+    print(f"    [done] 处理完成")
+    return True
 
 
 def main():
-    parser = argparse.ArgumentParser(description="mynews inbox 处理器")
+    parser = argparse.ArgumentParser(description="mynews inbox 处理器 (kimi 版本)")
     parser.add_argument("--batch-size", type=int, default=100,
                         help="最多处理文件数 (默认 100, 单条用 --batch-size 1)")
     parser.add_argument("--source-type", choices=["rss_entry", "github_commit", "all"],
                         default="all", help="过滤源类型")
-    parser.add_argument("--verbose", "-v", action="store_true", help="显示 subagent 输出")
+    parser.add_argument("--verbose", "-v", action="store_true", help="显示详细输出")
     args = parser.parse_args()
 
     try:
@@ -549,10 +467,10 @@ def main():
         print("Another instance is running, exiting")
         return
 
-    print(f"mynews inbox processor")
+    print(f"mynews inbox processor (kimi version)")
     print(f"  BASE_DIR: {BASE_DIR}")
     print(f"  INBOX_DIR: {INBOX_DIR}")
-    print(f"  Subagent timeout: {SUBAGENT_TIMEOUT}s")
+    print(f"  kimi timeout: {KIMI_TIMEOUT}s")
     print(f"  Batch size: {args.batch_size}, Source type: {args.source_type}")
     print()
 

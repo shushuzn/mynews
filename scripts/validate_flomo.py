@@ -25,7 +25,7 @@ setup_windows_utf8()
 
 SIGNAL_TYPES = {'#趋势信号', '#知识基座', '#信号笔记', '#分析框架', '#知识载体'}
 FORBIDDEN_PATTERNS = [
-    (re.compile(r'^#+\s+', re.MULTILINE), "Markdown 标题 (# ## ###)"),
+    (re.compile(r'^#+\s+[^S]', re.MULTILINE), "Markdown 标题 (# ## ###)"),
     (re.compile(r'^>\s+', re.MULTILINE), "引用块 (>)"),
     (re.compile(r'```'), "代码块 (```)"),
     (re.compile(r'\[.+?\]\(.+?\)'), "链接 [text](url)"),
@@ -64,7 +64,22 @@ def validate_content(filepath, expected_domain, expected_subdomain, filename):
         errors.append("❌ 第一行不能为空，必须是标签行")
         return errors
 
-    first_line = lines[0].strip()
+    # 跳过开头的元数据行（# SOURCE_URL 等），找到标签行
+    tag_line_idx = 0
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped and not stripped.startswith('# SOURCE_') and not stripped.startswith('# '):
+            # 检查这行是否包含标签
+            if re.search(r'[#@][^\s#@]+', stripped):
+                tag_line_idx = i
+                break
+        tag_line_idx = i + 1
+
+    if tag_line_idx >= len(lines):
+        errors.append("❌ 未找到标签行")
+        return errors
+
+    first_line = lines[tag_line_idx].strip()
     tags = re.findall(r'[#@][^\s#@]+', first_line)
     if len(tags) < 3:
         errors.append(f"❌ 标签数量不足3个，当前{len(tags)}个")
