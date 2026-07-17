@@ -9,13 +9,13 @@ description: 为 mynews 项目创建结构化 flomo 格式知识文档
 | # | 检查项 | 合格标准 |
 |---|--------|----------|
 | 1 | **TodoWrite 开任务** | 收到 inbox 文件后立即开 TodoWrite |
-| 2 | **查重 flomo_memo_search** | **唯一权威查重**——必须调用 MCP 工具 `flomo_memo_search`，搜主题关键词 + 子领域，5 条以上结果需逐条评估 |
+| 2 | **查重 memo_search** | **唯一权威查重**——必须调用 MCP 工具 `memo_search`（参数 `keywords`），搜主题关键词 + 子领域，5 条以上结果需逐条评估 |
 | 3 | Webfetch | 不得以"之前处理过"为由跳过 |
 | 4 | 已读完整内容 | 不仅是标题/摘要/URL，必须读完全文 |
 | 5 | 文件名格式 | `领域_二级领域_知识点.md`，三段式，每段≥2字符 |
 | 6 | 标签数量 | ≥3个，必含 `#信号类型` |
 | 7 | **本地 = flomo 格式** | 直接写 flomo 格式，**无需**转换 |
-| 8 | flomo 上传 | `flomo_memo_create` 上传本地文档内容 |
+| 8 | flomo 上传 | `memo_create` 上传本地文档内容 |
 | 9 | **flomo 格式合规** | 禁止 `#` 标题、引用、代码块、链接、图片、水平线、表格 |
 | 10 | 标签在第一行 | 第一行必须是 `#xxx` 或 `@xxx` 标签 |
 | 11 | **answers 严禁 push** | `git reset HEAD~1` 清除本地 commit，**永远不要 push** |
@@ -70,8 +70,8 @@ description: 为 mynews 项目创建结构化 flomo 格式知识文档
 
 | 步骤 | 操作 | 校验点 |
 |------|------|--------|
-| 1 | **TodoWrite** | 第一项：`flomo_memo_search 查重` |
-| 2 | `flomo_memo_search 查重` | 主题关键词+子领域，是否已有同主题笔记？ |
+| 1 | **TodoWrite** | 第一项：`memo_search 查重` |
+| 2 | `memo_search 查重` | 主题关键词+子领域，是否已有同主题笔记？ |
 | 3 | 读取 inbox 文件提取 SOURCE_URL | 文件格式：# SOURCE_URL, # SOURCE_TYPE, # FEED, ---, 原文 |
 | 4 | `webfetch` SOURCE_URL | 获取完整内容（必须读完） |
 | 5 | `flomo_get_format_guide` + `flomo_tag_tree` | 确认格式规范；查看已有标签 |
@@ -80,7 +80,7 @@ description: 为 mynews 项目创建结构化 flomo 格式知识文档
 | 8 | `python3 scripts/check_dir.py <领域> <二级领域>` | 确认目录存在 |
 | 9 | 创建本地文档 `answers/领域/二级领域/文件名.md` | `<mark>` 高亮 + `<u>` 下划线 + 列表 |
 | 10 | `git add -f <路径> && git commit -m "<msg>"` | answers/ 在 .gitignore，必须 `-f` |
-| 11 | 查重命中 → `flomo_memo_update` 追加；无重复 → `flomo_memo_create` 上传 | 上传前加粗标题 `_` 转义为 `\_` |
+| 11 | 查重命中 → `memo_update` 追加；无重复 → `memo_create` 上传 | 上传前加粗标题 `_` 转义为 `\_` |
 | 12 | `git reset HEAD~1` | 清除本地 commit（**严禁 push**） |
 - 主题有重叠但角度不同 → 创建新文档但注明"补充视角"
 - 完全独立 → 正常新建上传
@@ -116,7 +116,7 @@ description: 为 mynews 项目创建结构化 flomo 格式知识文档
 
 - ❌ 任何 push 到 origin（answers 严禁推送）
 - ❌ 用 `git add -A`（必须用完整路径）
-- ❌ 跳过查重（漏掉 flomo_memo_search）
+- ❌ 跳过查重（漏掉 memo_search）
 - ❌ 跳过 git reset（不清除本地 commit）
 - ❌ 创建 4 章节 Markdown（mynews 已升级到 flomo 格式）
 - ❌ 使用 `# 标题`（用 `**加粗**` 代替）
