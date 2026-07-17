@@ -25,7 +25,7 @@ Validation rules:
    - Allowed: **bold**, <mark>highlight</mark>, <u>underline</u>, - lists, 1. ordered lists
 7. Title similarity check: warns if a file with a similar title already exists
    in the same subdomain directory in git history. Warns only, does not block.
-"""
+8. Bold title末尾禁止 _ 分隔符（`**xxx_yyy_**` 会触发 MCP server 将内部所有 `_` 转义为 `\_`）
 
 import subprocess
 import sys
@@ -58,7 +58,11 @@ FORBIDDEN_PATTERNS = [
     (re.compile(r'^\|.+\|$', re.MULTILINE), "Markdown 表格 flomo 不支持"),
 ]
 
-STOP_WORDS = {
+# 检测加粗标题末尾的 _ 分隔符（会导致 MCP server 将内部所有 _ 转义）
+BOLD_TRAILING_UNDERSCORE = re.compile(r'\*\*[^*]*_\*\*$')
+
+
+
     '与', '或', '的', '和', '及', '在', '对', '为', '了', '是',
     '一', '个', '上', '下', '中', '以', '等', '于', '把',
     '被', '用', '到', '从', '向', '由', '但', '却',
@@ -114,6 +118,9 @@ def validate_content(content, filename):
         first_title_match = re.search(r'^\*\*([^*]+)\*\*$', content, re.MULTILINE)
         if first_title_match:
             title = first_title_match.group(1)
+            # 检查加粗内容末尾是否有 _ 分隔符（MCP server 会将其后所有 _ 转义）
+            if title.endswith('_'):
+                errors.append(f"加粗标题末尾不允许 _ 分隔符（'{title}_' 会触发 MCP server 转义问题，去掉末尾的 _）")
             name_no_ext = filename[:-3] if filename.endswith('.md') else filename
             file_prefix = '_'.join(name_no_ext.split('_')[:2])
             if not title.startswith(file_prefix + '_'):

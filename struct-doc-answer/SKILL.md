@@ -146,7 +146,7 @@ description: Use when creating, generating, or producing structured theoretical/
 | 5 | 确定文件名 `领域_二级领域_知识点.md` + 标签 | 三段式，每段≥2字符；标签 ≥3 个，含 `#信号类型` |
 | 6 | 创建本地文档 `answers/领域/二级领域/文件名.md` | flomo 格式：第一行标签 + `**加粗**` 标题 + `<mark>`/`<u>`/列表 |
 | 7 | `git add -f <file>` → hook 验证 | `answers/` 在 `.gitignore` 中，必须用 `-f`；hook 检测到相似标题会**警告** |
-| 8 | 查重命中 → `memo_update` 追加；无重复 → `memo_create` 上传 | 上传前将加粗标题 `_` 转义为 `\_`（flomo 会把 `_` 当斜体标记） |
+| 8 | 查重命中 → `memo_update` 追加；无重复 → `memo_create` 上传 | 标题中 `**` 加粗内容内的分隔符 `_` 不需要转义，但**禁止在加粗内容末尾添加 `_`**（`**xxx_yyy_**` 会触发 markdown 解析器将内部所有 `_` 转义） |
 | 9 | `git reset HEAD~1` | 清除本地 commit（**不 push**） |
 
 ### 3.2 微信公众号流程
