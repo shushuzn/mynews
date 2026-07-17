@@ -16,6 +16,8 @@ Validation rules:
    - No horizontal rules (---)
    - No tables (|)
    - Allowed: **bold**, <mark>highlight</mark>, <u>underline</u>, - lists, 1. ordered lists
+7. Title similarity check: warns if a file with a similar title already exists
+   in the same subdomain directory in git history. Warns only, does not block.
 """
 
 import subprocess
@@ -46,6 +48,15 @@ FORBIDDEN_PATTERNS = [
     (re.compile(r'^\|.+\|$', re.MULTILINE), "Markdown 表格 flomo 不支持"),
 ]
 
+STOP_WORDS = {
+    '与', '或', '的', '和', '及', '在', '对', '为', '了', '是',
+    '一', '个', '上', '下', '中', '以', '等', '于', '把',
+    '被', '用', '到', '从', '向', '由', '但', '却',
+    '给', '并', '也', '又', '即', '如', '则', '所',
+    '不', '有', '这', '那', '而', '需', '要', '可', '能', '说',
+    '们', '来', '去', '做', '说', '道', '得'
+}
+
 
 def decode_git_path(path):
     return path
@@ -65,7 +76,6 @@ def validate_content(content):
     errors = []
     lines = content.split('\n')
 
-    # 1. Tags must be on first line
     if not lines or not lines[0].strip():
         errors.append("文件第一行不能为空，必须是标签行")
     else:
@@ -74,12 +84,10 @@ def validate_content(content):
         if len(tags) < 3:
             errors.append(f"标签数量不足3个，当前{len(tags)}个：第一行必须是标签行")
 
-    # 2. Forbidden patterns
     for pattern, msg in FORBIDDEN_PATTERNS:
         if pattern.search(content):
             errors.append(msg)
 
-    # 3. Must have a bold title (no Markdown header)
     has_bold_title = bool(re.search(r'^\*\*[^*]+\*\*$', content, re.MULTILINE))
     if not has_bold_title:
         errors.append("缺少加粗标题（**xxx**），例如：**领域_二级领域_知识点**")
@@ -87,14 +95,87 @@ def validate_content(content):
     return errors
 
 
+def extract_title_keywords(filename):
+    """从文件名提取主要关键词，使用字符 n-gram 方法。"""
+    name = filename.replace('.md', '')
+    parts = name.split('_')
+    if len(parts) >= 3:
+        keyword_part = '_'.join(parts[2:])
+    else:
+        keyword_part = name
+
+    cleaned = re.sub(r'[_\-\.]+', '', keyword_part)
+    keywords = []
+
+    chinese_chars = re.findall(r'[\u4e00-\u9fff]+', cleaned)
+    for chars in chinese_chars:
+        if len(chars) >= 2:
+            keywords.extend([chars[i:i+2] for i in range(len(chars)-1)])
+
+    english_words = re.findall(r'[a-zA-Z0-9]{2,}', keyword_part)
+    keywords.extend(english_words)
+
+    keywords = [kw for kw in keywords if kw not in STOP_WORDS]
+
+    return set(keywords)
+
+
+def check_similar_titles(decoded_file, filename):
+    """检查同子目录下是否有相似标题的旧文件。"""
+    parts = decoded_file.split(os.sep)
+    if len(parts) < 3:
+        return []
+
+    domain = parts[1]
+    subdomain = parts[2]
+    target_keywords = extract_title_keywords(filename)
+    if not target_keywords:
+        return []
+
+    try:
+        result = subprocess.run(
+            ["git", "-c", "core.quotePath=false", "ls-files",
+             f"answers/{domain}/{subdomain}/"],
+            capture_output=True, text=True, encoding="utf-8"
+        )
+        if result.returncode != 0:
+            return []
+    except Exception:
+        return []
+
+    existing_files = [f for f in result.stdout.split("\n") if f.strip().endswith(".md")]
+
+    target_full = os.path.basename(decoded_file).replace('.md', '').split('_', 2)[-1] if '_' in os.path.basename(decoded_file) else os.path.basename(decoded_file).replace('.md', '')
+    similar = []
+
+    for existing in existing_files:
+        existing_full = os.path.basename(existing).replace('.md', '').split('_', 2)[-1] if '_' in os.path.basename(existing) else os.path.basename(existing).replace('.md', '')
+        if existing_full == target_full:
+            continue
+
+        existing_keywords = extract_title_keywords(os.path.basename(existing))
+
+        shared = target_keywords & existing_keywords
+        if not target_keywords or not existing_keywords:
+            continue
+
+        if len(shared) >= 3:
+            similarity = len(shared) / max(len(target_keywords), len(existing_keywords))
+            similar.append((existing, similarity, shared))
+
+    return similar
+
+
 def main():
     result = subprocess.run(
-        ["git", "-c", "core.quotePath=false", "diff-index", "--cached", "--name-only", "--diff-filter=AM", "HEAD"],
+        ["git", "-c", "core.quotePath=false", "diff-index",
+         "--cached", "--name-only", "--diff-filter=AM", "HEAD"],
         capture_output=True, text=True, encoding="utf-8"
     )
     staged_files = [f for f in result.stdout.split("\n") if f.strip()]
 
     errors = []
+    warnings = []
 
     for file in staged_files:
         decoded_file = decode_git_path(file)
@@ -144,6 +225,14 @@ def main():
             except Exception:
                 pass
 
+            similar_files = check_similar_titles(decoded_file, filename)
+            for similar_file, similarity, shared in similar_files:
+                warnings.append((
+                    file,
+                    f"同子目录下已有相似标题文档: {similar_file} "
+                    f"(共享关键词: {', '.join(sorted(shared)[:5])}{'...' if len(shared) > 5 else ''}, 相似度: {similarity:.0%})"
+                ))
+
     if errors:
         print("pre-commit hook 验证失败:")
         print()
@@ -168,6 +257,19 @@ def main():
         print("4. 必须用 **加粗** 代替 ## 标题")
         print("5. flomo 不支持: 标题/引用/代码块/链接/图片/水平线/表格")
         sys.exit(1)
+
+    if warnings:
+        print("=" * 60)
+        print("⚠ 标题相似度警告（建议先确认是否重复，再决定 commit/合并）")
+        print("=" * 60)
+        for file, reason in warnings:
+            print(f"  📄 新文件: {file}")
+            print(f"  📋 提示: {reason}")
+            print()
+        print("如确认是新角度，可继续 commit；如重复，建议：")
+        print("  1. 合并到已有 flomo 笔记（追加而非新建）")
+        print("  2. 重命名本文档以区分主题")
+        print("=" * 60)
 
     sys.exit(0)
 
