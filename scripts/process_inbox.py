@@ -108,30 +108,49 @@ def extract_source_info(filepath):
 
 def build_prompt(source_type, source_url, content, filepath):
     """构建 subagent prompt"""
-    common = f"""**mynews 项目 flomo 格式规范**：
+    common = f"""**mynews 项目 flomo 格式规范**（严格按 SKILL.md）：
 
 - 本地文档直接写 flomo 格式，不是 4 章节 Markdown
 - 第一行必须是标签行：≥3 个 `#xxx` 或 `@xxx` 标签
-- 标题用 `**加粗**`，不是 `#` 标题
+- 加粗标题用 `**xxx**`，不是 `#` 标题
 - 禁止：# 标题、引用块、代码块、链接、图片、水平线、表格
 - 允许：**加粗**、`<mark>` 高亮、`<u>` 下划线、- 列表、1. 有序列表
 - answers 严禁 push 到远程
 
-**⚠️ 重要 - 文件名三段式（hook 强制检查）**：
+**⚠️ 文档结构（严格按 SKILL.md 二章节格式）**：
+```
+#信号类型 #领域 #二级领域 #具体概念    <- 第一行：标签
+
+**领域_二级领域_知识点**                <- 第二行：加粗标题
+
+**来源**：来源1、来源2                    <- 第四行（空一行后）：加粗来源行（**来源**：xxx 格式）
+
+**第一段加粗要点**：正文内容...
+**第二段加粗要点**：正文内容...
+
+- 列表项 1
+- 列表项 2
+```
+
+**⚠️ 关键错误案例**：
+- ❌ 错例 1：用 `来源：xxx` 不加粗 → 必须是 `**来源**：xxx`（加粗）
+- ❌ 错例 2：用 `**出处**：` 标签 → 必须用 `**来源**`
+- ❌ 错例 3：加粗标题漏前缀 `技术_AI_`
+- ❌ 错例 4：第一行标签不含 `#信号类型`（五选一）
+- ❌ 错例 5：内容里出现 `[text](url)` markdown 链接
+
+**⚠️ 文件名三段式（hook 强制检查）**：
 文件名必须严格三段式 `<领域>_<二级领域>_<知识点>.md`，**不能省略前两段**！
-- ✓ 正确示例：`自然科学_生态学_数字表型加速土壤生物多样性发现.md`
-- ✗ 错误示例：`数字表型加速土壤生物多样性发现.md`（缺前缀，hook 会拒绝 commit）
 
 **重要 - 工作目录**：所有 shell 命令必须在 /root/mynews 目录下执行。
-所有命令前必须 `cd /root/mynews` 或者用绝对路径。
 
-**⚠️ 严禁以下操作**（否则会破坏工作流）：
-- ❌ `git reset --hard`（会删除工作树文件！务必避免）
-- ❌ 任何 `git reset` / `git clean` / `git push`（git 操作由 process_inbox.py 接管）
-- ❌ `mv`、`rm`、`cp` 操作 `_inbox/` 下的任何文件（由 process_inbox.py 接管）
-- ❌ 任何会修改/删除 answers/ 下文件的命令
+**⚠️ 严禁操作**：
+- ❌ `git reset --hard` / 任何 git reset/clean/push
+- ❌ mv/rm/cp `_inbox/` 文件
+- ❌ 任何修改/删除 answers/ 下文件的命令
+- ❌ **不要调 `flomo_memo_create`**（由 process_inbox.py 审查通过后再调）
 
-**subagent 唯一职责**：创建本地文档 + 调 `flomo_memo_create` 上传 + 打印 `CREATED_FILE: <path>` 退出。其他一切由 process_inbox.py 完成。"""
+**subagent 唯一职责**：创建本地文档 + 打印 `CREATED_FILE: <path>` 退出。其他一切由 process_inbox.py 完成。"""
 
     if source_type == "github_commit":
         return f"""{common}
@@ -453,23 +472,35 @@ def upload_to_flomo(filepath, source_url):
     except Exception as e:
         return False, f"read_file_failed: {e}"
 
+    # flomo 平台会把加粗标题里的 _ 解释为 markdown 斜体标记并转义为 \_
+    # 解决方法：上传前把加粗标题里的 _ 替换为 \_（flomo 显示时会去掉 \）
+    import re
+    def escape_underscore_in_bold(match):
+        return "**" + match.group(1).replace("_", "\\_") + "**"
+    content_escaped = re.sub(
+        r'^\*\*([^*]+)\*\*$', escape_underscore_in_bold, content, flags=re.MULTILINE
+    )
+
     upload_prompt = f"""**任务（第 2 步：上传 flomo）**：将以下文件内容上传到 flomo。
 
 文件路径: {filepath}
 
-文件内容:
-{content}
+**⚠️ 重要 - 内容已预处理**：
+文件内容中所有加粗标题里的 `_` 已自动转义为 `\_`（避免 flomo 把 `_` 当斜体标记）。
+直接传下面 `content_escaped` 字符串给 `flomo_memo_create`。
+
+文件内容 (content_escaped):
+{content_escaped}
 
 **步骤**：
-1. 读取文件内容（已提供）
-2. 调用 MCP 工具 `flomo_memo_create` 上传，参数 content 必须是文件内容字符串
-3. 打印上传后的 memo id：`echo "FLOMO_ID: <id>"`
-4. 退出
+1. 调用 MCP 工具 `flomo_memo_create` 上传，参数 content 必须是上面的 content_escaped 字符串
+2. 打印上传后的 memo id：`echo "FLOMO_ID: <id>"`
+3. 退出
 
 **重要**：
 - 只调 `flomo_memo_create` 一个工具
 - 不要做其他任何事（不要 git、不要修改文件）
-- 直接传文件内容字符串给 `flomo_memo_create`"""
+- **直接传 content_escaped 字符串给 `flomo_memo_create`**（已转义）"""
 
     cmd = [OPENCODE_BIN, "run", "--agent", "doc-generator", upload_prompt]
     proc = subprocess.Popen(

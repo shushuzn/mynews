@@ -83,6 +83,37 @@ def validate_content(filepath, expected_domain, expected_subdomain, filename):
         if not title.startswith(file_prefix + '_'):
             errors.append(f"❌ 加粗标题 '{title}' 必须以 '{file_prefix}_' 开头")
 
+    # 检查来源行（必须是 "**来源**：xxx" 加粗格式）
+    lines = content.split('\n')
+    source_line_found = False
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if i == 0:
+            continue  # 标签行
+        if first_title_match and stripped == f"**{title}**":
+            continue  # 加粗标题
+        # 期望是 "**来源**：xxx" 加粗格式
+        if stripped.startswith("**来源**") or stripped.startswith("**来源:") or stripped.startswith("**来源："):
+            source_line_found = True
+            if "：" not in stripped and ":" not in stripped:
+                errors.append(f"❌ 来源行 '{stripped[:50]}' 缺少冒号")
+            break
+        # 错例：用了 **出处**： 或不加粗的"来源："
+        if stripped.startswith("**出处") or stripped.startswith("**来源") is False and stripped.startswith("来源"):
+            if not stripped.startswith("**"):
+                errors.append(f"❌ 来源行 '{stripped[:50]}' 不加粗，必须是 '**来源**：xxx'（加粗）")
+            elif stripped.startswith("**出处"):
+                errors.append(f"❌ 来源行 '{stripped[:50]}' 用了错误标签 '出处'，应该是 '**来源**'")
+            source_line_found = True
+            break
+        # 第一个非空行不是来源
+        break
+
+    if not source_line_found:
+        errors.append("❌ 缺少 '**来源**：xxx' 加粗行（必须在加粗标题之后）")
+
     return errors
 
 
