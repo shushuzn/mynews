@@ -45,7 +45,7 @@ ALLOWED_ROOT_FILES = {
 # 非 answers/ 路径不进行 4 层深度和 flomo 格式检查（基础设施文件）
 INFRA_PREFIXES = (".opencode/", "scripts/", "docs/")
 
-FILENAME_PATTERN = re.compile('^[a-zA-Z0-9_\-\.\u4e00-\u9fff()]+$')
+FILENAME_PATTERN = re.compile(r'^[a-zA-Z0-9_\-\.\u4e00-\u9fff()]+$')
 PATH_TRAVERSAL = re.compile(r'\.\.')
 
 FORBIDDEN_PATTERNS = [
