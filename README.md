@@ -39,6 +39,26 @@ tail -f logs/inbox_cron.log
 ls _inbox/*.md 2>/dev/null | wc -l
 ```
 
+## MCP 配置（flomo）
+
+MCP 配置必须放在 `~/.kimi-code/mcp.json`（注意：不是 `~/.config/kimi-code/`）。
+
+```json
+{
+  "mcpServers": {
+    "flomo": {
+      "type": "streamable-http",
+      "url": "https://flomoapp.com/mcp",
+      "headers": {
+        "Authorization": "Bearer <你的 flomo token>"
+      }
+    }
+  }
+}
+```
+
+配置后**重启 session** 生效，用 `/mcp` 查看连接状态。
+
 ## 首次安装
 
 ```bash
