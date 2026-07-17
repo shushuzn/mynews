@@ -149,7 +149,7 @@ def fetch_github_commits(repo, limit=20):
         url = f"https://api.github.com/repos/{repo}/commits?per_page={limit}"
         req = urllib.request.Request(url)
         req.add_header("Accept", "application/vnd.github.v3+json")
-        req.add_header("User-Agent", "news-docs-processor")
+        req.add_header("User-Agent", "mynews-processor")
         with urllib.request.urlopen(req, timeout=30) as r:
             commits = json.loads(r.read())
             results = []
@@ -165,7 +165,7 @@ def fetch_github_commits(repo, limit=20):
                 try:
                     diff_req = urllib.request.Request(diff_url)
                     diff_req.add_header("Accept", "text/plain")
-                    diff_req.add_header("User-Agent", "news-docs-processor")
+                    diff_req.add_header("User-Agent", "mynews-processor")
                     with urllib.request.urlopen(diff_req, timeout=15) as diff_r:
                         diff_content = diff_r.read().decode("utf-8", errors="replace")[:8000]
                 except:
