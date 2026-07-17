@@ -81,7 +81,7 @@ def validate_filename(filename):
     return True, ""
 
 
-def validate_content(content):
+def validate_content(content, filename):
     errors = []
     lines = content.split('\n')
 
@@ -92,7 +92,6 @@ def validate_content(content):
         tags = re.findall(r'[#@][^\s#@]+', first_line)
         if len(tags) < 3:
             errors.append(f"标签数量不足3个，当前{len(tags)}个：第一行必须是标签行")
-        # 必须含 #信号类型 之一
         SIGNAL_TYPES = {'#趋势信号', '#知识基座', '#信号笔记', '#分析框架', '#知识载体'}
         if not any(t in tags for t in SIGNAL_TYPES):
             errors.append(f"标签必须含 #信号类型 之一: {SIGNAL_TYPES}")
@@ -105,7 +104,6 @@ def validate_content(content):
     if not has_bold_title:
         errors.append("缺少加粗标题（**xxx**），例如：**领域_二级领域_知识点**")
     else:
-        # 加粗标题必须以 文件名第一段_第二段_ 开头
         first_title_match = re.search(r'^\*\*([^*]+)\*\*$', content, re.MULTILINE)
         if first_title_match:
             title = first_title_match.group(1)
@@ -113,6 +111,24 @@ def validate_content(content):
             file_prefix = '_'.join(name_no_ext.split('_')[:2])
             if not title.startswith(file_prefix + '_'):
                 errors.append(f"加粗标题 '{title}' 必须以 '{file_prefix}_' 开头")
+
+        found_title_idx = -1
+        for i, line in enumerate(lines):
+            if line.strip() == f"**{first_title_match.group(1)}**":
+                found_title_idx = i
+                break
+
+        if found_title_idx >= 0:
+            next_line_idx = -1
+            for i in range(found_title_idx + 1, len(lines)):
+                if lines[i].strip():
+                    next_line_idx = i
+                    break
+
+            if next_line_idx >= 0:
+                source_line = lines[next_line_idx].strip()
+                if not (source_line.startswith("**来源**") or source_line.startswith("**来源：") or source_line.startswith("**来源:")):
+                    errors.append(f"加粗标题后第一个非空行不是来源行（'{source_line[:40]}'），必须是 '**来源**：xxx'")
 
     return errors
 
@@ -245,7 +261,7 @@ def main():
                     capture_output=True, text=True, encoding="utf-8"
                 )
                 if content_result.returncode == 0:
-                    content_errors = validate_content(content_result.stdout)
+                    content_errors = validate_content(content_result.stdout, filename)
                     for err in content_errors:
                         errors.append((file, f"内容格式: {err}"))
             except Exception:
