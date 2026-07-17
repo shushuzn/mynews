@@ -1,1 +1,6 @@
 answers/
+_inbox/
+_inbox_done/
+_inbox_failed/
+data/
+__pycache__/

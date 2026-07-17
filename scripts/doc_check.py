@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-文档预检查工具（flomo 版）
+文档预检查工具（合并版）
+一次性完成：重复检查 → 路径生成 → 目录验证
 
 用法: python3 scripts/doc_check.py "领域_二级领域_知识点"
 """
@@ -12,6 +13,7 @@ from pathlib import Path
 
 BASE_DIR = "answers"
 
+# 唯一允许的一级领域（按文档数排序）
 ALLOWED_DOMAINS = {"医学", "安全", "技术", "政治", "教育科学", "法律", "游戏", "社会科学", "管理", "经济", "自然科学"}
 
 
@@ -29,7 +31,6 @@ def validate_title(title: str) -> tuple:
 
 
 def extract_keywords(title: str) -> list:
-    """从标题提取关键词"""
     parts = title.split('_')
     if len(parts) >= 3:
         keywords = parts[2:]
@@ -38,8 +39,7 @@ def extract_keywords(title: str) -> list:
     return [k for k in keywords if len(k) >= 2]
 
 
-def check_duplicate_local(title: str) -> list:
-    """检查本地是否有重复文档"""
+def check_duplicate(title: str) -> list:
     keywords = extract_keywords(title)
     found = []
     answers_path = Path(BASE_DIR)
@@ -70,6 +70,39 @@ def check_duplicate_local(title: str) -> list:
     return found
 
 
+def title_to_path(title: str) -> tuple:
+    parts = title.split('_')
+    domain = parts[0]
+    subdomain = parts[1]
+    filename_parts = parts[2:]
+    dir_path = f"{BASE_DIR}/{domain}/{subdomain}"
+    filename = '_'.join(filename_parts) + ".md"
+    full_path = f"{dir_path}/{filename}"
+    return full_path, dir_path, filename
+
+
+def check_dir(domain: str, subdomain: str) -> dict:
+    dir_path = f"{BASE_DIR}/{domain}/{subdomain}"
+    exists = os.path.isdir(dir_path)
+    files = []
+    subdirs = []
+
+    if exists:
+        for item in os.listdir(dir_path):
+            item_path = os.path.join(dir_path, item)
+            if os.path.isdir(item_path):
+                subdirs.append(item)
+            elif item.endswith('.md'):
+                files.append(item)
+
+    return {
+        'path': dir_path,
+        'exists': exists,
+        'files': files,
+        'subdirs': subdirs
+    }
+
+
 def main():
     if len(sys.argv) < 2:
         print("用法: python3 scripts/doc_check.py \"领域_二级领域_知识点\"")
@@ -86,12 +119,51 @@ def main():
     parts = title.split('_')
     domain, subdomain = parts[0], parts[1]
     print(f"领域: {domain}, 二级领域: {subdomain}")
+    print()
 
     if domain not in ALLOWED_DOMAINS:
-        print(f"⚠️  一级领域 '{domain}' 不在标准列表中（{sorted(ALLOWED_DOMAINS)}），但可继续")
+        print(f"❌ 一级领域 '{domain}' 不在允许列表中（仅允许：{sorted(ALLOWED_DOMAINS)}），禁止新建")
+        sys.exit(1)
+
+    if not os.path.isdir(os.path.join(BASE_DIR, domain)):
+        print(f"❌ 一级领域 '{domain}' 不存在，禁止新建")
+        sys.exit(1)
+
+    dir_result = check_dir(domain, subdomain)
+
+    if not dir_result['exists']:
+        os.makedirs(dir_result['path'], exist_ok=True)
+        print("✅ 目录已创建，重复检查跳过")
+
+    duplicate_result = check_duplicate(title)
+    if duplicate_result:
+        print(f"⚠️  发现 {len(duplicate_result)} 个可能重复的文档:")
+        for item in duplicate_result:
+            print(f"  - {item['path']}")
+            print(f"    标题: {item['title']}")
+            print(f"    匹配: {item['keyword']}")
+        print("根据'同一概念判断'规则决定: 更新/合并/新建")
+    else:
+        print("✅ 未发现重复文档，可以新建")
 
     print()
-    print("请使用 flomo_memo_search 工具搜索 flomo 中是否有重复笔记")
+
+    full_path, dir_path, filename = title_to_path(title)
+    print(f"目录: {dir_path}")
+    print(f"文件名: {filename}")
+    print(f"完整路径: {full_path}")
+
+    print()
+
+    dir_result = check_dir(domain, subdomain)
+
+    print(f"目录: {dir_result['path']}")
+    print(f"存在: {dir_result['exists']}")
+    if dir_result['exists']:
+        if dir_result['subdirs']:
+            print(f"子目录: {', '.join(dir_result['subdirs'])}")
+        if dir_result['files']:
+            print(f"文件: {', '.join(dir_result['files'])}")
 
 
 if __name__ == "__main__":

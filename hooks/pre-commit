@@ -35,7 +35,10 @@ ALLOWED_ROOT_FILES = {
     "_welcome.md", "P0Audit.md", "setup_hooks.sh", ".gitignore"
 }
 
-FILENAME_PATTERN = re.compile(r'^[a-zA-Z0-9\u4e00-\u9fff()\.]+$')
+# 非 answers/ 路径不进行 4 层深度和 flomo 格式检查（基础设施文件）
+INFRA_PREFIXES = (".opencode/", "scripts/", "docs/")
+
+FILENAME_PATTERN = re.compile('^[a-zA-Z0-9_\-\.\u4e00-\u9fff()]+$')
 PATH_TRAVERSAL = re.compile(r'\.\.')
 
 FORBIDDEN_PATTERNS = [
@@ -69,6 +72,12 @@ def validate_filename(filename):
         return False, "文件名包含空格"
     if not FILENAME_PATTERN.match(filename):
         return False, "文件名包含非法字符（允许：中文/字母/数字/_-().）"
+    name_part = filename[:-3] if filename.endswith('.md') else filename
+    parts = name_part.split('_')
+    if len(parts) < 3:
+        return False, f"文件名必须三段式（领域_二级领域_知识点.md），当前 {len(parts)} 段: {filename}"
+    if len(parts[0]) < 1 or len(parts[1]) < 1:
+        return False, f"领域/二级领域不能为空: {filename}"
     return True, ""
 
 
@@ -83,6 +92,10 @@ def validate_content(content):
         tags = re.findall(r'[#@][^\s#@]+', first_line)
         if len(tags) < 3:
             errors.append(f"标签数量不足3个，当前{len(tags)}个：第一行必须是标签行")
+        # 必须含 #信号类型 之一
+        SIGNAL_TYPES = {'#趋势信号', '#知识基座', '#信号笔记', '#分析框架', '#知识载体'}
+        if not any(t in tags for t in SIGNAL_TYPES):
+            errors.append(f"标签必须含 #信号类型 之一: {SIGNAL_TYPES}")
 
     for pattern, msg in FORBIDDEN_PATTERNS:
         if pattern.search(content):
@@ -91,6 +104,15 @@ def validate_content(content):
     has_bold_title = bool(re.search(r'^\*\*[^*]+\*\*$', content, re.MULTILINE))
     if not has_bold_title:
         errors.append("缺少加粗标题（**xxx**），例如：**领域_二级领域_知识点**")
+    else:
+        # 加粗标题必须以 文件名第一段_第二段_ 开头
+        first_title_match = re.search(r'^\*\*([^*]+)\*\*$', content, re.MULTILINE)
+        if first_title_match:
+            title = first_title_match.group(1)
+            name_no_ext = filename[:-3] if filename.endswith('.md') else filename
+            file_prefix = '_'.join(name_no_ext.split('_')[:2])
+            if not title.startswith(file_prefix + '_'):
+                errors.append(f"加粗标题 '{title}' 必须以 '{file_prefix}_' 开头")
 
     return errors
 
@@ -185,6 +207,10 @@ def main():
 
         filename = os.path.basename(decoded_file)
         if filename in ALLOWED_ROOT_FILES:
+            continue
+
+        # 基础设施目录（.opencode/, scripts/, docs/）跳过 answers/ 专属检查
+        if decoded_file.startswith(INFRA_PREFIXES):
             continue
 
         if PATH_TRAVERSAL.search(decoded_file):

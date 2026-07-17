@@ -10,20 +10,22 @@ description: Use when creating, generating, or producing structured theoretical/
 | # | 检查项 | 合格标准 |
 |---|--------|----------|
 | 1 | **TodoWrite 开任务** | 收到 URL 后立即开 TodoWrite，第一项永远是查重 |
-| 2 | 收到 URL → **立即 webfetch** | 不得以"之前处理过"为由跳过 |
-| 3 | **查重 flomo_memo_search** | 创建本地文档前必须调用，搜主题关键词 + 子领域，5 条以上结果需评估 |
+| 2 | **查重 flomo_memo_search** | **唯一可靠的查重方式**——创建本地文档前必须调用 MCP 工具 `flomo_memo_search`，搜主题关键词 + 子领域，5 条以上结果需逐条评估是否重复 |
+| 3 | 收到 URL → **立即 webfetch** | 不得以"之前处理过"为由跳过 |
 | 4 | 已读完整内容 | 不仅是标题/摘要/URL，必须读完全文 |
 | 5 | 文件名格式 | `领域_二级领域_知识点.md`，三段式，每段≥2字符 |
 | 6 | 标签数量 | ≥3个，必含 `#信号类型`，咨询类必含 `@咨询线` |
 | 7 | 本地 = flomo 格式 | 直接写 flomo 格式，**无需**转换 |
-| 8 | flomo 上传 | 调用 flomo_memo_create 上传（直接传本地文档内容） |
+| 8 | flomo 上传 | 调用 `flomo_memo_create` 上传（直接传本地文档内容） |
 | 9 | 无非 flomo 语法 | 禁止 `#` 标题/引用/代码块/链接/图片/水平线/表格 |
 | 10 | 标签在第一行 | 第一行必须是 `#xxx` 或 `@xxx` 标签 |
-| 11 | git reset | 上传 flomo 后必须 `git reset HEAD~1` 清除本地 commit（不推送） |
+| 11 | **answers 严禁推送到远程** | 上传 flomo 后必须 `git reset HEAD~1` 清除本地 commit，**永远不要 push answers/ 内容** |
 
 > **核心红线：禁止跳过。每条输入必须产出文档。禁止使用 Markdown 标题等非 flomo 语法。**
 >
-> **查重是硬性前置步骤**：漏掉查重会导致上传已有内容的重复笔记，浪费 flomo 配额、增加后续检索成本。
+> **查重 = `flomo_memo_search`，不是别的**：本地 hook 的相似度检测只是辅助手段，**唯一权威查重是 `flomo_memo_search`**——因为 flomo 才是真实笔记库，git 历史和 working tree 都不完整。漏掉 flomo 查重会导致上传已有内容的重复笔记，浪费 flomo 配额、增加后续检索成本。
+>
+> **answers 目录严格本地化**：所有 `answers/` 下的文档都是为 hook 验证临时创建的本地草稿，**永远不要 push 到 origin**。git remote 仓库只保留 `hooks/`、`scripts/`、`SKILL.md` 等基础设施代码。
 
 ---
 
@@ -121,22 +123,22 @@ description: Use when creating, generating, or producing structured theoretical/
 | 步骤 | 操作 | 校验点 |
 |------|------|--------|
 | 1 | **TodoWrite 开任务** | 第一项：`flomo_memo_search 查重` |
-| 2 | `flomo_memo_search 查重` | 主题关键词+子领域，是否已有同主题笔记？ |
+| 2 | **`flomo_memo_search` 查重（必须）** | 调用 MCP 工具 `flomo_memo_search`，搜主题关键词 + 子领域；**这是唯一权威查重方式** |
 | 3 | `webfetch <URL>` | 获取完整内容（必须读完） |
 | 4 | 确定文件名 `领域_二级领域_知识点.md` | 文件名格式正确？三级结构？ |
 | 5 | 创建本地文档 `answers/领域/二级领域/文件名.md` | flomo 格式？标签在第一行？ |
 | 6 | `git add` → hook 验证 | 通过才能继续；hook 检测到同子目录相似标题会**警告** |
 | 7 | `flomo_memo_create` 上传 | 直接传本地文档内容 |
-| 8 | `git reset --hard HEAD~1` | 清除本地 commit（不推送） |
+| 8 | `git reset --hard HEAD~1` | 清除本地 commit（**不 push**） |
 
-**查重触发条件**：
-- 词频 60% 以上重叠 → 直接复用旧文档，在原文档上追加
-- 词频 30%-60% 重叠 → 创建新文档但要注明"不同角度/补充"
-- 词频 <30% 重叠 → 完全独立的新文档
+**flomo 查重命中后的处理**：
+- 完全同主题 → 在原 flomo 笔记上 `flomo_memo_update` 追加，而非新建
+- 主题有重叠但角度不同 → 创建新文档但要明确"补充视角"
+- 完全独立 → 正常新建上传
 
 ### 3.2 微信公众号流程
 
-1. TodoWrite + `flomo_memo_search 查重`
+1. TodoWrite + `flomo_memo_search` 查重
 2. `webfetch` 获取正文
 3. 解析 HTML 提取正文文本内容
 4. 创建本地文档（flomo 格式）并走标准流程 3.1 第 5-8 步
@@ -159,7 +161,7 @@ description: Use when creating, generating, or producing structured theoretical/
 2. 建议文件名（领域_二级领域_知识点.md）
 3. 建议标签（≥3个）
 4. 关键概念列表（3-5个）
-5. 是否与现有笔记重复的判断
+5. 是否与现有 flomo 笔记重复的判断
 ```
 
 主流程拿到 sub-agent 输出后，进入步骤 5（创建本地文档）。
@@ -323,12 +325,27 @@ answers/领域/二级领域/文件名.md
 
 | 步骤 | 操作 | 说明 |
 |------|------|------|
-| 1 | `webfetch` 获取原文 | 不得跳过 |
-| 2 | 创建本地文档（flomo 格式） | 第一行标签 + `**加粗**` 标题 |
-| 3 | `git add <file>` + `git commit` | hook 自动验证 |
-| 4 | 验证失败 | 修复格式重新 add/commit |
-| 5 | 验证通过 | `flomo_memo_create` 上传（直接传文档内容） |
-| 6 | `git reset` | 清除本地 commit（不推送到远程） |
+| 1 | `flomo_memo_search` 查重 | **唯一权威查重方式**（必做） |
+| 2 | `webfetch` 获取原文 | 不得跳过 |
+| 3 | 创建本地文档（flomo 格式） | 第一行标签 + `**加粗**` 标题 |
+| 4 | `git add <file>` + `git commit` | hook 自动验证 |
+| 5 | 验证失败 | 修复格式重新 add/commit |
+| 6 | 验证通过 | `flomo_memo_create` 上传（直接传文档内容） |
+| 7 | `git reset --hard HEAD~1` | 清除本地 commit（**永远不要 push**） |
+
+### 9.4 ⚠️ answers 目录严格本地化（重要）
+
+`answers/` 目录是**本地草稿区**，仅用于：
+1. hook 格式验证的临时文件
+2. 上传 flomo 前的格式测试
+
+**绝对禁止推送到远程**：
+- ❌ `git push` 不要包含 answers/ 内容
+- ❌ 不要在 answers/ 下存储长期资料
+- ✅ 上传 flomo 后立即 `git reset HEAD~1` 清除本地 commit
+- ✅ git remote 仓库只保留基础设施：`hooks/`、`scripts/`、`SKILL.md`、`.gitignore` 等
+- ✅ `.gitignore` 已包含 `answers/`，新文件不会被 commit
+- ✅ 偶尔 commit 的 answers/ 内容（如测试用）必须用 `git reset` 撤回
 
 ---
 
@@ -338,7 +355,9 @@ answers/领域/二级领域/文件名.md
 |------|------|
 | **只做本 skill 明确写明的事情** | 未提及的操作一律禁止 |
 | **收到 URL 必须 webfetch** | 不得以"之前处理过"为由跳过 |
+| **必须 flomo_memo_search 查重** | 创建本地文档前必须调用；hook 的相似度检测只是辅助 |
 | **必须创建本地文档** | 禁止直接上传 flomo，必须先创建本地文件并 hook 验证 |
+| **answers 严禁推送远程** | 所有 answers/ 文档是临时草稿，上传 flomo 后立即 `git reset HEAD~1` 清除；永远不要 push |
 | **更新前必须校验格式** | 更新笔记前必须检查是否符合本文档"二、文档结构"的所有格式规则 |
 | 默认产出 | 每条输入都产出笔记，不存在"没有知识价值"的输入 |
 | 禁止私自增加限制 | 写入或修改本 skill 时，不得私自增加用户未明确要求的限制 |

@@ -1,0 +1,214 @@
+#!/bin/bash
+# Pre-commit hook for /root/news-docs (answers repo).
+# 检查项：
+# 1. 不提交源代码文件到answers仓库
+# 2. H1标题与文件名必须匹配（标题格式：领域_二级领域_知识点）
+# 3. 禁止 git revert
+#
+# Install: cp scripts/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+
+GIT_DIR=$(git rev-parse --show-toplevel 2>/dev/null)
+if [ -z "$GIT_DIR" ]; then
+    echo "[pre-commit] WARN: not inside a git repo, skipping" >&2
+    exit 0
+fi
+
+cd "$GIT_DIR"
+
+STAGED=$(git -C "$GIT_DIR" diff --cached --name-only --diff-filter=ACMR)
+
+# === 检查1：允许的文件类型 ===
+ALLOW_PATTERN='^answers/.*\.md$|^scripts/|^P0_AUDIT\.md$|^ROADMAP\.md$|^README\.md$|^AGENTS\.md$|^\.gitignore$|^SKILL\.md$|^\.opencode/'
+
+if [ -n "$STAGED" ]; then
+    bad_files=""
+    while IFS= read -r f; do
+        if [[ ! "$f" =~ $ALLOW_PATTERN ]]; then
+            bad_files="$bad_files\n  $f"
+        fi
+    done <<< "$STAGED"
+else
+    bad_files=""
+fi
+
+if [ -n "$bad_files" ]; then
+    echo "[pre-commit] REFUSED: invalid files:" >&2
+    echo -e "$bad_files" >&2
+    echo "[pre-commit] To bypass (DANGEROUS): git commit --no-verify" >&2
+    exit 1
+fi
+
+# === 检查2：H1标题与文件名匹配 ===
+export STAGED
+title_check=$(python3 - << 'PYTHON_SCRIPT'
+import sys
+import os
+
+staged_raw = os.environ.get('STAGED', '')
+staged_files = [f for f in staged_raw.split('\n') if f]
+
+errors = []
+
+for filepath in staged_files:
+    if not filepath.startswith('answers/') or not filepath.endswith('.md'):
+        continue
+    if filepath.count('/') == 1:
+        continue
+
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            first_line = f.readline().strip()
+    except Exception as e:
+        errors.append(f"  {filepath}: 读取失败 {e}")
+        continue
+
+    if not first_line.startswith('# '):
+        errors.append(f"  {filepath}: 第一行不是 H1（应为 '# 领域_二级领域_知识点'，实际为 '{first_line}'）")
+        continue
+
+    title = first_line[2:].strip()
+    parts = title.split('_')
+    if len(parts) != 3:
+        errors.append(f"  {filepath}: 标题 '{title}' 格式错误（需恰好2个下划线分成3部分，实际 {len(parts)} 部分）")
+        continue
+
+    domain, subdomain, filename_part = parts
+
+    ALLOWED_DOMAINS = {'医学', '安全', '技术', '政治', '教育科学', '法律', '游戏', '社会科学', '管理', '经济', '自然科学'}
+    if domain not in ALLOWED_DOMAINS:
+        errors.append(f"  {filepath}: 一级领域 '{domain}' 不在允许列表中（允许：{'、'.join(sorted(ALLOWED_DOMAINS))}）")
+
+    expected_filename = f"{filename_part}.md"
+    expected_dir = f"answers/{domain}/{subdomain}"
+    expected_path = f"{expected_dir}/{expected_filename}"
+
+    actual_dir = os.path.dirname(filepath)
+    actual_filename = os.path.basename(filepath)
+
+    if actual_filename != expected_filename or actual_dir != expected_dir:
+        errors.append(f"  {filepath}: 标题与路径不匹配")
+        errors.append(f"    H1:   {title}")
+        errors.append(f"    期望: {expected_path}")
+        errors.append(f"    实际: {filepath}")
+
+if errors:
+    print("[pre-commit] REFUSED: H1 title mismatches filename:", file=sys.stderr)
+    for e in errors:
+        print(e, file=sys.stderr)
+    sys.exit(1)
+
+sys.exit(0)
+PYTHON_SCRIPT
+)
+
+if [ $? -ne 0 ]; then
+    echo "$title_check" >&2
+    echo "[pre-commit] To bypass (DANGEROUS): git commit --no-verify" >&2
+    exit 1
+fi
+
+# === 检查3：文档结构 ===
+export STAGED
+format_check=$(python3 - << 'PYTHON_SCRIPT'
+import sys
+import os
+import re
+
+staged_raw = os.environ.get('STAGED', '')
+staged_files = [f for f in staged_raw.split('\n') if f]
+
+REQUIRED_SECTIONS = {'## 来源', '## 概述', '## 核心概念', '## 分类标签'}
+FORBIDDEN_SECTIONS = {
+    '## 摘要', '## 引言', '## 结论', '## 延伸阅读', '## 参考文献',
+    '## 思考题', '## 基本信息', '## 概念解释', '## 相关案例',
+    '## 拓展思考', '## 起源', '## 元信息', '## 正文', '## 结语',
+    '## 开头', '## 应用场景', '## 基本情况', '## 背景介绍',
+    '## 新闻背景', '## 相关文件', '## 补充说明', '## 备注',
+    '## 相关信息', '## 内容概要', '## 核心要点', '## 关键内容'
+}
+VALID_SIGNALS = {'#知识基座', '#趋势信号', '#信号笔记', '#分析框架', '#知识载体'}
+FORBIDDEN_LIST_PATTERN = re.compile(r'^[-*]\s', re.MULTILINE)
+FORBIDDEN_LINK_PATTERN = re.compile(r'\[.+?\]\(.+?\)')
+
+errors = []
+
+for filepath in staged_files:
+    if not filepath.startswith('answers/') or not filepath.endswith('.md'):
+        continue
+    if filepath.count('/') == 1:
+        continue
+
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            content = f.read()
+    except Exception as e:
+        errors.append(f"  {filepath}: 读取失败 {e}")
+        continue
+
+    lines = content.split('\n')
+    h2_sections = set()
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith('## '):
+            h2_sections.add(stripped.split()[0] + ' ' + stripped.split()[1] if len(stripped.split()) > 1 else stripped)
+
+    missing = REQUIRED_SECTIONS - h2_sections
+    if missing:
+        errors.append(f"  {filepath}: 缺少必需章节 {missing}")
+
+    found_forbidden = h2_sections & FORBIDDEN_SECTIONS
+    if found_forbidden:
+        errors.append(f"  {filepath}: 包含禁止章节 {found_forbidden}")
+
+    if '## 分类标签' in h2_sections:
+        tag_line_idx = None
+        for i, line in enumerate(lines):
+            if line.strip() == '## 分类标签':
+                tag_line_idx = i
+                break
+        if tag_line_idx is not None:
+            next_line = lines[tag_line_idx + 1] if tag_line_idx + 1 < len(lines) else ''
+            following_lines = lines[tag_line_idx+2:] if next_line and next_line.strip() == '' else lines[tag_line_idx+1:]
+            remaining = '\n'.join(following_lines).strip()
+            if remaining and not remaining.startswith('#') and not remaining.startswith('@'):
+                errors.append(f"  {filepath}: ## 分类标签 后不能有内容")
+
+    tag_section_match = re.search(r'^## 分类标签\s*\n(.+)', content, re.MULTILINE)
+    if tag_section_match:
+        tag_line = tag_section_match.group(1).strip()
+        words = tag_line.split()
+        tags = re.findall(r'[#@][^\s]+', tag_line)
+        if len(tags) < 3:
+            errors.append(f"  {filepath}: 标签不足3个（当前{tags}）")
+        has_signal = any(t in VALID_SIGNALS for t in tags)
+        if not has_signal:
+            errors.append(f"  {filepath}: 缺少信号类型标签（#知识基座/#趋势信号/#信号笔记/#分析框架/#知识载体）")
+        for w in words:
+            if not w.startswith('#') and not w.startswith('@'):
+                errors.append(f"  {filepath}: 标签 '{w}' 缺少 # 或 @ 前缀（所有标签必须以 # 或 @ 开头）")
+    elif '## 分类标签' in h2_sections:
+        errors.append(f"  {filepath}: ## 分类标签 后无内容")
+
+    if FORBIDDEN_LIST_PATTERN.search(content):
+        errors.append(f"  {filepath}: 正文中禁止使用列表格式（- 或 * 开头）")
+
+    if FORBIDDEN_LINK_PATTERN.search(content):
+        errors.append(f"  {filepath}: 来源中禁止使用链接格式 [标题](URL)")
+
+if errors:
+    print("[pre-commit] REFUSED: 文档格式错误:", file=sys.stderr)
+    for e in errors:
+        print(e, file=sys.stderr)
+    sys.exit(1)
+
+sys.exit(0)
+PYTHON_SCRIPT
+)
+
+if [ $? -ne 0 ]; then
+    echo "$format_check" >&2
+    echo "[pre-commit] To bypass (DANGEROUS): git commit --no-verify" >&2
+    exit 1
+fi
+
+exit 0
