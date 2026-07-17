@@ -4,3 +4,4 @@ _inbox_done/
 _inbox_failed/
 data/
 __pycache__/
+.mcp.json
