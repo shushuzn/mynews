@@ -140,18 +140,14 @@ description: Use when creating, generating, or producing structured theoretical/
 | 步骤 | 操作 | 校验点 |
 |------|------|--------|
 | 1 | **TodoWrite 开任务** | 第一项：`flomo_memo_search 查重` |
-| 2 | **`flomo_memo_search` 查重（必须）** | 调用 MCP 工具 `flomo_memo_search`，搜主题关键词 + 子领域；**这是唯一权威查重方式** |
+| 2 | **`flomo_memo_search` 查重（必须）** | 调用 MCP 工具 `flomo_memo_search`，搜主题关键词 + 子领域；5 条以上逐条评估是否重复 |
 | 3 | `webfetch <URL>` | 获取完整内容（必须读完） |
-| 4 | 确定文件名 `领域_二级领域_知识点.md` | 文件名格式正确？三级结构？ |
-| 5 | 创建本地文档 `answers/领域/二级领域/文件名.md` | flomo 格式？标签在第一行？ |
-| 6 | `git add -f <file>` → hook 验证 | `answers/` 在 `.gitignore` 中，必须用 `-f` 强制添加；hook 检测到同子目录相似标题会**警告** |
-| 7 | `flomo_memo_create` 上传 | 传之前将加粗标题中的 `_` 转义为 `\_`（flomo 会把 `_` 当斜体标记） |
-| 8 | `git reset HEAD~1` | 清除本地 commit（**不 push**） |
-
-**flomo 查重命中后的处理**：
-- 完全同主题 → 在原 flomo 笔记上 `flomo_memo_update` 追加，而非新建
-- 主题有重叠但角度不同 → 创建新文档但要明确"补充视角"
-- 完全独立 → 正常新建上传
+| 4 | `flomo_get_format_guide` + `flomo_tag_tree` | 确认 flomo 格式规范；查看已有标签结构以保持标签一致 |
+| 5 | 确定文件名 `领域_二级领域_知识点.md` + 标签 | 三段式，每段≥2字符；标签 ≥3 个，含 `#信号类型` |
+| 6 | 创建本地文档 `answers/领域/二级领域/文件名.md` | flomo 格式：第一行标签 + `**加粗**` 标题 + `<mark>`/`<u>`/列表 |
+| 7 | `git add -f <file>` → hook 验证 | `answers/` 在 `.gitignore` 中，必须用 `-f`；hook 检测到相似标题会**警告** |
+| 8 | 查重命中 → `flomo_memo_update` 追加；无重复 → `flomo_memo_create` 上传 | 上传前将加粗标题 `_` 转义为 `\_`（flomo 会把 `_` 当斜体标记） |
+| 9 | `git reset HEAD~1` | 清除本地 commit（**不 push**） |
 
 ### 3.2 微信公众号流程
 

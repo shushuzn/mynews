@@ -74,16 +74,14 @@ description: 为 mynews 项目创建结构化 flomo 格式知识文档
 | 2 | `flomo_memo_search 查重` | 主题关键词+子领域，是否已有同主题笔记？ |
 | 3 | 读取 inbox 文件提取 SOURCE_URL | 文件格式：# SOURCE_URL, # SOURCE_TYPE, # FEED, ---, 原文 |
 | 4 | `webfetch` SOURCE_URL | 获取完整内容（必须读完） |
-| 5 | 确定文件名 `领域_二级领域_知识点.md` | 三段式，每段≥2字符 |
-| 6 | `python3 scripts/title_to_path.py "<title>"` | 获取完整路径 |
-| 7 | `python3 scripts/check_dir.py <领域> <二级领域>` | 确认目录存在 |
-| 8 | 创建本地文档 `answers/领域/二级领域/文件名.md` | flomo 格式？第一行标签？ |
-| 9 | `git add <完整路径> && git commit -m "<msg>"` | hook 自动验证 flomo 格式 |
-| 10 | `flomo_memo_create` 上传 | 传本地文档内容 |
-| 11 | `git reset HEAD~1` | 清除本地 commit（**严禁 push**） |
-
-**查重命中处理**：
-- 完全同主题 → 在原 flomo 笔记上 `flomo_memo_update` 追加
+| 5 | `flomo_get_format_guide` + `flomo_tag_tree` | 确认格式规范；查看已有标签 |
+| 6 | 确定文件名 `领域_二级领域_知识点.md` + 标签 | 三段式；标签 ≥3 含 `#信号类型` |
+| 7 | `python3 scripts/title_to_path.py "<title>"` | 获取完整路径 |
+| 8 | `python3 scripts/check_dir.py <领域> <二级领域>` | 确认目录存在 |
+| 9 | 创建本地文档 `answers/领域/二级领域/文件名.md` | `<mark>` 高亮 + `<u>` 下划线 + 列表 |
+| 10 | `git add -f <路径> && git commit -m "<msg>"` | answers/ 在 .gitignore，必须 `-f` |
+| 11 | 查重命中 → `flomo_memo_update` 追加；无重复 → `flomo_memo_create` 上传 | 上传前加粗标题 `_` 转义为 `\_` |
+| 12 | `git reset HEAD~1` | 清除本地 commit（**严禁 push**） |
 - 主题有重叠但角度不同 → 创建新文档但注明"补充视角"
 - 完全独立 → 正常新建上传
 

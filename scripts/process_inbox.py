@@ -110,9 +110,11 @@ def build_prompt(source_type, source_url, content, filepath):
     """构建 subagent prompt"""
     common = f"""**mynews 项目 flomo 格式规范**（严格按 SKILL.md）：
 
+- 创建文档前先调 `flomo_get_format_guide` 确认格式，调 `flomo_tag_tree` 看已有标签
 - 本地文档直接写 flomo 格式，不是 4 章节 Markdown
 - 第一行必须是标签行：≥3 个 `#xxx` 或 `@xxx` 标签
 - 加粗标题用 `**xxx**`，不是 `#` 标题
+- 核心术语用 `<mark>高亮</mark>`，关键结论用 `<u>下划线</u>`
 - 禁止：# 标题、引用块、代码块、链接、图片、水平线、表格
 - 允许：**加粗**、`<mark>` 高亮、`<u>` 下划线、- 列表、1. 有序列表
 - answers 严禁 push 到远程
