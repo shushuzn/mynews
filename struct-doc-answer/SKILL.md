@@ -152,8 +152,8 @@ description: Use when creating, generating, or producing structured theoretical/
 ### 3.2 微信公众号流程
 
 1. TodoWrite + `flomo_memo_search` 查重
-2. `webfetch` 获取正文
-3. 解析 HTML 提取正文文本内容
+2. 用 iPhone UA 获取正文：`curl -sL "<URL>" -H "User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X)"`
+3. 解析 HTML 提取正文：提取 `<div class="rich_media_content">` 内的文本内容
 4. 创建本地文档（flomo 格式）并走标准流程 3.1 第 5-8 步
 
 ### 3.3 期刊目录页流程
