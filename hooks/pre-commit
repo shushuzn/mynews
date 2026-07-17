@@ -1,31 +1,30 @@
 #!/usr/bin/env python3
-"""
-Pre-commit hook for mynews
-
-USAGE:
-  文件路径: answers/领域/二级领域/知识点.md  (4层，不含空格)
-  文件名:  领域_二级领域_知识点.md         (3段式，段内不含空格)
-  标签:    第一行，≥3个，# 或 @ 前缀
-  标题:    **领域_二级领域_知识点**        (加粗，必须以 文件名前两段_ 开头)
-
-Validation rules:
-1. Only 11 approved top-level directories under answers/
-2. Only .md files checked (others skipped)
-3. Filename: Chinese/alphanumeric/_-(). allowed, no spaces, no special chars
-4. No path traversal (..)
-5. Exact depth: answers/domain/subdomain/file.md (exactly 4 parts/3 slashes)
-6. Content is in flomo format:
-   - Tags on the first line (# or @ prefix, ≥3)
-   - No Markdown headers (# ## ### etc.)
-   - No blockquotes (>)
-   - No code blocks (```)
-   - No links [text](url) or images ![](url)
-   - No horizontal rules (---)
-   - No tables (|)
-   - Allowed: **bold**, <mark>highlight</mark>, <u>underline</u>, - lists, 1. ordered lists
-7. Title similarity check: warns if a file with a similar title already exists
-   in the same subdomain directory in git history. Warns only, does not block.
-8. Bold title末尾禁止 _ 分隔符（`**xxx_yyy_**` 会触发 MCP server 将内部所有 `_` 转义为 `\_`）
+# Pre-commit hook for mynews
+#
+# USAGE:
+#   文件路径: answers/领域/二级领域/知识点.md  (4层，不含空格)
+#   文件名:  领域_二级领域_知识点.md         (3段式，段内不含空格)
+#   标签:    第一行，≥3个，# 或 @ 前缀
+#   标题:    **领域_二级领域_知识点**        (加粗，必须以 文件名前两段_ 开头)
+#
+# Validation rules:
+# 1. Only 11 approved top-level directories under answers/
+# 2. Only .md files checked (others skipped)
+# 3. Filename: Chinese/alphanumeric/underscore-dash-parentheses-dot allowed, no spaces, no special chars
+# 4. No path traversal (..)
+# 5. Exact depth: answers/domain/subdomain/file.md (exactly 4 parts/3 slashes)
+# 6. Content is in flomo format:
+#    - Tags on the first line (# or @ prefix, ≥3)
+#    - No Markdown headers (# ## ### etc.)
+#    - No blockquotes (>)
+#    - No code blocks (```)
+#    - No links [text](url) or images ![](url)
+#    - No horizontal rules (---)
+#    - No tables (|)
+#    - Allowed: **bold**, <mark>highlight</mark>, <u>underline</u>, - lists, 1. ordered lists
+# 7. Title similarity check: warns if a file with a similar title already exists
+#    in the same subdomain directory in git history. Warns only, does not block.
+# 8. Bold title末尾禁止 _ 分隔符（会触发 MCP server 将内部所有 _ 转义）
 
 import subprocess
 import sys
@@ -45,7 +44,7 @@ ALLOWED_ROOT_FILES = {
 # 非 answers/ 路径不进行 4 层深度和 flomo 格式检查（基础设施文件）
 INFRA_PREFIXES = (".opencode/", "scripts/", "docs/")
 
-FILENAME_PATTERN = re.compile(r'^[a-zA-Z0-9_\-\.\u4e00-\u9fff()]+$')
+FILENAME_PATTERN = re.compile('^[a-zA-Z0-9_\\-\\.\\u4e00-\\u9fff()]+$')
 PATH_TRAVERSAL = re.compile(r'\.\.')
 
 FORBIDDEN_PATTERNS = [
@@ -62,7 +61,7 @@ FORBIDDEN_PATTERNS = [
 BOLD_TRAILING_UNDERSCORE = re.compile(r'\*\*[^*]*_\*\*$')
 
 
-
+STOP_WORDS = {
     '与', '或', '的', '和', '及', '在', '对', '为', '了', '是',
     '一', '个', '上', '下', '中', '以', '等', '于', '把',
     '被', '用', '到', '从', '向', '由', '但', '却',
@@ -133,7 +132,7 @@ def validate_content(content, filename):
                 break
 
         # 检查来源行
-        has_source = bool(re.search(r'\*\*来源[：:]\s*.+', content))
+        has_source = bool(re.search(r'\*\*来源[^：:]*[：:]\s*.+', content))
         if not has_source:
             errors.append("缺少来源行，必须是 '**来源**：xxx' 或 '**来源: xxx'")
 
@@ -150,7 +149,7 @@ def validate_content(content, filename):
 
 
 def extract_title_keywords(filename):
-    """从文件名提取主要关键词，使用字符 n-gram 方法。"""
+    # 从文件名提取主要关键词，使用字符 n-gram 方法
     name = filename.replace('.md', '')
     parts = name.split('_')
     if len(parts) >= 3:
@@ -158,7 +157,7 @@ def extract_title_keywords(filename):
     else:
         keyword_part = name
 
-    cleaned = re.sub(r'[_\-\.]+', '', keyword_part)
+    cleaned = re.sub(r'[-_.]+', '', keyword_part)
     keywords = []
 
     chinese_chars = re.findall(r'[\u4e00-\u9fff]+', cleaned)
@@ -175,7 +174,7 @@ def extract_title_keywords(filename):
 
 
 def check_similar_titles(decoded_file, filename):
-    """检查同子目录下是否有相似标题的旧文件。"""
+    # 检查同子目录下是否有相似标题的旧文件
     parts = decoded_file.split(os.sep)
     if len(parts) < 3:
         return []
