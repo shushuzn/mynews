@@ -10,20 +10,20 @@ description: Use when creating, generating, or producing structured theoretical/
 | # | 检查项 | 合格标准 |
 |---|--------|----------|
 | 1 | **TodoWrite 开任务** | 收到 URL 后立即开 TodoWrite，第一项永远是查重 |
-| 2 | **查重 flomo_memo_search** | **唯一可靠的查重方式**——创建本地文档前必须调用 MCP 工具 `flomo_memo_search`，搜主题关键词 + 子领域，5 条以上结果需逐条评估是否重复 |
+| 2 | **查重 memo_search** | **唯一可靠的查重方式**——创建本地文档前必须调用 MCP 工具 `memo_search`（参数 `keywords`），搜主题关键词 + 子领域，5 条以上结果需逐条评估是否重复 |
 | 3 | 收到 URL → **立即 webfetch** | 不得以"之前处理过"为由跳过 |
 | 4 | 已读完整内容 | 不仅是标题/摘要/URL，必须读完全文 |
 | 5 | 文件名格式 | `领域_二级领域_知识点.md`，三段式，每段≥2字符 |
 | 6 | 标签数量 | ≥3个，必含 `#信号类型`，咨询类必含 `@咨询线` |
 | 7 | 本地 = flomo 格式 | 直接写 flomo 格式，**无需**转换 |
-| 8 | flomo 上传 | 调用 `flomo_memo_create` 上传（直接传本地文档内容） |
+| 8 | flomo 上传 | 调用 `memo_create` 上传（直接传本地文档内容） |
 | 9 | 无非 flomo 语法 | 禁止 `#` 标题/引用/代码块/链接/图片/水平线/表格 |
 | 10 | 标签在第一行 | 第一行必须是 `#xxx` 或 `@xxx` 标签 |
 | 11 | **answers 严禁推送到远程** | 上传 flomo 后必须 `git reset HEAD~1` 清除本地 commit，**永远不要 push answers/ 内容** |
 
 > **核心红线：禁止跳过。每条输入必须产出文档。禁止使用 Markdown 标题等非 flomo 语法。**
 >
-> **查重 = `flomo_memo_search`，不是别的**：本地 hook 的相似度检测只是辅助手段，**唯一权威查重是 `flomo_memo_search`**——因为 flomo 才是真实笔记库，git 历史和 working tree 都不完整。漏掉 flomo 查重会导致上传已有内容的重复笔记，浪费 flomo 配额、增加后续检索成本。
+> **查重 = `memo_search`，不是别的**：本地 hook 的相似度检测只是辅助手段，**唯一权威查重是 `memo_search`**（参数 `keywords`）——因为 flomo 才是真实笔记库，git 历史和 working tree 都不完整。漏掉 flomo 查重会导致上传已有内容的重复笔记，浪费 flomo 配额、增加后续检索成本。
 >
 > **answers 目录严格本地化**：所有 `answers/` 下的文档都是为 hook 验证临时创建的本地草稿，**永远不要 push 到 origin**。git remote 仓库只保留 `hooks/`、`scripts/`、`SKILL.md` 等基础设施代码。
 
@@ -146,19 +146,19 @@ description: Use when creating, generating, or producing structured theoretical/
 
 | 步骤 | 操作 | 校验点 |
 |------|------|--------|
-| 1 | **TodoWrite 开任务** | 第一项：`flomo_memo_search 查重` |
-| 2 | **`flomo_memo_search` 查重（必须）** | 调用 MCP 工具 `flomo_memo_search`，搜主题关键词 + 子领域；5 条以上逐条评估是否重复 |
+| 1 | **TodoWrite 开任务** | 第一项：`memo_search 查重` |
+| 2 | **`memo_search` 查重（必须）** | 调用 MCP 工具 `memo_search`（参数 `keywords`），搜主题关键词 + 子领域；5 条以上逐条评估是否重复 |
 | 3 | `webfetch <URL>` | 获取完整内容（必须读完） |
 | 4 | `flomo_get_format_guide` + `flomo_tag_tree` | 确认 flomo 格式规范；查看已有标签结构以保持标签一致 |
 | 5 | 确定文件名 `领域_二级领域_知识点.md` + 标签 | 三段式，每段≥2字符；标签 ≥3 个，含 `#信号类型` |
 | 6 | 创建本地文档 `answers/领域/二级领域/文件名.md` | flomo 格式：第一行标签 + `**加粗**` 标题 + `<mark>`/`<u>`/列表 |
 | 7 | `git add -f <file>` → hook 验证 | `answers/` 在 `.gitignore` 中，必须用 `-f`；hook 检测到相似标题会**警告** |
-| 8 | 查重命中 → `flomo_memo_update` 追加；无重复 → `flomo_memo_create` 上传 | 上传前将加粗标题 `_` 转义为 `\_`（flomo 会把 `_` 当斜体标记） |
+| 8 | 查重命中 → `memo_update` 追加；无重复 → `memo_create` 上传 | 上传前将加粗标题 `_` 转义为 `\_`（flomo 会把 `_` 当斜体标记） |
 | 9 | `git reset HEAD~1` | 清除本地 commit（**不 push**） |
 
 ### 3.2 微信公众号流程
 
-1. TodoWrite + `flomo_memo_search` 查重
+1. TodoWrite + `memo_search` 查重（参数 `keywords`）
 2. 用 iPhone UA 获取正文：`curl -sL "<URL>" -H "User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X)"`
 3. 解析 HTML 提取正文：提取 `<div class="rich_media_content">` 内的文本内容
 4. 创建本地文档（flomo 格式）并走标准流程 3.1 第 5-8 步
@@ -345,12 +345,12 @@ answers/领域/二级领域/文件名.md
 
 | 步骤 | 操作 | 说明 |
 |------|------|------|
-| 1 | `flomo_memo_search` 查重 | **唯一权威查重方式**（必做） |
+| 1 | `memo_search` 查重（参数 `keywords`） | **唯一权威查重方式**（必做） |
 | 2 | `webfetch` 获取原文 | 不得跳过 |
 | 3 | 创建本地文档（flomo 格式） | 第一行标签 + `**加粗**` 标题 |
 | 4 | `git add -f <file>` + `git commit` | `answers/` 在 `.gitignore` 中，必须 `-f`；hook 自动验证 |
 | 5 | 验证失败 | 修复格式重新 add/commit |
-| 6 | 验证通过 | `flomo_memo_create` 上传（传之前将加粗标题 `_` 转义为 `\_`） |
+| 6 | 验证通过 | `memo_create` 上传（传之前将加粗标题 `_` 转义为 `\_`） |
 | 7 | `git reset HEAD~1` | 清除本地 commit（**永远不要 push**） |
 
 ### 9.4 ⚠️ answers 目录严格本地化（重要）
@@ -375,7 +375,7 @@ answers/领域/二级领域/文件名.md
 |------|------|
 | **只做本 skill 明确写明的事情** | 未提及的操作一律禁止 |
 | **收到 URL 必须 webfetch** | 不得以"之前处理过"为由跳过 |
-| **必须 flomo_memo_search 查重** | 创建本地文档前必须调用；hook 的相似度检测只是辅助 |
+| **必须 memo_search 查重** | 创建本地文档前必须调用（参数 `keywords`）；hook 的相似度检测只是辅助 |
 | **必须创建本地文档** | 禁止直接上传 flomo，必须先创建本地文件并 hook 验证 |
 | **answers 严禁推送远程** | 所有 answers/ 文档是临时草稿，上传 flomo 后立即 `git reset HEAD~1` 清除；永远不要 push |
 | **更新前必须校验格式** | 更新笔记前必须检查是否符合本文档"二、文档结构"的所有格式规则 |
