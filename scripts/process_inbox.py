@@ -478,6 +478,12 @@ def process_file(filepath, args):
     if flomo_id:
         print(f"    [flomo] 上传成功 id={flomo_id}")
         # 上传成功后删除本地文档
+        # 先从staging区移除，避免误提交
+        subprocess.run(
+            ["git", "reset", "HEAD", "--", created_file],
+            cwd=str(BASE_DIR),
+            capture_output=True
+        )
         if full_path.exists():
             full_path.unlink()
             print(f"    [cleanup] 已删除本地文档: {created_file}")
