@@ -312,21 +312,6 @@ def process_without_kimi(source_url: str, source_type: str, content: str, feed_t
 
     print(f"    [classify] {domain} / {subdomain} / {knowledge}")
 
-    # 2. flomo 查重（用 knowledge 关键词）
-    print(f"    [flomo] 查重...")
-    existing_memos = search_flomo(knowledge)
-    dup_count = 0
-    if existing_memos:
-        try:
-            memos = existing_memos if isinstance(existing_memos, list) else [existing_memos]
-            dup_count = len(memos)
-        except Exception:
-            pass
-    if dup_count > 0:
-        print(f"    [flomo] 检测到 {dup_count} 条相似笔记，跳过上传")
-        return True, None
-    print(f"    [flomo] 无重复")
-
     # 3. 生成 flomo 内容
     flomo_content = generate_flomo_content(title, content, domain, subdomain, knowledge, source_title=knowledge)
 
@@ -361,7 +346,23 @@ def process_without_kimi(source_url: str, source_type: str, content: str, feed_t
         subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR))
         return False, None
 
-    # 6. 上传到 flomo
+    # 6. 查重并更新已有笔记
+    dup_result = search_flomo(knowledge)
+    dup_memos = dup_result if dup_result and isinstance(dup_result, list) else []
+    if dup_memos:
+        old_id = dup_memos[0].get("id") if isinstance(dup_memos[0], dict) else None
+        if old_id:
+            print(f"    [flomo] 检测到相似笔记 id={old_id}，自动更新...")
+            ok = update_flomo(old_id, flomo_content)
+            if ok:
+                print(f"    [flomo] 更新成功 id={old_id}")
+                subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR))
+                full_path.unlink()
+                return True, None
+            else:
+                print(f"    [flomo] 更新失败，继续新建")
+
+    # 7. 上传到 flomo
     flomo_id = upload_flomo(flomo_content)
     if flomo_id:
         print(f"    [flomo] 上传成功 id={flomo_id}")
@@ -485,6 +486,50 @@ def upload_flomo(content):
     except Exception as e:
         print(f"    [flomo upload] error: {e}")
         return None
+
+
+def update_flomo(memo_id, content):
+    """更新 flomo 已有笔记"""
+    def escape_underscore_in_bold(match):
+        return "**" + match.group(1).replace("_", "\\_") + "**"
+    content_escaped = re.sub(
+        r'^\*\*([^*]+)\*\*$', escape_underscore_in_bold, content, flags=re.MULTILINE
+    )
+
+    payload = json.dumps({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+            "name": "memo_update",
+            "arguments": {"id": memo_id, "content": content_escaped}
+        }
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        FLOMO_API_URL,
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream",
+            "Authorization": f"Bearer {FLOMO_TOKEN}"
+        },
+        method="POST"
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = resp.read().decode("utf-8")
+            for line in data.split("\n"):
+                if line.startswith("data:"):
+                    json_str = line[5:].strip()
+                    if json_str:
+                        result = json.loads(json_str)
+                        if "result" in result:
+                            return True
+            return False
+    except Exception as e:
+        print(f"    [flomo update] error: {e}")
+        return False
 
 
 def get_topic_keywords(source_type, content, feed_title):
@@ -876,14 +921,21 @@ def process_url(url: str, args):
 
     # 7. flomo 查重
     print("  [flomo] 查重...")
-    dup_check = search_flomo(knowledge)
-    dup_count = len(dup_check) if dup_check and isinstance(dup_check, list) else (1 if dup_check else 0)
-    if dup_count > 0:
-        print(f"  [flomo] 检测到 {dup_count} 条相似笔记，跳过上传（避免重复）")
-        print(f"  [flomo] 如需更新，请手动处理已有笔记")
-        subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR))
-        full_path.unlink()
-        return True
+    dup_result = search_flomo(knowledge)
+    dup_memos = dup_result if dup_result and isinstance(dup_result, list) else []
+    if dup_memos:
+        # 取第一条相似笔记的 ID
+        old_id = dup_memos[0].get("id") if isinstance(dup_memos[0], dict) else None
+        if old_id:
+            print(f"  [flomo] 检测到相似笔记 id={old_id}，自动更新...")
+            ok = update_flomo(old_id, flomo_content)
+            if ok:
+                print(f"  [flomo] 更新成功 id={old_id}")
+                subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR))
+                full_path.unlink()
+                return True
+            else:
+                print(f"  [flomo] 更新失败，继续新建")
 
     # 8. 上传到 flomo
     flomo_id = upload_flomo(flomo_content)
