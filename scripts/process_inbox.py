@@ -304,9 +304,17 @@ def process_without_kimi(source_url: str, source_type: str, content: str, feed_t
     if not content or len(content) < 50:
         return False, None
 
-    # 1. 搜索 flomo 去重
-    topic_keywords = article_title[:30] if article_title else title[:30]
-    existing_memos = search_flomo(topic_keywords)
+    # 1. 分类
+    domain, subdomain, knowledge = classify_content(title, content)
+    if not domain:
+        print(f"    [error] 无法分类内容，请手动处理")
+        return False, None
+
+    print(f"    [classify] {domain} / {subdomain} / {knowledge}")
+
+    # 2. flomo 查重（用 knowledge 关键词）
+    print(f"    [flomo] 查重...")
+    existing_memos = search_flomo(knowledge)
     dup_count = 0
     if existing_memos:
         try:
@@ -315,15 +323,9 @@ def process_without_kimi(source_url: str, source_type: str, content: str, feed_t
         except Exception:
             pass
     if dup_count > 0:
-        print(f"    [flomo] 检测到 {dup_count} 条相似笔记，将追加而非新建")
-
-    # 2. 分类
-    domain, subdomain, knowledge = classify_content(title, content)
-    if not domain:
-        print(f"    [error] 无法分类内容，请手动处理")
-        return False, None
-
-    print(f"    [classify] {domain} / {subdomain} / {knowledge}")
+        print(f"    [flomo] 检测到 {dup_count} 条相似笔记，跳过上传")
+        return True, None
+    print(f"    [flomo] 无重复")
 
     # 3. 生成 flomo 内容
     flomo_content = generate_flomo_content(title, content, domain, subdomain, knowledge, source_title=knowledge)
@@ -788,29 +790,34 @@ def process_url(url: str, args):
     else:
         if hasattr(args, 'content') and args.content:
             # --content 是原材料，需要 AI 理解后生成概念和子概念
-            print(f"\n{'='*60}")
-            print("【AI 生成阶段】请理解下方原材料，自己生成概念和子概念：")
-            print(f"{'='*60}")
-            raw = args.content
-            print(raw[:2000])
-            if len(raw) > 2000:
-                print(f"...（共 {len(raw)} 字符）")
-            print(f"{'='*60}")
-            print("请粘贴你生成的 **概念** 和 **子概念**（直接粘贴，不要加额外说明）：")
-            print("格式：\n**概念**：<mark>核心定义</mark>...\n\n**子概念**：\n- 要点1\n- 要点2\n")
-            content_lines = []
-            while True:
-                try:
-                    line = input()
-                except EOFError:
-                    break
-                if line.strip() == '.':
-                    break
-                content_lines.append(line)
-            body_text = '\n'.join(content_lines).strip()
-            if not body_text:
-                print("  [error] 正文内容为空")
-                return False
+            # --ai-content 是已生成的 AI 内容（直接传入，跳过交互）
+            if hasattr(args, 'ai_content') and args.ai_content:
+                body_text = args.ai_content
+                print(f"  [ai] 使用 --ai-content 内容（{len(body_text)} 字符）")
+            else:
+                print(f"\n{'='*60}")
+                print("【AI 生成阶段】请理解下方原材料，自己生成概念和子概念：")
+                print(f"{'='*60}")
+                raw = args.content
+                print(raw[:2000])
+                if len(raw) > 2000:
+                    print(f"...（共 {len(raw)} 字符）")
+                print(f"{'='*60}")
+                print("请粘贴你生成的 **概念** 和 **子概念**（直接粘贴，不要加额外说明）：")
+                print("格式：\n**概念**：<mark>核心定义</mark>...\n\n**子概念**：\n- 要点1\n- 要点2\n")
+                content_lines = []
+                while True:
+                    try:
+                        line = input()
+                    except EOFError:
+                        break
+                    if line.strip() == '.':
+                        break
+                    content_lines.append(line)
+                body_text = '\n'.join(content_lines).strip()
+                if not body_text:
+                    print("  [error] 正文内容为空")
+                    return False
         else:
             print(f"\n请输入正文内容（flomo 格式，用空行分隔，输入 '.' 结束）:")
             print("  格式提示: **概念**：<mark>核心定义</mark>...  |  **子概念**： |  - 要点列表\n")
@@ -870,10 +877,13 @@ def process_url(url: str, args):
     # 7. flomo 查重
     print("  [flomo] 查重...")
     dup_check = search_flomo(knowledge)
-    if dup_check:
-        print(f"  [flomo] 检测到 {len(dup_check) if isinstance(dup_check, list) else 1} 条相似笔记，将追加而非新建")
-    else:
-        print("  [flomo] 无重复，继续上传")
+    dup_count = len(dup_check) if dup_check and isinstance(dup_check, list) else (1 if dup_check else 0)
+    if dup_count > 0:
+        print(f"  [flomo] 检测到 {dup_count} 条相似笔记，跳过上传（避免重复）")
+        print(f"  [flomo] 如需更新，请手动处理已有笔记")
+        subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR))
+        full_path.unlink()
+        return True
 
     # 8. 上传到 flomo
     flomo_id = upload_flomo(flomo_content)
@@ -904,7 +914,9 @@ def main():
     parser.add_argument("--tags", type=str,
                         help="标签（可选，多个用空格分隔，如 --tags '#信号笔记 #AI'）")
     parser.add_argument("--content", type=str,
-                        help="正文内容（可选，直接指定而非交互输入）")
+                        help="原材料正文（作为 AI 理解的输入）")
+    parser.add_argument("--ai-content", type=str,
+                        help="AI 生成的概念和子概念内容（直接传入，跳过交互输入）")
     parser.add_argument("--title", type=str,
                         help="知识点标题（三段式，如：WAIC2026_中国AI_新产品发布；将作为文件名第三段）")
     args = parser.parse_args()
