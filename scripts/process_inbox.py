@@ -285,10 +285,10 @@ def generate_flomo_content(title: str, content: str, domain: str, subdomain: str
         s = s.strip()
         if len(s) > 10 and len(s) < 150 and len(bullets) < 5:
             if not re.match(r'^[\d一二三四五六七八九十]+[.、:：]', s):
-                # 提取句中首个关键词并加 <u>
+                # 提取句中首个关键词并加 <mark>
                 bullet_term = _extract_core_term(s)
                 if bullet_term:
-                    s = s.replace(bullet_term, f"<u>{bullet_term}</u>", 1)
+                    s = s.replace(bullet_term, f"<mark>{bullet_term}</mark>", 1)
                 bullets.append(f"- {s[:120]}")
 
     subconcept_block = ""
@@ -890,7 +890,7 @@ def process_url(url: str, args):
                     print(f"...（共 {len(raw)} 字符）")
                 print(f"{'='*60}")
                 print("请粘贴你生成的 **概念** 和 **子概念**（直接粘贴，不要加额外说明）：")
-                print("格式：\n**概念**：<mark>核心关键词</mark>...（核心词用<mark>，关键概念用<u>）\n\n**子概念**：\n- <u>关键概念1</u>：说明...\n- <u>关键概念2</u>：说明...\n（每个要点至少一个<u>关键词</u>）")
+                print("格式：\n**概念**：<mark>核心关键词</mark>...（核心词用<mark>高亮）\n\n**子概念**：\n- <mark>关键概念1</mark>：说明...\n- <mark>关键概念2</mark>：说明...\n（每个要点至少一个<mark>关键词</mark>高亮）")
                 content_lines = []
                 while True:
                     try:
