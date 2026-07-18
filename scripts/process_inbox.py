@@ -388,8 +388,8 @@ def process_without_kimi(source_url: str, source_type: str, content: str, feed_t
         return False, None
 
     # 6. 查重并更新已有笔记
-    dup_result = search_flomo(knowledge)
-    dup_memos = dup_result if dup_result and isinstance(dup_result, list) else []
+    dup_memos = search_flomo(knowledge)
+    dup_memos = dup_memos if dup_memos and isinstance(dup_memos, list) else []
     if dup_memos:
         old_id = dup_memos[0].get("id") if isinstance(dup_memos[0], dict) else None
         if old_id:
@@ -471,7 +471,21 @@ def search_flomo(keyword):
                     if json_str:
                         result = json.loads(json_str)
                         if "result" in result:
-                            return result["result"]
+                            raw = result["result"]
+                            # 解析外层：content 是 [{"type":"text","text":"{\"memos\":[...]}"}]
+                            content_list = raw.get("content", []) if isinstance(raw, dict) else []
+                            all_memos = []
+                            for item in content_list:
+                                if isinstance(item, dict) and item.get("type") == "text":
+                                    text_str = item.get("text", "")
+                                    if text_str:
+                                        try:
+                                            inner = json.loads(text_str)
+                                            memos = inner.get("memos", [])
+                                            all_memos.extend(memos)
+                                        except json.JSONDecodeError:
+                                            pass
+                            return all_memos
             return None
     except Exception as e:
         print(f"    [flomo search] error: {e}")
@@ -977,8 +991,8 @@ def process_url(url: str, args):
 
     # 7. flomo 查重
     print("  [flomo] 查重...")
-    dup_result = search_flomo(knowledge)
-    dup_memos = dup_result if dup_result and isinstance(dup_result, list) else []
+    dup_memos = search_flomo(knowledge)
+    dup_memos = dup_memos if dup_memos and isinstance(dup_memos, list) else []
     if dup_memos:
         # 取第一条相似笔记的 ID
         old_id = dup_memos[0].get("id") if isinstance(dup_memos[0], dict) else None
