@@ -365,11 +365,12 @@ def main():
                     f"(共享关键词: {', '.join(sorted(shared)[:5])}{'...' if len(shared) > 5 else ''}, 相似度: {similarity:.0%})"
                 ))
 
-            # 文件完全同名检测
-            collisions = check_filename_collision(decoded_file)
-            for coll in collisions:
-                fix = "删除本地旧文件后再提交: git rm " + coll
-                errors.append((file, f"文件已存在（同名冲突）: {coll}", fix))
+            # 文件完全同名检测（仅在 commit 模式检查，--staged 模式由 process_inbox 自行处理）
+            if not args.staged:
+                collisions = check_filename_collision(decoded_file)
+                for coll in collisions:
+                    fix = "删除本地旧文件后再提交: git rm " + coll
+                    errors.append((file, f"文件已存在（同名冲突）: {coll}", fix))
 
     if errors:
         print("验证失败:" if args.staged else "pre-commit hook 验证失败:")
