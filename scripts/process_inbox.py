@@ -734,8 +734,8 @@ def process_url(url: str, args):
             if not knowledge:
                 print("  不能为空，请重新输入")
                 continue
-            if '-' in knowledge:
-                print("  禁止使用 '-'")
+            if ' ' in knowledge:
+                print("  禁止使用空格")
                 continue
             break
     else:
@@ -744,17 +744,17 @@ def process_url(url: str, args):
         tags = args.tags.split() if (hasattr(args, 'tags') and args.tags) else ["#信号笔记"]
         if args.title:
             knowledge = args.title
-            if '-' in knowledge:
-                print("  [error] --title 禁止使用 '-'")
-                return False
         else:
             # 禁用自动生成，要求必须指定 --title
             print("  [error] --url 模式必须指定 --title 知识点名称")
             print("  示例: --title 'WAIC2026新品发布'")
             return False
 
-    # 4. 交互收集正文内容
-    if interactive:
+    # 4. 正文内容：--ai-content 直接使用；否则交互式收集
+    if hasattr(args, 'ai_content') and args.ai_content:
+        body_text = args.ai_content
+        print(f"  [ai] 使用 --ai-content 内容（{len(body_text)} 字符）")
+    elif interactive:
         print(f"\n请输入正文内容（flomo 格式，用空行分隔段落，输入单独的 '.' 结束）:")
         print("  格式提示: **概念**：<mark>核心定义</mark>...  |  **子概念**： |  - 要点列表")
         print("  (输入 '.' 回车结束输入)\n")
