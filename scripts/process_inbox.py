@@ -903,14 +903,9 @@ def process_url(url: str, args):
                 full_path.unlink()
                 return True
             elif choice == 'u':
-                ok = update_flomo(old_id, flomo_content)
-                if ok:
-                    print(f"  [flomo] 更新成功 id={old_id}")
-                    subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR))
-                    full_path.unlink()
-                    return True
-                else:
-                    print(f"  [flomo] 更新失败，继续新建")
+                print(f"  [flomo] 我来手动更新 id={old_id}，退出程序")
+                import sys
+                sys.exit(1)
 
     # 8. 上传到 flomo
     flomo_id = upload_flomo(flomo_content)
