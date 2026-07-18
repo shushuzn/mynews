@@ -251,101 +251,16 @@ def classify_content(title: str, content: str) -> tuple:
     return best_domain, best_subdomain, knowledge
 
 
-def generate_flomo_content(title: str, content: str, domain: str, subdomain: str, knowledge: str, source_title: str = None) -> str:
-    """从原始内容生成 flomo 格式字符串（自动添加高亮和下划线）。"""
-    import re
 
-    # 清理原始内容中的 HTML 标签
-    clean = re.sub(r'<[^>]+>', '', content)
-    clean = re.sub(r'\s+', ' ', clean).strip()
-
-    # 取前 500 字作为正文摘要
-    body_preview = clean[:500]
-    if len(clean) > 500:
-        body_preview += "……"
-
-    # 提取概念：取第一句完整的话
-    first_para = clean.split('。')[0] if '。' in clean else clean[:200]
-    if len(first_para) > 200:
-        first_para = first_para[:197] + "……"
-    if not first_para.strip():
-        first_para = title[:80]  # 内容为空时用标题兜底
-
-    # 为概念添加 <mark> 高亮：提取核心关键词（名词短语）
-    # 策略：取第一句中首个中文名词短语（2-6字）
-    concept_text = first_para[:300]
-    core_term = _extract_core_term(concept_text)
-    if core_term and core_term in concept_text:
-        concept_text = concept_text.replace(core_term, f"<mark>{core_term}</mark>", 1)
-
-    # 生成子概念：从正文中提取关键句子，并为每句首个关键词加 <u>
-    sentences = re.split(r'[。\n]', clean)
-    bullets = []
-    for s in sentences:
-        s = s.strip()
-        if len(s) > 10 and len(s) < 150 and len(bullets) < 5:
-            if not re.match(r'^[\d一二三四五六七八九十]+[.、:：]', s):
-                # 提取句中首个关键词并加 <mark>
-                bullet_term = _extract_core_term(s)
-                if bullet_term:
-                    s = s.replace(bullet_term, f"<mark>{bullet_term}</mark>", 1)
-                bullets.append(f"- {s[:120]}")
-
-    subconcept_block = ""
-    if bullets:
-        subconcept_block = "\n\n**子概念**：\n\n" + "\n".join(bullets)
-    else:
-        subconcept_block = "\n\n**子概念**：\n\n- " + concept_text[:80]
-
-    return f"""#信号笔记 #{domain} #{subdomain}
-
-**{domain}_{subdomain}_{knowledge}**
-
-**来源**：{source_title if source_title else "网络"}
-
-**概念**：{concept_text}{subconcept_block}
-"""
-
-
-def _extract_core_term(text: str) -> str:
-    """从文本中提取核心关键词（首个中文名词短语，2-6字）。"""
-    # 匹配首个 2-6 字的中文词组（包含常见名词后缀）
-    patterns = [
-        r'[\u4e00-\u9fff]{2,4}法则',
-        r'[\u4e00-\u9fff]{2,6}效应',
-        r'[\u4e00-\u9fff]{2,6}理论',
-        r'[\u4e00-\u9fff]{2,6}原则',
-        r'[\u4e00-\u9fff]{2,6}模型',
-        r'[\u4e00-\u9fff]{2,6}规律',
-        r'[\u4e00-\u9fff]{2,6}机制',
-        r'[\u4e00-\u9fff]{2,6}方法',
-        r'[\u4e00-\u9fff]{2,6}方案',
-        r'[\u4e00-\u9fff]{2,6}策略',
-        r'[\u4e00-\u9fff]{2,6}规律',
-        r'[\u4e00-\u9fff]{2,6}定律',
-        r'[\u4e00-\u9fff]{2,6}现象',
-        r'[\u4e00-\u9fff]{2,6}问题',
-        r'[\u4e00-\u9fff]{2,6}原因',
-        r'[\u4e00-\u9fff]{2,6}结果',
-        r'[\u4e00-\u9fff]{3,6}',
-    ]
-    for pat in patterns:
-        m = re.search(pat, text)
-        if m:
-            return m.group(0)
-    # 降级：取前2-4个连续中文
-    m = re.search(r'[\u4e00-\u9fff]{2,4}', text)
-    return m.group(0) if m else ""
 
 
 def process_without_kimi(source_url: str, source_type: str, content: str, feed_title: str, filepath: str, args, article_title: str = None) -> tuple:
-    """本地处理：分类 → 生成 → 验证 → 上传。返回 (success, created_file)。"""
-    # 优先使用从文章内容提取的真实标题，其次使用 feed_title（频道名）
+    """inbox 批处理：分类 → 写入原始内容 → 停住等我补充概念/子概念。返回 (success, created_file)。"""
     title = article_title or feed_title or "未命名"
     if not content or len(content) < 50:
         return False, None
 
-    # 1. 分类
+    # 1. 分类（结构性工作，程序可以做）
     domain, subdomain, knowledge = classify_content(title, content)
     if not domain:
         print(f"    [error] 无法分类内容，请手动处理")
@@ -353,12 +268,8 @@ def process_without_kimi(source_url: str, source_type: str, content: str, feed_t
 
     print(f"    [classify] {domain} / {subdomain} / {knowledge}")
 
-    # 3. 生成 flomo 内容
-    flomo_content = generate_flomo_content(title, content, domain, subdomain, knowledge)
-
-    # 4. 创建本地文件（验证用）
+    # 2. 写入原始内容，等我补充概念/子概念（创造性工作禁止程序处理）
     filename = f"{domain}_{subdomain}_{knowledge}.md"
-    # 修正段数
     name_part = filename[:-3]
     parts = name_part.split('_')
     while len(parts) > 3:
@@ -368,77 +279,19 @@ def process_without_kimi(source_url: str, source_type: str, content: str, feed_t
 
     full_path = BASE_DIR / "answers" / domain / subdomain / filename
     full_path.parent.mkdir(parents=True, exist_ok=True)
-    # 删除旧文件（同一会话重复运行时会碰到）
     if full_path.exists():
         full_path.unlink()
+
+    import re
+    clean = re.sub(r'<[^>]+>', '', content)
+    clean = re.sub(r'\s+', ' ', clean).strip()
     with open(full_path, "w", encoding="utf-8") as f:
-        f.write(flomo_content)
-    print(f"    [file] 已创建: {full_path.relative_to(BASE_DIR)}")
+        f.write(clean)
+    print(f"    [file] 已创建（待补充概念/子概念）: {full_path.relative_to(BASE_DIR)}")
+    print(f"    [stop] 请手动补充 **概念** 和 **子概念** 后重新运行")
 
-    # 5. hook 验证
-    subprocess.run(["git", "add", "-f", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR))
-    hook_result = subprocess.run(
-        [PYTHON_BIN, str(BASE_DIR / "hooks" / "pre-commit"), "--staged"],
-        cwd=str(BASE_DIR),
-        capture_output=True, text=True
-    )
-    if hook_result.returncode != 0:
-        print(f"    [error] 格式验证失败:\n{hook_result.stdout[:300]}")
-        subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR))
-        return False, None
-
-    # 6. 查重并更新已有笔记
-    dup_memos = search_flomo(knowledge)
-    dup_memos = dup_memos if dup_memos and isinstance(dup_memos, list) else []
-    if dup_memos:
-        best = dup_memos[0]
-        old_id = best.get("id") if isinstance(best, dict) else None
-        relevance = best.get("relevance", 0) if isinstance(best, dict) else 0
-        if old_id:
-            print(f"    [flomo] 检测到相似笔记 id={old_id}（relevance={relevance:.2f}）")
-            import termios, tty, os
-            if os.isatty(0):
-                print(f"    选择: [u]更新旧笔记  [s]跳过上传  [n]新建: ", end='', flush=True)
-                fd = os.open('/dev/tty', os.O_RDONLY)
-                old_settings = termios.tcgetattr(fd)
-                try:
-                    tty.setraw(fd)
-                    ch = os.read(fd, 1).decode()
-                finally:
-                    termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-                    os.close(fd)
-                print(ch)
-                choice = ch.strip().lower()
-            else:
-                print(f"    [flomo] 检测到重复 id={old_id}，relevance={relevance:.2f}，退出由我处理")
-                import sys
-                sys.exit(1)
-            if choice == 'u':
-                ok = update_flomo(old_id, flomo_content)
-                if ok:
-                    print(f"    [flomo] 更新成功 id={old_id}")
-                    subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR))
-                    full_path.unlink()
-                    return True, None
-                else:
-                    print(f"    [flomo] 更新失败，继续新建")
-            elif choice == 's':
-                print(f"    [flomo] 跳过上传")
-                subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR))
-                full_path.unlink()
-                return True, None
-
-    # 7. 上传到 flomo
-    flomo_id = upload_flomo(flomo_content)
-    if flomo_id:
-        print(f"    [flomo] 上传成功 id={flomo_id}")
-        subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR))
-        full_path.unlink()
-        print(f"    [cleanup] 已删除本地文件")
-        return True, str(full_path.relative_to(BASE_DIR))
-    else:
-        print(f"    [flomo] 上传失败（文件保留在: {full_path}）")
-        return False, None
+    subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR))
+    return False, None
 
 
 def call_kimi(prompt, timeout=KIMI_TIMEOUT):
