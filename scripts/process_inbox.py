@@ -291,7 +291,7 @@ def generate_flomo_content(title: str, content: str, domain: str, subdomain: str
 
 **{domain}_{subdomain}_{knowledge}**
 
-**来源**：{(source_title or knowledge)[:100]}
+**来源**：{source_title if source_title else "网络"}
 
 **概念**：{first_para[:300]}{subconcept_block}
 """
@@ -313,7 +313,7 @@ def process_without_kimi(source_url: str, source_type: str, content: str, feed_t
     print(f"    [classify] {domain} / {subdomain} / {knowledge}")
 
     # 3. 生成 flomo 内容
-    flomo_content = generate_flomo_content(title, content, domain, subdomain, knowledge, source_title=knowledge)
+    flomo_content = generate_flomo_content(title, content, domain, subdomain, knowledge)
 
     # 4. 创建本地文件（验证用）
     filename = f"{domain}_{subdomain}_{knowledge}.md"
@@ -899,7 +899,7 @@ def process_url(url: str, args):
 
 {bold_title}
 
-**来源**：{knowledge}
+**来源**：网络
 
 {body_text}
 """
