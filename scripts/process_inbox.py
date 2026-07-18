@@ -897,7 +897,10 @@ def process_url(url: str, args):
                     sys.exit(1)
                 else:
                     print(f"  [flomo] 低相关（relevance={relevance:.2f}），继续新建")
-            if choice == 's':
+                    choice = None  # non-TTY, low relevance: 跳过choice逻辑，直接新建
+            if choice is None:
+                pass  # 继续新建
+            elif choice == 's':
                 print(f"  [flomo] 跳过上传")
                 subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR))
                 full_path.unlink()
