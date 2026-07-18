@@ -891,9 +891,12 @@ def process_url(url: str, args):
                 print(ch)
                 choice = ch.strip().lower()
             else:
-                print(f"  [flomo] 检测到重复 id={old_id}， relevance={relevance:.2f}，退出由我处理")
-                import sys
-                sys.exit(1)
+                if relevance >= 0.9:
+                    print(f"  [flomo] 检测到高相似笔记 id={old_id}（relevance={relevance:.2f}），退出由我处理")
+                    import sys
+                    sys.exit(1)
+                else:
+                    print(f"  [flomo] 低相关（relevance={relevance:.2f}），继续新建")
             if choice == 's':
                 print(f"  [flomo] 跳过上传")
                 subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR))
