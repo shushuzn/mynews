@@ -30,6 +30,7 @@ import subprocess
 import sys
 import re
 import os
+from pathlib import Path
 
 ALLOWED_TOP_DIRS = {
     "医学", "安全", "技术", "政治", "教育科学", "法律",
@@ -198,6 +199,16 @@ def extract_title_keywords(filename):
     return set(keywords)
 
 
+def check_filename_collision(decoded_file):
+    """检查 answers/ 目录下是否有完全同名的已存在文件（工作树）。"""
+    if not decoded_file.startswith("answers/"):
+        return []
+    existing = Path(decoded_file)
+    if existing.exists():
+        return [decoded_file]
+    return []
+
+
 def check_similar_titles(decoded_file, filename):
     # 检查同子目录下是否有相似标题的旧文件
     parts = decoded_file.split(os.sep)
@@ -311,23 +322,27 @@ def main():
 
         if len(parts) != 4:
             depth = len(parts) - 1
-            errors.append((file, f"路径深度必须是4层(answers/领域/二级领域/文件名.md)，当前{depth}层"))
+            fix = f"在 answers/ 下创建正确层级目录，如: mkdir -p answers/技术/AI芯片/"
+            errors.append((file, f"路径深度必须是4层(answers/领域/二级领域/文件名.md)，当前{depth}层", fix))
             continue
 
         top_dir = parts[1]
 
         if top_dir not in ALLOWED_TOP_DIRS:
-            errors.append((file, f"顶级目录 '{top_dir}' 不在白名单内"))
+            fix = f"顶级目录必须为以下之一: {' '.join(sorted(ALLOWED_TOP_DIRS))}；将文件移动到正确目录下"
+            errors.append((file, f"顶级目录 '{top_dir}' 不在白名单内", fix))
             continue
 
         name_part = filename[:-3] if filename.endswith('.md') else filename
         name_first_part = name_part.split('_')[0]
         if name_first_part != top_dir:
-            errors.append((file, f"文件名第一段 '{name_first_part}' 必须等于顶级目录名 '{top_dir}'"))
+            fix = f"将文件名第一段改为 '{top_dir}'，或移动文件到 answers/{name_first_part}/ 目录"
+            errors.append((file, f"文件名第一段 '{name_first_part}' 必须等于顶级目录名 '{top_dir}'", fix))
 
         valid, msg = validate_filename(filename)
         if not valid:
-            errors.append((file, f"文件名问题: {msg}"))
+            fix = "用连字符-代替知识点部分的下划线_（尤其当含英文缩写时），如：真武T-Head-SAIL软件栈开源.md"
+            errors.append((file, f"文件名问题: {msg}", fix))
 
         if len(parts) == 4 and parts[0] == "answers":
             try:
@@ -350,19 +365,30 @@ def main():
                     f"(共享关键词: {', '.join(sorted(shared)[:5])}{'...' if len(shared) > 5 else ''}, 相似度: {similarity:.0%})"
                 ))
 
+            # 文件完全同名检测
+            collisions = check_filename_collision(decoded_file)
+            for coll in collisions:
+                fix = "删除本地旧文件后再提交: git rm " + coll
+                errors.append((file, f"文件已存在（同名冲突）: {coll}", fix))
+
     if errors:
         print("验证失败:" if args.staged else "pre-commit hook 验证失败:")
         print()
         by_type = {}
-        for file, reason in errors:
+        for entry in errors:
+            file = entry[0]
+            reason = entry[1] if len(entry) > 1 else entry
+            fix = entry[2] if len(entry) > 2 else ""
             if reason not in by_type:
-                by_type[reason] = []
-            by_type[reason].append(file)
+                by_type[reason] = {"files": [], "fix": fix}
+            by_type[reason]["files"].append(file)
 
-        for reason, files in by_type.items():
+        for reason, data in by_type.items():
             print(f"【{reason}】")
-            for f in files:
+            for f in data["files"]:
                 print(f"  - {f}")
+            if data["fix"]:
+                print(f"  💡 修复: {data['fix']}")
             print()
 
         print("允许的顶级目录:", " ".join(sorted(ALLOWED_TOP_DIRS)))
