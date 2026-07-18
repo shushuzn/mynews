@@ -265,6 +265,11 @@ def main():
             errors.append((file, f"顶级目录 '{top_dir}' 不在白名单内"))
             continue
 
+        name_part = filename[:-3] if filename.endswith('.md') else filename
+        name_first_part = name_part.split('_')[0]
+        if name_first_part != top_dir:
+            errors.append((file, f"文件名第一段 '{name_first_part}' 必须等于顶级目录名 '{top_dir}'"))
+
         valid, msg = validate_filename(filename)
         if not valid:
             errors.append((file, f"文件名问题: {msg}"))
