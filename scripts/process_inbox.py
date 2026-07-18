@@ -477,6 +477,10 @@ def process_file(filepath, args):
     flomo_id = upload_flomo(flomo_content)
     if flomo_id:
         print(f"    [flomo] 上传成功 id={flomo_id}")
+        # 上传成功后删除本地文档
+        if full_path.exists():
+            full_path.unlink()
+            print(f"    [cleanup] 已删除本地文档: {created_file}")
     else:
         print(f"    [flomo] 上传失败（文件已保存本地）")
 
