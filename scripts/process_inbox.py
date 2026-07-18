@@ -632,12 +632,12 @@ ALLOWED_TOP_DIRS = {
 
 def slugify(text: str) -> str:
     """Convert text to a safe filename segment (keep Chinese, alphanumeric, hyphenate others).
-    Truncates to 30 chars to keep filename manageable."""
+    Truncates to 50 chars to keep filename manageable while preserving meaning."""
     import re
     # Replace non-alphanumeric with hyphen (keep Chinese, letters, digits)
     text = re.sub(r'[^\u4e00-\u9fffA-Za-z0-9]', '-', text)
     text = re.sub(r'-+', '-', text).strip('-')
-    return text[:30]
+    return text[:50]
 
 
 def ask_domain() -> str:
@@ -712,7 +712,7 @@ def process_url(url: str, args):
                 html = resp.read().decode("utf-8", errors="replace")
             # 简单提取 <title>
             title_match = re.search(r'<title[^>]*>([^<]+)</title>', html, re.IGNORECASE)
-            title = title_match.group(1).strip() if title_match else ""
+            wx_title = title_match.group(1).strip() if title_match else ""
             # 简单提取正文（取 <body> 内的文字）
             body_match = re.search(r'<body[^>]*>(.*)</body>', html, re.IGNORECASE | re.DOTALL)
             body = body_match.group(1) if body_match else html
@@ -725,11 +725,14 @@ def process_url(url: str, args):
             return False
 
     # 2. 提取标题
+    # WeChat: 用 wx_title（HTML <title>，真实标题）；其他: 取内容第一行
     lines = [l.strip() for l in text.split('\n') if l.strip()]
-    # 取第一行非空行作为标题
-    title = lines[0][:80] if lines else "未命名"
-    if len(title) > 60:
-        title = title[:57] + "..."
+    if is_wechat_url(url) and wx_title:
+        title = wx_title
+    else:
+        title = lines[0][:80] if lines else "未命名"
+        if len(title) > 60:
+            title = title[:57] + "..."
     print(f"  标题: {title}")
 
     # 3. 交互收集元信息
