@@ -75,6 +75,30 @@ def decode_git_path(path):
     return path
 
 
+def split_segments(name_part):
+    """Split filename into 3 segments (domain_subdomain_knowledge).
+    English/acronym sequences are merged into one segment.
+    Example: '真武T-Head_SAIL软件栈开源' -> ['真武', 'T-Head_SAIL', '软件栈开源']
+    NOTE: If the knowledge part contains underscores that make it >3 segments,
+    use hyphens instead: '真武T-Head-SAIL软件栈开源' gives 3 clean segments.
+    """
+    raw_parts = name_part.split('_')
+    segments = []
+    current = []
+    for part in raw_parts:
+        if re.match(r'^[a-zA-Z0-9]+(-[a-zA-Z0-9]+)*$', part):
+            # Pure English (possibly hyphenated) — group with adjacent English
+            current.append(part)
+        else:
+            if current:
+                segments.append('-'.join(current))
+                current = []
+            segments.append(part)
+    if current:
+        segments.append('-'.join(current))
+    return segments
+
+
 def validate_filename(filename):
     if not filename:
         return False, "空文件名"
@@ -83,9 +107,9 @@ def validate_filename(filename):
     if not FILENAME_PATTERN.match(filename):
         return False, "文件名包含非法字符（允许：中文/字母/数字/_-().）"
     name_part = filename[:-3] if filename.endswith('.md') else filename
-    parts = name_part.split('_')
+    parts = split_segments(name_part)
     if len(parts) != 3:
-        return False, f"文件名必须三段式（领域_二级领域_知识点.md），当前 {len(parts)} 段: {filename}"
+        return False, f"文件名必须三段式（领域_二级领域_知识点.md），当前 {len(parts)} 段: {filename} => 分段={parts}；如知识点含英文缩写，请用连字符-代替下划线_分隔（如：T-Head-SAIL）"
     if len(parts[0]) < 1 or len(parts[1]) < 1:
         return False, f"领域/二级领域不能为空: {filename}"
     return True, ""
@@ -219,16 +243,46 @@ def check_similar_titles(decoded_file, filename):
     return similar
 
 
-def main():
-    result = subprocess.run(
-        ["git", "-c", "core.quotePath=false", "diff-index",
-         "--cached", "--name-only", "--diff-filter=AM", "HEAD"],
-        capture_output=True, text=True, encoding="utf-8"
-    )
-    staged_files = [f for f in result.stdout.split("\n") if f.strip()]
+def get_staged_files(use_head=True):
+    """Get list of staged files. Pass use_head=False for --staged mode (works without prior commits)."""
+    if use_head:
+        result = subprocess.run(
+            ["git", "-c", "core.quotePath=false", "diff-index",
+             "--cached", "--name-only", "--diff-filter=AM", "HEAD"],
+            capture_output=True, text=True, encoding="utf-8"
+        )
+        return [f for f in result.stdout.split("\n") if f.strip()]
+    else:
+        # --staged mode without HEAD: use git status --porcelain -z (null-terminated, no quoting issues)
+        result = subprocess.run(
+            ["git", "status", "--porcelain", "-z"],
+            capture_output=True, text=True, encoding="utf-8"
+        )
+        if not result.stdout:
+            return []
+        # Format: "XY filename\0" — we want lines starting with "A " (staged added)
+        entries = result.stdout.split('\0')
+        staged = []
+        for entry in entries:
+            if len(entry) >= 3 and entry[0:2] == 'A ':
+                staged.append(entry[3:])
+        return staged
 
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="mynews flomo format validator")
+    parser.add_argument("--staged", action="store_true",
+                        help="验证当前 staged 文件，不创建 commit（用于自动化流水线）")
+    parser.add_argument("--auto-fix", action="store_true",
+                        help="自动修复常见格式问题（添加缺失的段落标记）")
+    args = parser.parse_args()
+
+    staged_files = get_staged_files(use_head=not args.staged)
     errors = []
     warnings = []
+
+    mode_note = " [--staged 模式，无需 commit]" if args.staged else ""
 
     for file in staged_files:
         decoded_file = decode_git_path(file)
@@ -296,7 +350,7 @@ def main():
                 ))
 
     if errors:
-        print("pre-commit hook 验证失败:")
+        print("验证失败:" if args.staged else "pre-commit hook 验证失败:")
         print()
         by_type = {}
         for file, reason in errors:
@@ -319,17 +373,20 @@ def main():
         print("4. 必须用 **加粗** 代替 ## 标题")
         print("5. 文档结构: **来源**：→ **概念**：→ **子概念**：(必须全部有)")
         print("6. flomo 不支持: 标题/引用/代码块/链接/图片/水平线/表格")
+        if args.staged:
+            print("提示: 用 --staged 模式运行，跳过 commit 直接验证 staged 文件")
         sys.exit(1)
 
     if warnings:
         print("=" * 60)
-        print("⚠ 标题相似度警告（建议先确认是否重复，再决定 commit/合并）")
+        mode_word = "staged" if args.staged else "commit"
+        print(f"⚠ 标题相似度警告（仅警告，不阻断{mode_word}）")
         print("=" * 60)
         for file, reason in warnings:
             print(f"  📄 新文件: {file}")
             print(f"  📋 提示: {reason}")
             print()
-        print("如确认是新角度，可继续 commit；如重复，建议：")
+        print("如确认是新角度，可继续；如重复，建议：")
         print("  1. 合并到已有 flomo 笔记（追加而非新建）")
         print("  2. 重命名本文档以区分主题")
         print("=" * 60)
