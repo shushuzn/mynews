@@ -136,6 +136,14 @@ def validate_content(filepath, expected_domain, expected_subdomain, filename):
     elif "：" not in source_line and ":" not in source_line:
         errors.append(f"❌ 来源行 '{source_line[:50]}' 缺少冒号")
 
+    has_concept = bool(re.search(r'^\*\*概念\*\*[：:]', content, re.MULTILINE))
+    if not has_concept:
+        errors.append("❌ 缺少 '**概念**：xxx' 段落")
+
+    has_subconcept = bool(re.search(r'^\*\*子概念\*\*[：:]', content, re.MULTILINE))
+    if not has_subconcept:
+        errors.append("❌ 缺少 '**子概念**：' 段落")
+
     return errors
 
 
