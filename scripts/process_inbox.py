@@ -631,12 +631,12 @@ ALLOWED_TOP_DIRS = {
 
 
 def slugify(text: str) -> str:
-    """Convert text to a safe filename segment (keep Chinese, alphanumeric, hyphenate others).
-    Truncates to 50 chars to keep filename manageable while preserving meaning."""
+    """Convert text to a safe filename segment (keep Chinese, alphanumeric, underscore others).
+    Truncates to 50 chars. Only allows: Chinese chars, letters, digits, underscores, parentheses."""
     import re
-    # Replace non-alphanumeric with hyphen (keep Chinese, letters, digits)
-    text = re.sub(r'[^\u4e00-\u9fffA-Za-z0-9]', '-', text)
-    text = re.sub(r'-+', '-', text).strip('-')
+    # Replace non-alphanumeric with underscore (keep Chinese, letters, digits)
+    text = re.sub(r'[^\u4e00-\u9fffA-Za-z0-9]', '_', text)
+    text = re.sub(r'_+', '_', text).strip('_')
     return text[:50]
 
 
@@ -733,7 +733,6 @@ def process_url(url: str, args):
         title = lines[0][:80] if lines else "未命名"
         if len(title) > 60:
             title = title[:57] + "..."
-    print(f"  标题: {title}")
 
     # 3. 交互收集元信息
     interactive = not (hasattr(args, 'domain') and args.domain)
@@ -742,10 +741,31 @@ def process_url(url: str, args):
         domain = ask_domain()
         subdomain = ask_subdomain()
         tags = ask_tags()
+        print(f"\n  文章标题: {title}")
+        print("  文件名格式: 领域_二级领域_知识点.md（三段式，知识点为第三段）")
+        while True:
+            knowledge = input("知识点名称（第三段，如：WAIC2026新产品发布）: ").strip()
+            if not knowledge:
+                print("  不能为空，请重新输入")
+                continue
+            if '-' in knowledge:
+                print("  禁止使用 '-'")
+                continue
+            break
     else:
         domain = args.domain
         subdomain = args.subdomain if args.subdomain else ask_subdomain()
         tags = args.tags.split() if (hasattr(args, 'tags') and args.tags) else ["#信号笔记"]
+        if args.title:
+            knowledge = args.title
+            if '-' in knowledge:
+                print("  [error] --title 禁止使用 '-'")
+                return False
+        else:
+            # 禁用自动生成，要求必须指定 --title
+            print("  [error] --url 模式必须指定 --title 知识点名称")
+            print("  示例: --title 'WAIC2026新品发布'")
+            return False
 
     # 4. 交互收集正文内容
     if interactive:
@@ -784,17 +804,7 @@ def process_url(url: str, args):
         return False
 
     # 5. 构建 flomo 内容
-    knowledge = slugify(title)
     filename = f"{domain}_{subdomain}_{knowledge}.md"
-    # 检查并修正段数
-    name_part = filename[:-3]
-    parts = name_part.split('_')
-    # 如果超过3段，合并后几段
-    while len(parts) > 3:
-        parts[2] = parts[2] + '_' + parts[3]
-        parts.pop(3)
-    filename = '_'.join(parts) + ".md"
-
     full_path = BASE_DIR / "answers" / domain / subdomain / filename
     full_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -861,6 +871,8 @@ def main():
                         help="标签（可选，多个用空格分隔，如 --tags '#信号笔记 #AI'）")
     parser.add_argument("--content", type=str,
                         help="正文内容（可选，直接指定而非交互输入）")
+    parser.add_argument("--title", type=str,
+                        help="知识点标题（三段式，如：WAIC2026_中国AI_新产品发布；将作为文件名第三段）")
     args = parser.parse_args()
 
     if args.url:
