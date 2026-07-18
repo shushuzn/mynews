@@ -825,6 +825,9 @@ def process_url(url: str, args):
         if len(title) > 60:
             title = title[:57] + "..."
 
+    # 确定来源标题：微信文章用wx_title，其他用None（默认"网络"）
+    source_title = wx_title if (is_wechat_url(url) and wx_title) else None
+
     # 3. 交互收集元信息
     interactive = not (hasattr(args, 'domain') and args.domain)
     print()
@@ -946,7 +949,7 @@ def process_url(url: str, args):
 
 {bold_title}
 
-**来源**：网络
+**来源**：{source_title if source_title else "网络"}
 
 {body_text}
 """
