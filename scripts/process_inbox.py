@@ -251,7 +251,7 @@ def classify_content(title: str, content: str) -> tuple:
     return best_domain, best_subdomain, knowledge
 
 
-def generate_flomo_content(title: str, content: str, domain: str, subdomain: str, knowledge: str) -> str:
+def generate_flomo_content(title: str, content: str, domain: str, subdomain: str, knowledge: str, source_title: str = None) -> str:
     """从原始内容生成 flomo 格式字符串。"""
     import re
 
@@ -291,7 +291,7 @@ def generate_flomo_content(title: str, content: str, domain: str, subdomain: str
 
 **{domain}_{subdomain}_{knowledge}**
 
-**来源**：{title[:100]}
+**来源**：{(source_title or knowledge)[:100]}
 
 **概念**：{first_para[:300]}{subconcept_block}
 """
@@ -326,7 +326,7 @@ def process_without_kimi(source_url: str, source_type: str, content: str, feed_t
     print(f"    [classify] {domain} / {subdomain} / {knowledge}")
 
     # 3. 生成 flomo 内容
-    flomo_content = generate_flomo_content(title, content, domain, subdomain, knowledge)
+    flomo_content = generate_flomo_content(title, content, domain, subdomain, knowledge, source_title=knowledge)
 
     # 4. 创建本地文件（验证用）
     filename = f"{domain}_{subdomain}_{knowledge}.md"
