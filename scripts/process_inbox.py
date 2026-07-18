@@ -252,7 +252,7 @@ def classify_content(title: str, content: str) -> tuple:
 
 
 def generate_flomo_content(title: str, content: str, domain: str, subdomain: str, knowledge: str, source_title: str = None) -> str:
-    """从原始内容生成 flomo 格式字符串。"""
+    """从原始内容生成 flomo 格式字符串（自动添加高亮和下划线）。"""
     import re
 
     # 清理原始内容中的 HTML 标签
@@ -264,28 +264,38 @@ def generate_flomo_content(title: str, content: str, domain: str, subdomain: str
     if len(clean) > 500:
         body_preview += "……"
 
-    # 提取概念：取第一段或前100字
+    # 提取概念：取第一句完整的话
     first_para = clean.split('。')[0] if '。' in clean else clean[:200]
     if len(first_para) > 200:
         first_para = first_para[:197] + "……"
     if not first_para.strip():
         first_para = title[:80]  # 内容为空时用标题兜底
 
-    # 生成子概念：从正文中提取关键句子
+    # 为概念添加 <mark> 高亮：提取核心关键词（名词短语）
+    # 策略：取第一句中首个中文名词短语（2-6字）
+    concept_text = first_para[:300]
+    core_term = _extract_core_term(concept_text)
+    if core_term and core_term in concept_text:
+        concept_text = concept_text.replace(core_term, f"<mark>{core_term}</mark>", 1)
+
+    # 生成子概念：从正文中提取关键句子，并为每句首个关键词加 <u>
     sentences = re.split(r'[。\n]', clean)
     bullets = []
     for s in sentences:
         s = s.strip()
         if len(s) > 10 and len(s) < 150 and len(bullets) < 5:
-            # 过滤掉太像标题的句子
             if not re.match(r'^[\d一二三四五六七八九十]+[.、:：]', s):
-                bullets.append(f"- {s[:100]}")
+                # 提取句中首个关键词并加 <u>
+                bullet_term = _extract_core_term(s)
+                if bullet_term:
+                    s = s.replace(bullet_term, f"<u>{bullet_term}</u>", 1)
+                bullets.append(f"- {s[:120]}")
 
     subconcept_block = ""
     if bullets:
         subconcept_block = "\n\n**子概念**：\n\n" + "\n".join(bullets)
     else:
-        subconcept_block = "\n\n**子概念**：\n\n- " + first_para[:80]
+        subconcept_block = "\n\n**子概念**：\n\n- " + concept_text[:80]
 
     return f"""#信号笔记 #{domain} #{subdomain}
 
@@ -293,8 +303,39 @@ def generate_flomo_content(title: str, content: str, domain: str, subdomain: str
 
 **来源**：{source_title if source_title else "网络"}
 
-**概念**：{first_para[:300]}{subconcept_block}
+**概念**：{concept_text}{subconcept_block}
 """
+
+
+def _extract_core_term(text: str) -> str:
+    """从文本中提取核心关键词（首个中文名词短语，2-6字）。"""
+    # 匹配首个 2-6 字的中文词组（包含常见名词后缀）
+    patterns = [
+        r'[\u4e00-\u9fff]{2,4}法则',
+        r'[\u4e00-\u9fff]{2,6}效应',
+        r'[\u4e00-\u9fff]{2,6}理论',
+        r'[\u4e00-\u9fff]{2,6}原则',
+        r'[\u4e00-\u9fff]{2,6}模型',
+        r'[\u4e00-\u9fff]{2,6}规律',
+        r'[\u4e00-\u9fff]{2,6}机制',
+        r'[\u4e00-\u9fff]{2,6}方法',
+        r'[\u4e00-\u9fff]{2,6}方案',
+        r'[\u4e00-\u9fff]{2,6}策略',
+        r'[\u4e00-\u9fff]{2,6}规律',
+        r'[\u4e00-\u9fff]{2,6}定律',
+        r'[\u4e00-\u9fff]{2,6}现象',
+        r'[\u4e00-\u9fff]{2,6}问题',
+        r'[\u4e00-\u9fff]{2,6}原因',
+        r'[\u4e00-\u9fff]{2,6}结果',
+        r'[\u4e00-\u9fff]{3,6}',
+    ]
+    for pat in patterns:
+        m = re.search(pat, text)
+        if m:
+            return m.group(0)
+    # 降级：取前2-4个连续中文
+    m = re.search(r'[\u4e00-\u9fff]{2,4}', text)
+    return m.group(0) if m else ""
 
 
 def process_without_kimi(source_url: str, source_type: str, content: str, feed_title: str, filepath: str, args, article_title: str = None) -> tuple:
@@ -849,7 +890,7 @@ def process_url(url: str, args):
                     print(f"...（共 {len(raw)} 字符）")
                 print(f"{'='*60}")
                 print("请粘贴你生成的 **概念** 和 **子概念**（直接粘贴，不要加额外说明）：")
-                print("格式：\n**概念**：<mark>核心定义</mark>...\n\n**子概念**：\n- 要点1\n- 要点2\n")
+                print("格式：\n**概念**：<mark>核心关键词</mark>...（核心词用<mark>，关键概念用<u>）\n\n**子概念**：\n- <u>关键概念1</u>：说明...\n- <u>关键概念2</u>：说明...\n（每个要点至少一个<u>关键词</u>）")
                 content_lines = []
                 while True:
                     try:
