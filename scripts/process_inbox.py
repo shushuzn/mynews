@@ -881,7 +881,13 @@ def process_url(url: str, args):
         print("  [error] 正文内容为空")
         return False
 
-    # 5. 构建 flomo 内容
+    # 5. 验证 domain 是否在有效领域列表中
+    valid_domains = list(DOMAIN_KEYWORDS.keys())
+    if domain not in valid_domains:
+        print(f"  [error] 无效领域 '{domain}'，有效领域：{', '.join(valid_domains)}")
+        return False
+
+    # 6. 构建 flomo 内容
     filename = f"{domain}_{subdomain}_{knowledge}.md"
     full_path = BASE_DIR / "answers" / domain / subdomain / filename
     full_path.parent.mkdir(parents=True, exist_ok=True)
