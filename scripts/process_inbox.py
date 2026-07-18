@@ -814,7 +814,7 @@ def process_url(url: str, args):
     tag_line = ' '.join(tags)
     bold_title = f"**{domain}_{subdomain}_{knowledge}**"
 
-    flomo_content = f"""# {tag_line}
+    flomo_content = f"""{tag_line}
 
 {bold_title}
 
