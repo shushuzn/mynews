@@ -818,7 +818,7 @@ def process_url(url: str, args):
 
 {bold_title}
 
-**来源**：{title}
+**来源**：{knowledge}
 
 {body_text}
 """
