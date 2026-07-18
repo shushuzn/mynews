@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-mynews inbox 处理器 (kimi 版本)
+mynews inbox 处理器
 - 从 _inbox/ 读取条目（由 process_miniflux.py 生成）
-- 调用 kimi 处理每条
+- 本地关键词分类 + MCP flomo 搜索去重
 - 成功后从 _inbox/ 移动到 _inbox_done/
 - 失败后从 _inbox/ 移动到 _inbox_failed/
 """
@@ -108,33 +108,44 @@ def extract_source_info(filepath):
 def extract_wechat_if_needed(source_url, content, feed_title):
     """
     如果是微信公众号 URL 且内容为空或过短，尝试重新抓取
-    返回: (content, feed_title)
+    返回: (content, feed_title, article_title)
+    article_title 是从文章内容中提取的实际标题（不同于 feed_title 频道名）
     """
     if not is_wechat_url(source_url):
-        return content, feed_title
+        return content, feed_title, None
 
-    # 如果已有有效内容（超过500字符），直接返回
+    article_title = None
+
+    # 如果已有有效内容（超过500字符），尝试从内容中提取真实标题
     if len(content) > 500:
-        print(f"  [wechat] 已有足够内容 ({len(content)} 字符)，跳过重新抓取")
-        return content, feed_title
+        print(f"  [wechat] 已有足够内容 ({len(content)} 字符)，提取文章标题...")
+        lines = [l.strip() for l in content.split("\n") if l.strip()]
+        if lines:
+            # 取第一行或第一段作为标题
+            article_title = lines[0][:80]
+        return content, feed_title, article_title
 
     print(f"  [wechat] 检测到微信公众号 URL，尝试重新抓取...")
     print(f"    URL: {source_url[:60]}...")
 
-    text, source, error = fetch_wechat_article(source_url, use_cache=True)
+    text, source, error, wx_title = fetch_wechat_article(source_url, use_cache=True)
 
     if text:
         print(f"  [wechat] 抓取成功 ({source})，内容长度: {len(text)} 字符")
-        # 从内容中提取标题
-        if not feed_title:
-            lines = text.strip().split("\n")
-            if lines:
-                feed_title = lines[0][:50]
-        return text, feed_title or source
+        # 优先使用从 HTML 提取的真实标题
+        article_title = wx_title if wx_title else None
+        if not article_title:
+            # 降级：从正文第一段提取
+            lines = [l.strip() for l in text.split("\n") if l.strip()]
+            for line in lines:
+                if len(line) > 10 and not re.match(r'^[⇅\s\xa0~]+$', line):
+                    article_title = line[:80]
+                    break
+        return text, feed_title or source, article_title
     else:
         print(f"  [wechat] 抓取失败: {error}")
         # 返回原始内容，让后续流程处理
-        return content, feed_title
+        return content, feed_title, None
 
 
 def move_to_failed(filepath, reason):
@@ -152,8 +163,214 @@ def move_to_done(filepath):
         shutil.move(filepath, done_path)
 
 
+# ------------------------------------------------------------
+# 域名/二级领域分类器（基于关键词）
+# ------------------------------------------------------------
+DOMAIN_KEYWORDS = {
+    "技术": {
+        "AI芯片": ["芯片", "CPU", "GPU", "AI芯片", "处理器", "算力", "真武", "T-Head", "NPU", "HBM", "半导体"],
+        "大模型": ["大模型", "LLM", "GPT", "ChatGPT", "模型训练", "参数", "AGI", "多模态", "推理", "RAG", "Embedding"],
+        "软件开发": ["软件", "代码", "开源", "框架", "API", "SDK", "算法", "编程", "GitHub", "开发", "程序员"],
+        "互联网": ["互联网", "平台", "电商", "SaaS", "云计算", "数据中心", "服务器", "CDN", "运营商"],
+        "AI应用": ["AI", "人工智能", "机器学习", "深度学习", "NLP", "CV", "计算机视觉", "语音", "AIGC", "Copilot"],
+    },
+    "社会科学": {
+        "军事历史": ["红军", "长征", "军事", "战争", "军队", "国防", "战役", "士兵", "革命"],
+        "社会治理": ["社会", "治理", "社区", "基层", "民生", "公共服务", "治理"],
+        "政治学": ["政治", "政府", "政党", "政策", "外交", "国际关系", "主权", "政治学"],
+        "经济学": ["经济", "市场", "金融", "投资", "贸易", "货币", "银行", "GDP", "通胀"],
+        "教育": ["教育", "学校", "教学", "学生", "教师", "课程", "高等教育", "义务教育"],
+        "法律": ["法律", "法规", "法案", "司法", "法院", "律师", "判决", "立法", "合规"],
+    },
+    "自然科学": {
+        "物理": ["物理", "量子", "相对论", "粒子", "天体", "宇宙", "黑洞", "引力", "磁场"],
+        "化学": ["化学", "分子", "反应", "元素", "化合物", "材料"],
+        "生物": ["生物", "基因", "细胞", "进化", "生态", "蛋白质", "DNA", "RNA"],
+        "环境科学": ["环境", "气候", "碳排放", "污染", "生态", "能源", "可持续发展"],
+        "哲学": ["哲学", "宇宙观", "存在", "意识", "形而上学", "认识论"],
+    },
+    "政治": {
+        "外交": ["外交", "国际", "双边", "多边", "峰会", "外交关系", "使领馆"],
+        "国际关系": ["国际关系", "地缘政治", "大国关系", "联盟", "制裁", "核武"],
+        "国防": ["国防", "军队现代化", "军工", "武器装备", "军事演习"],
+    },
+    "医学": {
+        "临床医学": ["临床", "诊断", "治疗", "手术", "药物", "医疗器械", "医院"],
+        "药物学": ["药物", "靶点", "临床试验", "化合物", "生物制药", "疫苗"],
+        "公共卫生": ["公共卫生", "流行病", "疫情防控", "疫苗接种", "CDC"],
+    },
+    "经济": {
+        "产业": ["产业", "制造业", "供应链", "产业链", "工业", "实体经济"],
+        "企业": ["企业", "公司", "创业", "融资", "上市", "商业模式"],
+        "市场": ["市场", "消费", "零售", "房地产", "股市", "资本市场"],
+    },
+    "管理": {
+        "企业战略": ["战略", "商业模式", "竞争", "增长", "转型", "并购"],
+        "组织管理": ["组织", "管理", "领导力", "人才", "团队", "绩效"],
+    },
+    "教育科学": {
+        "教育政策": ["教育政策", "双减", "素质教育", "新课改", "高考改革"],
+        "教育技术": ["教育技术", "智慧教育", "在线教育", "EdTech"],
+    },
+    "安全": {
+        "网络安全": ["网络", "安全", "漏洞", "数据泄露", "黑客", "加密", "隐私"],
+        "信息安全": ["信息", "安全", "认证", "权限", "风控"],
+    },
+    "游戏": {
+        "游戏产业": ["游戏", "电竞", "手游", "端游", "游戏开发", "VR", "AR", "元宇宙"],
+    },
+    "法律": {
+        "法律研究": ["法律", "法学", "判例", "法律解释", "司法实践"],
+    },
+}
+
+
+def classify_content(title: str, content: str) -> tuple:
+    """基于关键词分类 content，返回 (domain, subdomain, knowledge_slug)。
+    如果无法分类，返回 (None, None, None)。"""
+    text = (title + " " + content[:3000]).lower()
+
+    best_domain = None
+    best_subdomain = None
+    best_score = 0
+
+    for domain, subdomains in DOMAIN_KEYWORDS.items():
+        for subdomain, keywords in subdomains.items():
+            score = sum(1 for kw in keywords if kw.lower() in text)
+            if score > best_score:
+                best_score = score
+                best_domain = domain
+                best_subdomain = subdomain
+
+    if best_score == 0:
+        # 默认归入社会科学-其他
+        return "社会科学", "其他", slugify(title)[:20]
+
+    knowledge = slugify(title)[:20]
+    return best_domain, best_subdomain, knowledge
+
+
+def generate_flomo_content(title: str, content: str, domain: str, subdomain: str, knowledge: str) -> str:
+    """从原始内容生成 flomo 格式字符串。"""
+    import re
+
+    # 清理原始内容中的 HTML 标签
+    clean = re.sub(r'<[^>]+>', '', content)
+    clean = re.sub(r'\s+', ' ', clean).strip()
+
+    # 取前 500 字作为正文摘要
+    body_preview = clean[:500]
+    if len(clean) > 500:
+        body_preview += "……"
+
+    # 提取概念：取第一段或前100字
+    first_para = clean.split('。')[0] if '。' in clean else clean[:200]
+    if len(first_para) > 200:
+        first_para = first_para[:197] + "……"
+
+    # 生成子概念：从正文中提取关键句子
+    sentences = re.split(r'[。\n]', clean)
+    bullets = []
+    for s in sentences:
+        s = s.strip()
+        if len(s) > 10 and len(s) < 150 and len(bullets) < 5:
+            # 过滤掉太像标题的句子
+            if not re.match(r'^[\d一二三四五六七八九十]+[.、:：]', s):
+                bullets.append(f"- {s[:100]}")
+
+    subconcept_block = ""
+    if bullets:
+        subconcept_block = "\n\n**子概念**：\n\n" + "\n".join(bullets)
+    else:
+        subconcept_block = "\n\n**子概念**：\n\n- " + first_para[:80]
+
+    return f"""#信号笔记 #{domain} #{subdomain}
+
+**{domain}_{subdomain}_{knowledge}**
+
+**来源**：{title[:100]}
+
+**概念**：{first_para[:300]}{subconcept_block}
+"""
+
+
+def process_without_kimi(source_url: str, source_type: str, content: str, feed_title: str, filepath: str, args, article_title: str = None) -> tuple:
+    """本地处理：分类 → 生成 → 验证 → 上传。返回 (success, created_file)。"""
+    # 优先使用从文章内容提取的真实标题，其次使用 feed_title（频道名）
+    title = article_title or feed_title or "未命名"
+    if not content or len(content) < 50:
+        return False, None
+
+    # 1. 搜索 flomo 去重
+    topic_keywords = article_title[:30] if article_title else title[:30]
+    existing_memos = search_flomo(topic_keywords)
+    dup_count = 0
+    if existing_memos:
+        try:
+            memos = existing_memos if isinstance(existing_memos, list) else [existing_memos]
+            dup_count = len(memos)
+        except Exception:
+            pass
+    if dup_count > 0:
+        print(f"    [flomo] 检测到 {dup_count} 条相似笔记，将追加而非新建")
+
+    # 2. 分类
+    domain, subdomain, knowledge = classify_content(title, content)
+    if not domain:
+        print(f"    [error] 无法分类内容，请手动处理")
+        return False, None
+
+    print(f"    [classify] {domain} / {subdomain} / {knowledge}")
+
+    # 3. 生成 flomo 内容
+    flomo_content = generate_flomo_content(title, content, domain, subdomain, knowledge)
+
+    # 4. 创建本地文件（验证用）
+    filename = f"{domain}_{subdomain}_{knowledge}.md"
+    # 修正段数
+    name_part = filename[:-3]
+    parts = name_part.split('_')
+    while len(parts) > 3:
+        parts[2] = parts[2] + '_' + parts[3]
+        parts.pop(3)
+    filename = '_'.join(parts) + ".md"
+
+    full_path = BASE_DIR / "answers" / domain / subdomain / filename
+    full_path.parent.mkdir(parents=True, exist_ok=True)
+    # 删除旧文件（同一会话重复运行时会碰到）
+    if full_path.exists():
+        full_path.unlink()
+    with open(full_path, "w", encoding="utf-8") as f:
+        f.write(flomo_content)
+    print(f"    [file] 已创建: {full_path.relative_to(BASE_DIR)}")
+
+    # 5. hook 验证
+    subprocess.run(["git", "add", "-f", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR))
+    hook_result = subprocess.run(
+        [PYTHON_BIN, str(BASE_DIR / "hooks" / "pre-commit"), "--staged"],
+        cwd=str(BASE_DIR),
+        capture_output=True, text=True
+    )
+    if hook_result.returncode != 0:
+        print(f"    [error] 格式验证失败:\n{hook_result.stdout[:300]}")
+        subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR))
+        return False, None
+
+    # 6. 上传到 flomo
+    flomo_id = upload_flomo(flomo_content)
+    if flomo_id:
+        print(f"    [flomo] 上传成功 id={flomo_id}")
+        subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR))
+        full_path.unlink()
+        print(f"    [cleanup] 已删除本地文件")
+        return True, str(full_path.relative_to(BASE_DIR))
+    else:
+        print(f"    [flomo] 上传失败（文件保留在: {full_path}）")
+        return False, None
+
+
 def call_kimi(prompt, timeout=KIMI_TIMEOUT):
-    """调用 kimi 处理任务"""
+    """调用 kimi 处理任务（已废弃，保留仅用于兼容）"""
     cmd = ["kimi", "-p", prompt]
     try:
         proc = subprocess.Popen(
@@ -283,7 +500,7 @@ def get_topic_keywords(source_type, content, feed_title):
 
 
 def build_prompt(source_type, source_url, content, feed_title, filepath):
-    """构建 kimi prompt"""
+    """构建 kimi prompt（已废弃）"""
     topic_title, topic_source = get_topic_keywords(source_type, content, feed_title)
     
     return f"""**mynews 任务**：处理以下信息，生成 flomo 格式笔记并创建本地文件。
@@ -354,8 +571,8 @@ def process_file(filepath, args):
     basename = Path(filepath).name
     source_url, source_type, feed_title, entry_id, content = extract_source_info(filepath)
 
-    # 微信公众号特殊处理：重新抓取正文
-    content, feed_title = extract_wechat_if_needed(source_url, content, feed_title)
+    # 微信公众号特殊处理：重新抓取正文，并提取真实文章标题
+    content, feed_title, article_title = extract_wechat_if_needed(source_url, content, feed_title)
 
     if not source_url:
         print(f"  No SOURCE_URL found, moving to failed")
@@ -383,112 +600,20 @@ def process_file(filepath, args):
     print(f"  Processing: {basename}")
     print(f"  Type: {source_type}, URL: {source_url[:60]}")
 
-    # 构建 prompt 并调用 kimi
-    prompt = build_prompt(source_type, source_url, content, feed_title, filepath)
-    stdout, stderr = call_kimi(prompt, timeout=KIMI_TIMEOUT)
+    # 构建 prompt 并调用 kimi（已废弃，改用本地分类）
+    # prompt = build_prompt(source_type, source_url, content, feed_title, filepath)
+    # stdout, stderr = call_kimi(prompt, timeout=KIMI_TIMEOUT)
 
-    if args.verbose:
-        print(f"    stdout: {stdout[:500] if stdout else 'none'}")
-        if stderr:
-            print(f"    stderr: {stderr[:200]}")
-
-    # 解析创建的文件路径
-    created_file = None
-    for line in stdout.split("\n"):
-        if "CREATED_FILE:" in line:
-            created_file = line.split("CREATED_FILE:")[-1].strip()
-            break
-
-    # 也检查 stderr 或重新查找最近创建的文件
-    if not created_file:
-        for line in stderr.split("\n"):
-            if "CREATED_FILE:" in line:
-                created_file = line.split("CREATED_FILE:")[-1].strip()
-                break
-
-    if not created_file:
-        # 查找最近创建的 answers 文件
-        answers_dir = BASE_DIR / "answers"
-        if answers_dir.exists():
-            candidates = [
-                p for p in answers_dir.rglob("*.md")
-                if p.is_file() and (time.time() - p.stat().st_mtime) < 300
-            ]
-            if candidates:
-                candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-                created_file = candidates[0].relative_to(BASE_DIR).as_posix()
-                print(f"    [fallback detect] 创建文件: {created_file}")
-
-    if not created_file:
-        print(f"    [error] 未检测到创建的文档")
-        remove_processing(source_url)
-        move_to_failed(filepath, "no_created_file_detected")
-        return False
-
-    # 验证文件格式
-    full_path = BASE_DIR / created_file
-    if not full_path.exists():
-        print(f"    [error] 创建的文件不存在: {created_file}")
-        remove_processing(source_url)
-        move_to_failed(filepath, "file_not_found")
-        return False
-
-    # 运行 validate_flomo.py 验证
-    validate_result = subprocess.run(
-        [PYTHON_BIN, str(BASE_DIR / "scripts" / "validate_flomo.py"), created_file],
-        cwd=str(BASE_DIR),
-        capture_output=True,
-        text=True,
-        timeout=60
+    # 使用本地处理：分类 → 生成 → 验证 → 上传
+    success, created_file = process_without_kimi(
+        source_url, source_type, content, feed_title, filepath, args, article_title
     )
 
-    if validate_result.returncode != 0:
-        print(f"    [error] 格式验证失败")
-        if args.verbose:
-            print(f"    {validate_result.stdout[:300]}")
-            print(f"    {validate_result.stderr[:300]}")
-        remove_processing(source_url)
-        move_to_failed(filepath, "validate_failed")
+    if not success:
+        if not created_file:
+            remove_processing(source_url)
+            move_to_failed(filepath, "local_processing_failed")
         return False
-
-    print(f"    [ok] 文档验证通过: {created_file}")
-
-    # 上传到 flomo
-    with open(full_path, encoding="utf-8") as f:
-        file_content = f.read()
-    
-    # 移除开头的 SOURCE_URL 行再上传
-    content_lines = file_content.split("\n")
-    if content_lines and "# SOURCE_URL" in content_lines[0]:
-        content_lines = content_lines[1:]
-    flomo_content = "\n".join(content_lines).strip()
-
-    # 添加来源行
-    source_line = f"**来源**：{feed_title or source_url}"
-    if source_line not in flomo_content:
-        # 找到第一个空行后插入
-        lines = flomo_content.split("\n")
-        for i, line in enumerate(lines):
-            if not line.strip():
-                lines.insert(i, source_line)
-                break
-        flomo_content = "\n".join(lines)
-
-    flomo_id = upload_flomo(flomo_content)
-    if flomo_id:
-        print(f"    [flomo] 上传成功 id={flomo_id}")
-        # 上传成功后删除本地文档
-        # 先从staging区移除，避免误提交
-        subprocess.run(
-            ["git", "reset", "HEAD", "--", created_file],
-            cwd=str(BASE_DIR),
-            capture_output=True
-        )
-        if full_path.exists():
-            full_path.unlink()
-            print(f"    [cleanup] 已删除本地文档: {created_file}")
-    else:
-        print(f"    [flomo] 上传失败（文件已保存本地）")
 
     # 移动到 done
     remove_processing(source_url)
@@ -568,7 +693,7 @@ def process_url(url: str, args):
     # 1. 抓取内容
     if is_wechat_url(url):
         print("  [wechat] 抓取中...")
-        text, source, error = fetch_wechat_article(url, use_cache=True)
+        text, source, error, wx_title = fetch_wechat_article(url, use_cache=True)
         if not text:
             print(f"  [error] 抓取失败: {error}")
             return False
@@ -719,7 +844,7 @@ def process_url(url: str, args):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="mynews inbox 处理器 (kimi 版本)")
+    parser = argparse.ArgumentParser(description="mynews inbox 处理器（本地分类版本）")
     parser.add_argument("--batch-size", type=int, default=100,
                         help="最多处理文件数 (默认 100, 单条用 --batch-size 1)")
     parser.add_argument("--source-type", choices=["rss_entry", "github_commit", "all"],
@@ -746,10 +871,9 @@ def main():
         print("Another instance is running, exiting")
         return
 
-    print(f"mynews inbox processor (kimi version)")
+    print(f"mynews inbox processor (local-classify version)")
     print(f"  BASE_DIR: {BASE_DIR}")
     print(f"  INBOX_DIR: {INBOX_DIR}")
-    print(f"  kimi timeout: {KIMI_TIMEOUT}s")
     print(f"  Batch size: {args.batch_size}, Source type: {args.source_type}")
     print()
 

@@ -145,7 +145,12 @@ PC_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, li
 BACKUP_APIS = [
     "https://www.newureader.com/",
     "https://rss.aiown.cn/api/wxarticle?url=",
+    "https://api.pfeng.cn/wx/article?url=",
+    "https://wxb.sangzhuaya.com/api/wx?url=",
 ]
+
+# Android UA（部分文章 iPhone UA 受限，Android UA 可用）
+ANDROID_UA = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36"
 
 
 def is_wechat_url(url: str) -> bool:
@@ -224,6 +229,20 @@ def extract_wechat_content(html: str) -> str:
         if len(content_html) > 100:
             return html_module.unescape(content_html)
 
+    # 方法4: 提取 section 标签内的正文（新版微信文章）
+    match = re.search(r'<section[^>]*class=["\'][^"\']*article-content[^"\']*["\'][^>]*>(.*?)</section>', html, re.DOTALL)
+    if match:
+        content_html = _clean_html_content(match.group(1))
+        if len(content_html) > 100:
+            return html_module.unescape(content_html)
+
+    # 方法5: 提取 <article> 标签（部分文章使用）
+    match = re.search(r'<article[^>]*>(.*?)</article>', html, re.DOTALL)
+    if match:
+        content_html = _clean_html_content(match.group(1))
+        if len(content_html) > 100:
+            return html_module.unescape(content_html)
+
     return ""
 
 
@@ -253,6 +272,24 @@ def _clean_html_content(html_content: str) -> str:
     return html_content
 
 
+def extract_title_from_html(html: str) -> str:
+    """从微信公众号 HTML 中提取文章标题。"""
+    # 优先从 <title> 提取
+    match = re.search(r'<title[^>]*>([^<]+)</title>', html, re.IGNORECASE)
+    if match:
+        title = match.group(1).strip()
+        # 清理常见后缀
+        title = re.sub(r'[_-]微信.*$', '', title)
+        title = re.sub(r'\s*-\s*.*$', '', title)
+        if title:
+            return title
+    # 次选从 og:title 提取
+    match = re.search(r'<meta[^>]+property=["\']og:title["\'][^>]+content=["\']([^"\']+)["\']', html, re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+    return ""
+
+
 def fetch_wechat_article(url: str, use_cache: bool = True) -> tuple:
     """
     抓取微信公众号文章，支持多重降级策略
@@ -261,9 +298,10 @@ def fetch_wechat_article(url: str, use_cache: bool = True) -> tuple:
     1. 读取缓存
     2. iPhone UA + 标准解析
     3. PC UA + 标准解析
-    4. 备用 API 中转
+    4. Android UA
+    5. 备用 API 中转
 
-    返回: (content, source_info, error_msg)
+    返回: (content, source_info, error_msg, article_title)
     """
     # 检查缓存
     cache_path = get_cache_path(url)
@@ -272,34 +310,52 @@ def fetch_wechat_article(url: str, use_cache: bool = True) -> tuple:
             with open(cache_path, encoding="utf-8") as f:
                 cached = json.load(f)
                 if cached.get("content") and cached.get("content") != "FETCH_FAILED":
-                    return cached["content"], cached.get("source", ""), "cache"
+                    return cached["content"], cached.get("source", ""), "cache", cached.get("title", "")
         except Exception:
             pass
 
-    # 策略1: iPhone UA
+    raw_html = None  # 保存原始 HTML 以便提取标题
+
+    # 策略1: iPhone UA（最常用，成功率最高）
     print(f"    [wechat] 尝试 iPhone UA...")
     headers = {"User-Agent": IPHONE_UA}
-    content, error = fetch_with_retry(url, headers)
+    content, error = fetch_with_retry(url, headers, timeout=20, max_retries=4)
     if content:
+        raw_html = content
         text = extract_wechat_content(content)
         if text and len(text) > 100:
-            # 保存缓存
+            title = extract_title_from_html(content)
             with open(cache_path, "w", encoding="utf-8") as f:
-                json.dump({"content": text, "source": "iPhone UA", "url": url}, f)
-            return text, "iPhone UA", None
+                json.dump({"content": text, "source": "iPhone UA", "url": url, "title": title}, f)
+            return text, "iPhone UA", None, title
 
     # 策略2: PC UA
     print(f"    [wechat] 尝试 PC UA...")
     headers = {"User-Agent": PC_UA}
-    content, error = fetch_with_retry(url, headers)
+    content, error = fetch_with_retry(url, headers, timeout=20, max_retries=4)
     if content:
+        raw_html = content
         text = extract_wechat_content(content)
         if text and len(text) > 100:
+            title = extract_title_from_html(content)
             with open(cache_path, "w", encoding="utf-8") as f:
-                json.dump({"content": text, "source": "PC UA", "url": url}, f)
-            return text, "PC UA", None
+                json.dump({"content": text, "source": "PC UA", "url": url, "title": title}, f)
+            return text, "PC UA", None, title
 
-    # 策略3: 备用 API 中转
+    # 策略3: Android UA
+    print(f"    [wechat] 尝试 Android UA...")
+    headers = {"User-Agent": ANDROID_UA}
+    content, error = fetch_with_retry(url, headers, timeout=20, max_retries=3)
+    if content:
+        raw_html = content
+        text = extract_wechat_content(content)
+        if text and len(text) > 100:
+            title = extract_title_from_html(content)
+            with open(cache_path, "w", encoding="utf-8") as f:
+                json.dump({"content": text, "source": "Android UA", "url": url, "title": title}, f)
+            return text, "Android UA", None, title
+
+    # 策略4: 备用 API 中转
     for api_base in BACKUP_APIS:
         print(f"    [wechat] 尝试备用 API: {api_base}")
         try:
@@ -313,16 +369,19 @@ def fetch_wechat_article(url: str, use_cache: bool = True) -> tuple:
                     if isinstance(data, dict):
                         text = data.get("content", "") or data.get("text", "") or data.get("data", "")
                         if text:
+                            title = data.get("title", "") or (extract_title_from_html(text) if not isinstance(text, str) else "")
                             with open(cache_path, "w", encoding="utf-8") as f:
-                                json.dump({"content": text, "source": api_base, "url": url}, f)
-                            return text, api_base, None
+                                json.dump({"content": text, "source": api_base, "url": url, "title": title}, f)
+                            return text, api_base, None, title
                 except json.JSONDecodeError:
                     # 直接返回文本
+                    raw_html = content
                     text = extract_wechat_content(content)
                     if text and len(text) > 100:
+                        title = extract_title_from_html(content)
                         with open(cache_path, "w", encoding="utf-8") as f:
-                            json.dump({"content": text, "source": api_base, "url": url}, f)
-                        return text, api_base, None
+                            json.dump({"content": text, "source": api_base, "url": url, "title": title}, f)
+                        return text, api_base, None, title
         except Exception as e:
             print(f"    [wechat] API {api_base} 失败: {e}")
             continue
@@ -331,7 +390,7 @@ def fetch_wechat_article(url: str, use_cache: bool = True) -> tuple:
     with open(cache_path, "w", encoding="utf-8") as f:
         json.dump({"content": "FETCH_FAILED", "source": "failed", "url": url, "error": str(error)}, f)
 
-    return "", "", f"全部策略失败: {error}"
+    return "", "", f"全部策略失败: {error}", ""
 
 
 def clear_cache(url: str = None):
