@@ -290,6 +290,21 @@ def extract_title_from_html(html: str) -> str:
     return ""
 
 
+def extract_author_from_html(html: str) -> str:
+    """从微信公众号 HTML 中提取发布账号（作者）。"""
+    # 优先从 <meta name="author"> 提取
+    match = re.search(r'<meta[^>]+name=["\']author["\'][^>]+content=["\']([^"\']+)["\']', html, re.IGNORECASE)
+    if match:
+        author = match.group(1).strip()
+        if author:
+            return author
+    # 次选从 og:site_name 提取
+    match = re.search(r'<meta[^>]+property=["\']og:site_name["\'][^>]+content=["\']([^"\']+)["\']', html, re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+    return ""
+
+
 def fetch_wechat_article(url: str, use_cache: bool = True) -> tuple:
     """
     抓取微信公众号文章，支持多重降级策略
@@ -325,9 +340,11 @@ def fetch_wechat_article(url: str, use_cache: bool = True) -> tuple:
         text = extract_wechat_content(content)
         if text and len(text) > 100:
             title = extract_title_from_html(content)
+            author = extract_author_from_html(content)
+            source = author if author else "iPhone UA"
             with open(cache_path, "w", encoding="utf-8") as f:
-                json.dump({"content": text, "source": "iPhone UA", "url": url, "title": title}, f)
-            return text, "iPhone UA", None, title
+                json.dump({"content": text, "source": source, "url": url, "title": title}, f)
+            return text, source, None, title
 
     # 策略2: PC UA
     print(f"    [wechat] 尝试 PC UA...")
@@ -338,9 +355,11 @@ def fetch_wechat_article(url: str, use_cache: bool = True) -> tuple:
         text = extract_wechat_content(content)
         if text and len(text) > 100:
             title = extract_title_from_html(content)
+            author = extract_author_from_html(content)
+            source = author if author else "PC UA"
             with open(cache_path, "w", encoding="utf-8") as f:
-                json.dump({"content": text, "source": "PC UA", "url": url, "title": title}, f)
-            return text, "PC UA", None, title
+                json.dump({"content": text, "source": source, "url": url, "title": title}, f)
+            return text, source, None, title
 
     # 策略3: Android UA
     print(f"    [wechat] 尝试 Android UA...")
@@ -351,9 +370,11 @@ def fetch_wechat_article(url: str, use_cache: bool = True) -> tuple:
         text = extract_wechat_content(content)
         if text and len(text) > 100:
             title = extract_title_from_html(content)
+            author = extract_author_from_html(content)
+            source = author if author else "Android UA"
             with open(cache_path, "w", encoding="utf-8") as f:
-                json.dump({"content": text, "source": "Android UA", "url": url, "title": title}, f)
-            return text, "Android UA", None, title
+                json.dump({"content": text, "source": source, "url": url, "title": title}, f)
+            return text, source, None, title
 
     # 策略4: 备用 API 中转
     for api_base in BACKUP_APIS:
@@ -379,9 +400,11 @@ def fetch_wechat_article(url: str, use_cache: bool = True) -> tuple:
                     text = extract_wechat_content(content)
                     if text and len(text) > 100:
                         title = extract_title_from_html(content)
+                        author = extract_author_from_html(content)
+                        source = author if author else api_base
                         with open(cache_path, "w", encoding="utf-8") as f:
-                            json.dump({"content": text, "source": api_base, "url": url, "title": title}, f)
-                        return text, api_base, None, title
+                            json.dump({"content": text, "source": source, "url": url, "title": title}, f)
+                        return text, source, None, title
         except Exception as e:
             print(f"    [wechat] API {api_base} 失败: {e}")
             continue
