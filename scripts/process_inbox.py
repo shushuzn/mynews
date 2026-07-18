@@ -267,6 +267,8 @@ def generate_flomo_content(title: str, content: str, domain: str, subdomain: str
     first_para = clean.split('。')[0] if '。' in clean else clean[:200]
     if len(first_para) > 200:
         first_para = first_para[:197] + "……"
+    if not first_para.strip():
+        first_para = title[:80]  # 内容为空时用标题兜底
 
     # 生成子概念：从正文中提取关键句子
     sentences = re.split(r'[。\n]', clean)
