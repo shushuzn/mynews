@@ -867,7 +867,15 @@ def process_url(url: str, args):
 
     print("  [ok] 格式验证通过")
 
-    # 7. 上传到 flomo
+    # 7. flomo 查重
+    print("  [flomo] 查重...")
+    dup_check = search_flomo(knowledge)
+    if dup_check:
+        print(f"  [flomo] 检测到 {len(dup_check) if isinstance(dup_check, list) else 1} 条相似笔记，将追加而非新建")
+    else:
+        print("  [flomo] 无重复，继续上传")
+
+    # 8. 上传到 flomo
     flomo_id = upload_flomo(flomo_content)
     if flomo_id:
         print(f"  [flomo] 上传成功 id={flomo_id}")
