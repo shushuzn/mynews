@@ -391,17 +391,42 @@ def process_without_kimi(source_url: str, source_type: str, content: str, feed_t
     dup_memos = search_flomo(knowledge)
     dup_memos = dup_memos if dup_memos and isinstance(dup_memos, list) else []
     if dup_memos:
-        old_id = dup_memos[0].get("id") if isinstance(dup_memos[0], dict) else None
+        best = dup_memos[0]
+        old_id = best.get("id") if isinstance(best, dict) else None
+        relevance = best.get("relevance", 0) if isinstance(best, dict) else 0
         if old_id:
-            print(f"    [flomo] 检测到相似笔记 id={old_id}，自动更新...")
-            ok = update_flomo(old_id, flomo_content)
-            if ok:
-                print(f"    [flomo] 更新成功 id={old_id}")
+            print(f"    [flomo] 检测到相似笔记 id={old_id}（relevance={relevance:.2f}）")
+            import termios, tty, os
+            if os.isatty(0):
+                print(f"    选择: [u]更新旧笔记  [s]跳过上传  [n]新建: ", end='', flush=True)
+                fd = os.open('/dev/tty', os.O_RDONLY)
+                old_settings = termios.tcgetattr(fd)
+                try:
+                    tty.setraw(fd)
+                    ch = os.read(fd, 1).decode()
+                finally:
+                    termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                    os.close(fd)
+                print(ch)
+                choice = ch.strip().lower()
+            else:
+                print(f"    [flomo] 检测到重复 id={old_id}，relevance={relevance:.2f}，退出由我处理")
+                import sys
+                sys.exit(1)
+            if choice == 'u':
+                ok = update_flomo(old_id, flomo_content)
+                if ok:
+                    print(f"    [flomo] 更新成功 id={old_id}")
+                    subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR))
+                    full_path.unlink()
+                    return True, None
+                else:
+                    print(f"    [flomo] 更新失败，继续新建")
+            elif choice == 's':
+                print(f"    [flomo] 跳过上传")
                 subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR))
                 full_path.unlink()
                 return True, None
-            else:
-                print(f"    [flomo] 更新失败，继续新建")
 
     # 7. 上传到 flomo
     flomo_id = upload_flomo(flomo_content)
@@ -994,18 +1019,42 @@ def process_url(url: str, args):
     dup_memos = search_flomo(knowledge)
     dup_memos = dup_memos if dup_memos and isinstance(dup_memos, list) else []
     if dup_memos:
-        # 取第一条相似笔记的 ID
-        old_id = dup_memos[0].get("id") if isinstance(dup_memos[0], dict) else None
+        best = dup_memos[0]
+        old_id = best.get("id") if isinstance(best, dict) else None
+        relevance = best.get("relevance", 0) if isinstance(best, dict) else 0
         if old_id:
-            print(f"  [flomo] 检测到相似笔记 id={old_id}，自动更新...")
-            ok = update_flomo(old_id, flomo_content)
-            if ok:
-                print(f"  [flomo] 更新成功 id={old_id}")
+            print(f"  [flomo] 检测到相似笔记 id={old_id}（relevance={relevance:.2f}）")
+            import termios, tty, os
+            if os.isatty(0):
+                print(f"  选择: [u]更新旧笔记  [s]跳过上传  [n]新建: ", end='', flush=True)
+                fd = os.open('/dev/tty', os.O_RDONLY)
+                old_settings = termios.tcgetattr(fd)
+                try:
+                    tty.setraw(fd)
+                    ch = os.read(fd, 1).decode()
+                finally:
+                    termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                    os.close(fd)
+                print(ch)
+                choice = ch.strip().lower()
+            else:
+                print(f"  [flomo] 检测到重复 id={old_id}， relevance={relevance:.2f}，退出由我处理")
+                import sys
+                sys.exit(1)
+            if choice == 's':
+                print(f"  [flomo] 跳过上传")
                 subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR))
                 full_path.unlink()
                 return True
-            else:
-                print(f"  [flomo] 更新失败，继续新建")
+            elif choice == 'u':
+                ok = update_flomo(old_id, flomo_content)
+                if ok:
+                    print(f"  [flomo] 更新成功 id={old_id}")
+                    subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR))
+                    full_path.unlink()
+                    return True
+                else:
+                    print(f"  [flomo] 更新失败，继续新建")
 
     # 8. 上传到 flomo
     flomo_id = upload_flomo(flomo_content)
