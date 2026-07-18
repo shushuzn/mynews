@@ -787,7 +787,30 @@ def process_url(url: str, args):
         body_text = '\n'.join(content_lines).strip()
     else:
         if hasattr(args, 'content') and args.content:
-            body_text = args.content
+            # --content 是原材料，需要 AI 理解后生成概念和子概念
+            print(f"\n{'='*60}")
+            print("【AI 生成阶段】请理解下方原材料，自己生成概念和子概念：")
+            print(f"{'='*60}")
+            raw = args.content
+            print(raw[:2000])
+            if len(raw) > 2000:
+                print(f"...（共 {len(raw)} 字符）")
+            print(f"{'='*60}")
+            print("请粘贴你生成的 **概念** 和 **子概念**（直接粘贴，不要加额外说明）：")
+            print("格式：\n**概念**：<mark>核心定义</mark>...\n\n**子概念**：\n- 要点1\n- 要点2\n")
+            content_lines = []
+            while True:
+                try:
+                    line = input()
+                except EOFError:
+                    break
+                if line.strip() == '.':
+                    break
+                content_lines.append(line)
+            body_text = '\n'.join(content_lines).strip()
+            if not body_text:
+                print("  [error] 正文内容为空")
+                return False
         else:
             print(f"\n请输入正文内容（flomo 格式，用空行分隔，输入 '.' 结束）:")
             print("  格式提示: **概念**：<mark>核心定义</mark>...  |  **子概念**： |  - 要点列表\n")
