@@ -146,6 +146,8 @@ def validate_content(content, filename):
             # 检查加粗内容末尾是否有 _ 分隔符（MCP server 会将其后所有 _ 转义）
             if title.endswith('_'):
                 errors.append(f"加粗标题末尾不允许 _ 分隔符（'{title}_' 会触发 MCP server 转义问题，去掉末尾的 _）")
+            if '-' in title:
+                errors.append(f"标题禁止使用连字符（-）：'{title}'")
             name_no_ext = filename[:-3] if filename.endswith('.md') else filename
             file_prefix = '_'.join(name_no_ext.split('_')[:2])
             if not title.startswith(file_prefix + '_'):
