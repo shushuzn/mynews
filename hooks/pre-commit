@@ -48,7 +48,8 @@ FILENAME_PATTERN = re.compile('^[a-zA-Z0-9_\\-\\.\\u4e00-\\u9fff()]+$')
 PATH_TRAVERSAL = re.compile(r'\.\.')
 
 FORBIDDEN_PATTERNS = [
-    (re.compile(r'^#+\s+', re.MULTILINE), "Markdown 标题 (# ## ### 等) flomo 不支持"),
+    # 匹配 ## Title, ### Title 等；不匹配 #tag 和 # tag（标签格式）
+    (re.compile(r'^#{2,}\s+\S|^#\s+[^#\s@]', re.MULTILINE), "Markdown 标题 (# ## ### 等) flomo 不支持"),
     (re.compile(r'^>\s+', re.MULTILINE), "引用块 (> xxx) flomo 不支持"),
     (re.compile(r'```'), "代码块 (```) flomo 不支持"),
     (re.compile(r'\[.+?\]\(.+?\)'), "链接格式 [标题](链接) flomo 不支持"),

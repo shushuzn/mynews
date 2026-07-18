@@ -25,7 +25,8 @@ setup_windows_utf8()
 
 SIGNAL_TYPES = {'#趋势信号', '#知识基座', '#信号笔记', '#分析框架', '#知识载体'}
 FORBIDDEN_PATTERNS = [
-    (re.compile(r'^#+\s+[^S]', re.MULTILINE), "Markdown 标题 (# ## ###)"),
+    # 匹配 ## Title, ### Title 等；不匹配 #tag 和 # tag（标签格式）
+    (re.compile(r'^#{2,}\s+\S|^#\s+[^#\s@]', re.MULTILINE), "Markdown 标题 (# ## ###)"),
     (re.compile(r'^>\s+', re.MULTILINE), "引用块 (>)"),
     (re.compile(r'```'), "代码块 (```)"),
     (re.compile(r'\[.+?\]\(.+?\)'), "链接 [text](url)"),

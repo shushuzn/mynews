@@ -499,6 +499,225 @@ def process_file(filepath, args):
     return True
 
 
+ALLOWED_TOP_DIRS = {
+    "医学", "安全", "技术", "政治", "教育科学", "法律",
+    "游戏", "社会科学", "管理", "经济", "自然科学"
+}
+
+
+def slugify(text: str) -> str:
+    """Convert text to a safe filename segment (keep Chinese, alphanumeric, hyphenate others).
+    Truncates to 30 chars to keep filename manageable."""
+    import re
+    # Replace non-alphanumeric with hyphen (keep Chinese, letters, digits)
+    text = re.sub(r'[^\u4e00-\u9fffA-Za-z0-9]', '-', text)
+    text = re.sub(r'-+', '-', text).strip('-')
+    return text[:30]
+
+
+def ask_domain() -> str:
+    """Interactive domain selection."""
+    print("\n可选领域:")
+    sorted_dirs = sorted(ALLOWED_TOP_DIRS)
+    for i, d in enumerate(sorted_dirs, 1):
+        print(f"  {i}. {d}")
+    while True:
+        choice = input("选择领域编号（或直接输入领域名）: ").strip()
+        if choice.isdigit():
+            idx = int(choice) - 1
+            if 0 <= idx < len(sorted_dirs):
+                return sorted_dirs[idx]
+        # Try direct name match
+        if choice in ALLOWED_TOP_DIRS:
+            return choice
+        print(f"  无效选择，请重试")
+
+
+def ask_subdomain() -> str:
+    """Interactive subdomain input."""
+    while True:
+        d = input("二级领域（如：AI芯片, 外交, 军事历史）: ").strip()
+        if d and len(d) >= 2:
+            return d
+        print("  二级领域至少2个字符，请重试")
+
+
+def ask_tags() -> list:
+    """Interactive tag input."""
+    print("信号类型标签（五选一）: #趋势信号 #知识基座 #信号笔记 #分析框架 #知识载体")
+    while True:
+        tag = input("输入信号类型标签（直接回车=信号笔记）: ").strip() or "#信号笔记"
+        if tag.startswith('#') or tag.startswith('@'):
+            break
+        print("  标签必须以 # 或 @ 开头，请重试")
+    extra = input("额外标签（如：#AI #开源，输入空格分隔，回车跳过）: ").strip()
+    tags = [tag]
+    if extra:
+        tags.extend([t.strip() for t in extra.split() if t.strip()])
+    return tags
+
+
+def process_url(url: str, args):
+    """处理单个 URL，直接完成 fetch → 构建 → 验证 → 上传全流程。"""
+    from mynews_utils import is_wechat_url, fetch_wechat_article
+    import urllib.request
+    import urllib.error
+
+    print(f"\n[URL 模式] {url[:60]}{'...' if len(url) > 60 else ''}")
+
+    # 1. 抓取内容
+    if is_wechat_url(url):
+        print("  [wechat] 抓取中...")
+        text, source, error = fetch_wechat_article(url, use_cache=True)
+        if not text:
+            print(f"  [error] 抓取失败: {error}")
+            return False
+        print(f"  [ok] 抓取成功 ({source})，{len(text)} 字符")
+    else:
+        print("  [http] 抓取中...")
+        try:
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                }
+            )
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                html = resp.read().decode("utf-8", errors="replace")
+            # 简单提取 <title>
+            title_match = re.search(r'<title[^>]*>([^<]+)</title>', html, re.IGNORECASE)
+            title = title_match.group(1).strip() if title_match else ""
+            # 简单提取正文（取 <body> 内的文字）
+            body_match = re.search(r'<body[^>]*>(.*)</body>', html, re.IGNORECASE | re.DOTALL)
+            body = body_match.group(1) if body_match else html
+            # 移除标签
+            text = re.sub(r'<[^>]+>', ' ', body)
+            text = re.sub(r'\s+', ' ', text).strip()
+            print(f"  [ok] 抓取成功，{len(text)} 字符")
+        except Exception as e:
+            print(f"  [error] 抓取失败: {e}")
+            return False
+
+    # 2. 提取标题
+    lines = [l.strip() for l in text.split('\n') if l.strip()]
+    # 取第一行非空行作为标题
+    title = lines[0][:80] if lines else "未命名"
+    if len(title) > 60:
+        title = title[:57] + "..."
+    print(f"  标题: {title}")
+
+    # 3. 交互收集元信息
+    interactive = not (hasattr(args, 'domain') and args.domain)
+    print()
+    if interactive:
+        domain = ask_domain()
+        subdomain = ask_subdomain()
+        tags = ask_tags()
+    else:
+        domain = args.domain
+        subdomain = args.subdomain if args.subdomain else ask_subdomain()
+        tags = args.tags.split() if (hasattr(args, 'tags') and args.tags) else ["#信号笔记"]
+
+    # 4. 交互收集正文内容
+    if interactive:
+        print(f"\n请输入正文内容（flomo 格式，用空行分隔段落，输入单独的 '.' 结束）:")
+        print("  格式提示: **概念**：<mark>核心定义</mark>...  |  **子概念**： |  - 要点列表")
+        print("  (输入 '.' 回车结束输入)\n")
+        content_lines = []
+        while True:
+            try:
+                line = input()
+            except EOFError:
+                break
+            if line.strip() == '.':
+                break
+            content_lines.append(line)
+        body_text = '\n'.join(content_lines).strip()
+    else:
+        if hasattr(args, 'content') and args.content:
+            body_text = args.content
+        else:
+            print(f"\n请输入正文内容（flomo 格式，用空行分隔，输入 '.' 结束）:")
+            print("  格式提示: **概念**：<mark>核心定义</mark>...  |  **子概念**： |  - 要点列表\n")
+            content_lines = []
+            while True:
+                try:
+                    line = input()
+                except EOFError:
+                    break
+                if line.strip() == '.':
+                    break
+                content_lines.append(line)
+            body_text = '\n'.join(content_lines).strip()
+
+    if not body_text:
+        print("  [error] 正文内容为空")
+        return False
+
+    # 5. 构建 flomo 内容
+    knowledge = slugify(title)
+    filename = f"{domain}_{subdomain}_{knowledge}.md"
+    # 检查并修正段数
+    name_part = filename[:-3]
+    parts = name_part.split('_')
+    # 如果超过3段，合并后几段
+    while len(parts) > 3:
+        parts[2] = parts[2] + '_' + parts[3]
+        parts.pop(3)
+    filename = '_'.join(parts) + ".md"
+
+    full_path = BASE_DIR / "answers" / domain / subdomain / filename
+    full_path.parent.mkdir(parents=True, exist_ok=True)
+
+    tag_line = ' '.join(tags)
+    bold_title = f"**{domain}_{subdomain}_{knowledge}**"
+
+    flomo_content = f"""# {tag_line}
+
+{bold_title}
+
+**来源**：{title}
+
+{body_text}
+"""
+    # 写文件
+    with open(full_path, "w", encoding="utf-8") as f:
+        f.write(flomo_content)
+    print(f"\n  [file] 已创建: answers/{domain}/{subdomain}/{filename}")
+
+    # 6. 用 hook --staged 验证
+    print("  [hook] 验证格式...")
+    subprocess.run(["git", "add", "-f", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR))
+    hook_result = subprocess.run(
+        [PYTHON_BIN, str(BASE_DIR / "hooks" / "pre-commit"), "--staged"],
+        cwd=str(BASE_DIR),
+        capture_output=True, text=True
+    )
+    if hook_result.returncode != 0:
+        print(f"  [error] 格式验证失败:\n{hook_result.stdout}")
+        subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR))
+        # 保留文件让用户修正
+        print(f"  [file] 文件保留在: {full_path}")
+        return False
+
+    print("  [ok] 格式验证通过")
+
+    # 7. 上传到 flomo
+    flomo_id = upload_flomo(flomo_content)
+    if flomo_id:
+        print(f"  [flomo] 上传成功 id={flomo_id}")
+        # 清理
+        subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR))
+        full_path.unlink()
+        print(f"  [cleanup] 已删除本地文件")
+    else:
+        print(f"  [flomo] 上传失败，文件保留在: {full_path}")
+
+    print(f"\n✅ 处理完成!")
+    return True
+
+
 def main():
     parser = argparse.ArgumentParser(description="mynews inbox 处理器 (kimi 版本)")
     parser.add_argument("--batch-size", type=int, default=100,
@@ -506,7 +725,19 @@ def main():
     parser.add_argument("--source-type", choices=["rss_entry", "github_commit", "all"],
                         default="all", help="过滤源类型")
     parser.add_argument("--verbose", "-v", action="store_true", help="显示详细输出")
+    parser.add_argument("--url", type=str,
+                        help="直接处理单个 URL（无需 inbox 文件，交互式输入正文）")
+    parser.add_argument("--domain", type=str, help="领域（可选，配合 --url 使用，如 --domain 技术 --subdomain AI）")
+    parser.add_argument("--subdomain", type=str, help="二级领域（可选）")
+    parser.add_argument("--tags", type=str,
+                        help="标签（可选，多个用空格分隔，如 --tags '#信号笔记 #AI'）")
+    parser.add_argument("--content", type=str,
+                        help="正文内容（可选，直接指定而非交互输入）")
     args = parser.parse_args()
+
+    if args.url:
+        process_url(args.url, args)
+        return
 
     try:
         lock = CrossPlatformLock(LOCK_FILE)
