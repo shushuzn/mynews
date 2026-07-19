@@ -338,15 +338,25 @@ def trim_inbox():
 
 
 def main(daemon=False):
+    import signal
+
     try:
         lock = CrossPlatformLock(LOCK_FILE)
         lock.acquire(blocking=False)
     except BlockingIOError:
-        print("Another instance is running, exiting")
+        print("Another instance is running, exiting", flush=True)
         return
 
+    def release_lock_and_exit(signum, frame):
+        lock.release()
+        import sys
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, release_lock_and_exit)
+    signal.signal(signal.SIGINT, release_lock_and_exit)
+
     seen_count = len(load_seen())
-    print(f"Miniflux processor starting, {seen_count} URLs already seen")
+    print(f"Miniflux processor starting, {seen_count} URLs already seen", flush=True)
     if daemon:
         print(f"Daemon mode, poll interval: {POLL_INTERVAL}s")
 
