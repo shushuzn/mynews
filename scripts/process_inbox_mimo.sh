@@ -14,9 +14,31 @@ if [ -z "$FILES" ]; then
     exit 0
 fi
 
+# Track the current file being processed so the trap can access it
+CURRENT_FILE=""
+CURRENT_BASENAME=""
+
+cleanup() {
+    # Record what happened to the current file before exiting
+    if [ -n "$CURRENT_FILE" ] && [ -f "$CURRENT_FILE" ]; then
+        MIMO_EXIT=${MIMO_EXIT:-143}
+        if [ "$MIMO_EXIT" -eq 0 ]; then
+            echo "  [$CURRENT_BASENAME] Done (exit $MIMO_EXIT)" >> "$LOG"
+            mv "$CURRENT_FILE" "$DONE_DIR/" 2>/dev/null
+        else
+            echo "  [$CURRENT_BASENAME] Failed (exit $MIMO_EXIT)" >> "$LOG"
+        fi
+    fi
+    rm -rf "$MIMOCODE_HOME"
+    exit 0
+}
+
+trap cleanup TERM INT
+
 for f in $FILES; do
-    basename=$(basename "$f")
-    echo "[$(date)] Processing: $basename" >> "$LOG"
+    CURRENT_FILE="$f"
+    CURRENT_BASENAME=$(basename "$f")
+    echo "[$(date)] Processing: $CURRENT_BASENAME" >> "$LOG"
 
     # 读取文件提取 URL
     URL=$(grep -A1 "^# SOURCE_URL" "$f" | tail -1 | tr -d '[:space:]')
@@ -25,6 +47,7 @@ for f in $FILES; do
     if [ -z "$URL" ]; then
         echo "  No URL, moving to failed" >> "$LOG"
         mv "$f" "${f}.failed" 2>/dev/null
+        CURRENT_FILE=""
         continue
     fi
 
@@ -66,17 +89,20 @@ Feed: $TITLE
 重要：来源行写成"作者（机构），《期刊》"格式，不要只写作者名。
 PROMPT_EOF
 
-    MIMOCODE_HOME="$MIMOCODE_HOME" /root/.mimocode/bin/mimo run --format json --dangerously-skip-permissions --dir /root/mynews < "$PROMPT" >> "$LOG" 2>&1
-    EXIT=$?
+    MIMOCODE_HOME="$MIMOCODE_HOME" /root/.mimocode/bin/mimo run --format json --dangerously-skip-permissions --dir /root/mynews < "$PROMPT" >> "$LOG" 2>&1 &
+    MIMO_PID=$!
 
+    wait $MIMO_PID
+    MIMO_EXIT=$?
     rm -f "$PROMPT"
 
-    if [ $EXIT -eq 0 ]; then
-        echo "  [$basename] Done (exit $EXIT)" >> "$LOG"
+    if [ "$MIMO_EXIT" -eq 0 ]; then
+        echo "  [$CURRENT_BASENAME] Done (exit $MIMO_EXIT)" >> "$LOG"
         mv "$f" "$DONE_DIR/" 2>/dev/null
     else
-        echo "  [$basename] Failed (exit $EXIT)" >> "$LOG"
+        echo "  [$CURRENT_BASENAME] Failed (exit $MIMO_EXIT)" >> "$LOG"
     fi
+    CURRENT_FILE=""
 done
 
 rm -rf "$MIMOCODE_HOME"
