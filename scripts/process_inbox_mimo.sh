@@ -66,7 +66,7 @@ Feed: $TITLE
 重要：来源行写成"作者（机构），《期刊》"格式，不要只写作者名。
 PROMPT_EOF
 
-    MIMOCODE_HOME="$MIMOCODE_HOME" mimo run --format json --dangerously-skip-permissions --dir /root/mynews < "$PROMPT" >> "$LOG" 2>&1
+    MIMOCODE_HOME="$MIMOCODE_HOME" /root/.mimocode/bin/mimo run --format json --dangerously-skip-permissions --dir /root/mynews < "$PROMPT" >> "$LOG" 2>&1
     EXIT=$?
 
     rm -f "$PROMPT"
