@@ -799,11 +799,13 @@ def process_url(url: str, args):
             print("  示例: --title 'WAIC2026新品发布'")
             return False
 
-    # 4. 正文内容：--ai-content 直接使用；否则交互式收集
+    # 4. 正文内容
     if hasattr(args, 'ai_content') and args.ai_content:
+        # --ai-content：已生成的AI内容，直接使用
         body_text = args.ai_content
         print(f"  [ai] 使用 --ai-content 内容（{len(body_text)} 字符）")
     elif interactive:
+        # 交互模式：通过 stdin 收集
         print(f"\n请输入正文内容（flomo 格式，用空行分隔段落，输入单独的 '.' 结束）:")
         print("  格式提示: **概念**：<mark>核心定义</mark>...  |  **子概念**： |  - 要点列表")
         print("  (输入 '.' 回车结束输入)\n")
@@ -818,39 +820,39 @@ def process_url(url: str, args):
             content_lines.append(line)
         body_text = '\n'.join(content_lines).strip()
     else:
+        # 非交互 --url 模式：fetch_wechat_article 已抓取完整 text
+        # 将全文打印出来供 AI 读取理解，避免只读部分内容就处理
         if hasattr(args, 'content') and args.content:
-            # --content 是原材料，需要 AI 理解后生成概念和子概念
-            # --ai-content 是已生成的 AI 内容（直接传入，跳过交互）
-            if hasattr(args, 'ai_content') and args.ai_content:
-                body_text = args.ai_content
-                print(f"  [ai] 使用 --ai-content 内容（{len(body_text)} 字符）")
-            else:
-                print(f"\n{'='*60}")
-                print("【AI 生成阶段】请理解下方原材料，自己生成概念和子概念：")
-                print(f"{'='*60}")
-                raw = args.content
-                print(raw[:2000])
-                if len(raw) > 2000:
-                    print(f"...（共 {len(raw)} 字符）")
-                print(f"{'='*60}")
-                print("请粘贴你生成的 **概念** 和 **子概念**（直接粘贴，不要加额外说明）：")
-                print("格式：\n**概念**：<mark>核心关键词</mark>...（核心词用<mark>高亮）\n\n**子概念**：\n- <mark>关键概念1</mark>：说明...\n- <mark>关键概念2</mark>：说明...\n（每个要点至少一个<mark>关键词</mark>高亮）")
-                content_lines = []
-                while True:
-                    try:
-                        line = input()
-                    except EOFError:
-                        break
-                    if line.strip() == '.':
-                        break
-                    content_lines.append(line)
-                body_text = '\n'.join(content_lines).strip()
-                if not body_text:
-                    print("  [error] 正文内容为空")
-                    return False
+            # --content：原材料，打印出来让 AI 生成概念/子概念
+            print(f"\n{'='*60}")
+            print("【AI 生成阶段】请理解下方原材料，自己生成概念和子概念：")
+            print(f"{'='*60}")
+            raw = args.content
+            print(raw[:2000])
+            if len(raw) > 2000:
+                print(f"...（共 {len(raw)} 字符）")
+            print(f"{'='*60}")
+            print("请粘贴你生成的 **概念** 和 **子概念**（直接粘贴，不要加额外说明）：")
+            print("格式：\n**概念**：<mark>核心关键词</mark>...（核心词用<mark>高亮）\n\n**子概念**：\n- <mark>关键概念1</mark>：说明...\n- <mark>关键概念2</mark>：说明...\n（每个要点至少一个<mark>关键词</mark>高亮）")
+            content_lines = []
+            while True:
+                try:
+                    line = input()
+                except EOFError:
+                    break
+                if line.strip() == '.':
+                    break
+                content_lines.append(line)
+            body_text = '\n'.join(content_lines).strip()
         else:
-            print(f"\n请输入正文内容（flomo 格式，用空行分隔，输入 '.' 结束）:")
-            print("  格式提示: **概念**：<mark>核心定义</mark>...  |  **子概念**： |  - 要点列表\n")
+            # --url 模式：打印抓取的完整文章内容，供 AI 读取理解
+            print(f"\n{'='*60}")
+            print(f"【文章全文 {len(text)} 字符】请 AI 读取理解后再生成 flomo 内容：")
+            print(f"{'='*60}")
+            print(text)
+            print(f"{'='*60}")
+            print("请粘贴你生成的 **概念** 和 **子概念**（直接粘贴，不要加额外说明）：")
+            print("格式：\n**概念**：<mark>核心关键词</mark>...（核心词用<mark>高亮）\n\n**子概念**：\n- <mark>关键概念1</mark>：说明...\n- <mark>关键概念2</mark>：说明...\n（每个要点至少一个<mark>关键词</mark>高亮）")
             content_lines = []
             while True:
                 try:
