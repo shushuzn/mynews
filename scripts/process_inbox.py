@@ -372,6 +372,18 @@ def search_flomo(keyword):
 
 def _validate_and_extract_domain(content):
     """从 flomo content 中提取并验证 domain/subdomain，返回 (domain, subdomain)"""
+    # 格式必填项检查
+    colon = '：'
+    if f'**概念**{colon}' not in content:
+        raise ValueError(f"内容缺少 **概念**{colon}")
+    if f'**子概念**{colon}' not in content:
+        raise ValueError(f"内容缺少 **子概念**{colon}")
+    if f'**来源**{colon}' not in content:
+        raise ValueError(f"内容缺少 **来源**{colon}")
+    # 标签行检查（第一行必须是 #xxx 或 @xxx）
+    first_line = content.strip().split('\n')[0] if content.strip() else ''
+    if not (first_line.startswith('#') or first_line.startswith('@')):
+        raise ValueError(f"第一行必须是标签行（#开头），当前第一行：'{first_line}'")
     # 找 **domain_subdomain_knowledge** 格式的粗体标题行
     # 粗体内容中可能含中文、英文、数字、括号、空格，知识点中含 _ （下划线），因此分三段提取
     # 匹配格式：**领域_二级领域_知识点**（知识点中允许出现 _）
@@ -379,6 +391,8 @@ def _validate_and_extract_domain(content):
     if not match:
         raise ValueError("无法从内容中找到粗体标题行（格式：**领域_二级领域_知识点**）")
     full_title = match.group(0)[2:-2]  # 去掉首尾 **
+    if '-' in full_title:
+        raise ValueError(f"标题禁止使用连字符（-）：'{full_title}'")
     parts = full_title.split('_', 2)
     if len(parts) < 2:
         raise ValueError(f"标题 '{full_title}' 不符合 三段式格式（领域_二级领域_知识点）")
