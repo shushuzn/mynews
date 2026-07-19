@@ -725,6 +725,11 @@ def process_url(url: str, args):
             print(f"  [error] 抓取失败: {error}")
             return False
         print(f"  [ok] 抓取成功 ({source})，{len(text)} 字符")
+        # 内容完整性检查：微信文章正文低于 1000 字符很可能是只抓到了开头
+        if len(text) < 1000:
+            print(f"  [warn] 微信文章仅 {len(text)} 字符，内容可能不完整（低于 1000 字符阈值），请确认是否只抓到了开头部分")
+            print(f"  [info] 如需读取完整内容，请使用 fetch_wechat_article(use_cache=False) 重新抓取")
+            # 不自动阻断，但提示用户
     else:
         print("  [http] 抓取中...")
         try:
