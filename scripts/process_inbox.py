@@ -373,10 +373,12 @@ def search_flomo(keyword):
 def _validate_and_extract_domain(content):
     """从 flomo content 中提取并验证 domain/subdomain，返回 (domain, subdomain)"""
     # 找 **domain_subdomain_knowledge** 格式的粗体标题行
-    match = re.search(r'^\*\*(.+?)\*\*$', content, re.MULTILINE)
+    # 粗体内容中可能含中文、英文、数字、括号、空格，知识点中含 _ （下划线），因此分三段提取
+    # 匹配格式：**领域_二级领域_知识点**（知识点中允许出现 _）
+    match = re.search(r'^\*\*(?:\\\_|[^_])*\_(?:\\\_|[^_])*\_(?:\\\_|[^*])*\*\*$', content, re.MULTILINE)
     if not match:
         raise ValueError("无法从内容中找到粗体标题行（格式：**领域_二级领域_知识点**）")
-    full_title = match.group(1)
+    full_title = match.group(0)[2:-2]  # 去掉首尾 **
     parts = full_title.split('_', 2)
     if len(parts) < 2:
         raise ValueError(f"标题 '{full_title}' 不符合 三段式格式（领域_二级领域_知识点）")
