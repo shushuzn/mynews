@@ -370,8 +370,30 @@ def search_flomo(keyword):
         return None
 
 
+def _validate_and_extract_domain(content):
+    """从 flomo content 中提取并验证 domain/subdomain，返回 (domain, subdomain)"""
+    # 找 **domain_subdomain_knowledge** 格式的粗体标题行
+    match = re.search(r'^\*\*(.+?)\*\*$', content, re.MULTILINE)
+    if not match:
+        raise ValueError("无法从内容中找到粗体标题行（格式：**领域_二级领域_知识点**）")
+    full_title = match.group(1)
+    parts = full_title.split('_', 2)
+    if len(parts) < 2:
+        raise ValueError(f"标题 '{full_title}' 不符合 三段式格式（领域_二级领域_知识点）")
+    domain, subdomain = parts[0], parts[1]
+    valid_domains = list(DOMAIN_KEYWORDS.keys())
+    if domain not in valid_domains:
+        raise ValueError(f"无效领域 '{domain}'，有效领域：{', '.join(valid_domains)}")
+    valid_subdomains = list(DOMAIN_KEYWORDS.get(domain, {}).keys())
+    if subdomain not in valid_subdomains:
+        raise ValueError(f"无效二级领域 '{subdomain}'（在领域 '{domain}' 下），有效二级领域：{', '.join(valid_subdomains)}")
+    return domain, subdomain
+
+
 def upload_flomo(content):
     """上传到 flomo"""
+    # 验证 domain/subdomain
+    _validate_and_extract_domain(content)
     # 转义 content 中的下划线
     def escape_underscore_in_bold(match):
         return "**" + match.group(1).replace("_", "\\_") + "**"
@@ -423,6 +445,8 @@ def upload_flomo(content):
 
 def update_flomo(memo_id, content):
     """更新 flomo 已有笔记"""
+    # 验证 domain/subdomain
+    _validate_and_extract_domain(content)
     def escape_underscore_in_bold(match):
         return "**" + match.group(1).replace("_", "\\_") + "**"
     content_escaped = re.sub(
