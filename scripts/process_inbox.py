@@ -432,8 +432,16 @@ def upload_flomo(content):
                     json_str = line[5:].strip()
                     if json_str:
                         result = json.loads(json_str)
+                        # 检查是否是错误响应
+                        if result.get("error"):
+                            err = result["error"]
+                            print(f"    [flomo upload] API error: {err.get('message', err)}")
+                            return None
                         if "result" in result:
                             memo = result["result"]
+                            if isinstance(memo, dict) and memo.get("isError"):
+                                print(f"    [flomo upload] API error: {memo}")
+                                return None
                             if "id" in memo:
                                 return memo["id"]
                             # Check structuredContent
@@ -483,6 +491,16 @@ def update_flomo(memo_id, content):
                     json_str = line[5:].strip()
                     if json_str:
                         result = json.loads(json_str)
+                        # 检查是否是错误响应
+                        if result.get("error"):
+                            err = result["error"]
+                            print(f"    [flomo update] API error: {err.get('message', err)}")
+                            return False
+                        # 检查 result 中是否包含 isError
+                        res_content = result.get("result", {})
+                        if isinstance(res_content, dict) and res_content.get("isError"):
+                            print(f"    [flomo update] API error: {res_content}")
+                            return False
                         if "result" in result:
                             return True
             return False
