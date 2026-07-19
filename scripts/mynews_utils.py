@@ -155,7 +155,7 @@ ANDROID_UA = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML
 
 def is_wechat_url(url: str) -> bool:
     """判断是否为微信公众号 URL"""
-    return "mp.weixin.qq.com" in url
+    return url and "mp.weixin.qq.com" in url
 
 
 def get_cache_dir() -> Path:
