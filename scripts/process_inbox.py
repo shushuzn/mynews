@@ -722,6 +722,7 @@ def process_url(url: str, args):
             return False
         text = args.content
         source = None  # will default to "网络"
+        source_title = None  # explicitly None so it defaults to "网络" in format string
         wx_title = ""
         print(f"\n[内容模式] 使用提供的 --content（{len(text)} 字符）")
     else:
@@ -948,7 +949,11 @@ def process_url(url: str, args):
                 choice = ch.strip().lower()
             else:
                 if relevance >= 0.9:
-                    print(f"  [flomo] 检测到高相似笔记 id={old_id}（relevance={relevance:.2f}），退出由我处理")
+                    print(f"  [flomo] 检测到高相似笔记 id={old_id}（relevance={relevance:.2f}）")
+                    old_content = best.get("content", "")
+                    if old_content:
+                        print(f"\n========== 已有笔记内容 ==========\n{old_content}\n===================================\n")
+                    print("  退出由我判断是否真的重复")
                     import sys
                     sys.exit(1)
                 else:
