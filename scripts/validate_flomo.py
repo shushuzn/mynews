@@ -91,6 +91,18 @@ def validate_content(filepath, expected_domain, expected_subdomain, filename):
         if pattern.search(content):
             errors.append(f"❌ 包含禁止语法: {msg}")
 
+    # Check for plain text URLs (http:// or https://) in content, excluding header lines
+    # SOURCE_URL is metadata and exempt; the bad pattern is URLs embedded in body text
+    content_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith('# SOURCE_'):
+            continue
+        content_lines.append(line)
+    content_only = '\n'.join(content_lines)
+    if re.search(r'https?://', content_only):
+        errors.append("❌ 包含禁止语法: 纯文本链接 (http:// 或 https://)")
+
     has_bold_title = False
     first_title_match = re.search(r'^\*\*([^*]+)\*\*$', content, re.MULTILINE)
     if not first_title_match:
