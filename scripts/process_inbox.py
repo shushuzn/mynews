@@ -386,9 +386,6 @@ def _validate_and_extract_domain(content):
     valid_domains = list(DOMAIN_KEYWORDS.keys())
     if domain not in valid_domains:
         raise ValueError(f"无效领域 '{domain}'，有效领域：{', '.join(valid_domains)}")
-    valid_subdomains = list(DOMAIN_KEYWORDS.get(domain, {}).keys())
-    if subdomain not in valid_subdomains:
-        raise ValueError(f"无效二级领域 '{subdomain}'（在领域 '{domain}' 下），有效二级领域：{', '.join(valid_subdomains)}")
     return domain, subdomain
 
 
@@ -880,13 +877,7 @@ def process_url(url: str, args):
         print(f"  [error] 无效领域 '{domain}'，有效领域：{', '.join(valid_domains)}")
         return False
 
-    # 6. 验证 subdomain 是否在 domain 的子领域列表中
-    valid_subdomains = list(DOMAIN_KEYWORDS.get(domain, {}).keys())
-    if subdomain not in valid_subdomains:
-        print(f"  [error] 无效二级领域 '{subdomain}'（在领域 '{domain}' 下），有效二级领域：{', '.join(valid_subdomains) if valid_subdomains else '该领域下无预定义二级领域'}")
-        return False
-
-    # 7. 构建 flomo 内容
+    # 6. 构建 flomo 内容
     filename = f"{domain}_{subdomain}_{knowledge}.md"
     full_path = BASE_DIR / "answers" / domain / subdomain / filename
     full_path.parent.mkdir(parents=True, exist_ok=True)
