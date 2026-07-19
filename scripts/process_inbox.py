@@ -958,6 +958,7 @@ def process_url(url: str, args):
                     old_content = best.get("content", "")
                     if old_content:
                         print(f"\n========== 已有笔记内容 ==========\n{old_content}\n===================================\n")
+                    print(f"\n========== 新文章内容 ==========\n{body_text}\n===================================\n")
                     print("  退出由我判断是否真的重复")
                     import sys
                     sys.exit(1)
