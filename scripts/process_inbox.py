@@ -715,54 +715,64 @@ def process_url(url: str, args):
     import urllib.request
     import urllib.error
 
-    print(f"\n[URL 模式] {url[:60]}{'...' if len(url) > 60 else ''}")
-
-    # 1. 抓取内容
-    if is_wechat_url(url):
-        print("  [wechat] 抓取中...")
-        text, source, error, wx_title = fetch_wechat_article(url, use_cache=True)
-        if not text:
-            print(f"  [error] 抓取失败: {error}")
+    # --content without --url: skip fetching, use provided content
+    if url is None:
+        if not (hasattr(args, 'content') and args.content):
+            print("  [error] --content 模式需要提供 --content 参数")
             return False
-        print(f"  [ok] 抓取成功 ({source})，{len(text)} 字符")
+        text = args.content
+        source = None  # will default to "网络"
+        wx_title = ""
+        print(f"\n[内容模式] 使用提供的 --content（{len(text)} 字符）")
     else:
-        print("  [http] 抓取中...")
-        try:
-            req = urllib.request.Request(
-                url,
-                headers={
-                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                }
-            )
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                html = resp.read().decode("utf-8", errors="replace")
-            # 简单提取 <title>
-            title_match = re.search(r'<title[^>]*>([^<]+)</title>', html, re.IGNORECASE)
-            wx_title = title_match.group(1).strip() if title_match else ""
-            # 简单提取正文（取 <body> 内的文字）
-            body_match = re.search(r'<body[^>]*>(.*)</body>', html, re.IGNORECASE | re.DOTALL)
-            body = body_match.group(1) if body_match else html
-            # 移除标签
-            text = re.sub(r'<[^>]+>', ' ', body)
-            text = re.sub(r'\s+', ' ', text).strip()
-            print(f"  [ok] 抓取成功，{len(text)} 字符")
-        except Exception as e:
-            print(f"  [error] 抓取失败: {e}")
-            return False
+        print(f"\n[URL 模式] {url[:60]}{'...' if len(url) > 60 else ''}")
 
-    # 2. 提取标题
-    # WeChat: 用 wx_title（HTML <title>，真实标题）；其他: 取内容第一行
-    lines = [l.strip() for l in text.split('\n') if l.strip()]
-    if is_wechat_url(url) and wx_title:
-        title = wx_title
-    else:
-        title = lines[0][:80] if lines else "未命名"
-        if len(title) > 60:
-            title = title[:57] + "..."
+        # 1. 抓取内容
+        if is_wechat_url(url):
+            print("  [wechat] 抓取中...")
+            text, source, error, wx_title = fetch_wechat_article(url, use_cache=True)
+            if not text:
+                print(f"  [error] 抓取失败: {error}")
+                return False
+            print(f"  [ok] 抓取成功 ({source})，{len(text)} 字符")
+        else:
+            print("  [http] 抓取中...")
+            try:
+                req = urllib.request.Request(
+                    url,
+                    headers={
+                        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    }
+                )
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    html = resp.read().decode("utf-8", errors="replace")
+                # 简单提取 <title>
+                title_match = re.search(r'<title[^>]*>([^<]+)</title>', html, re.IGNORECASE)
+                wx_title = title_match.group(1).strip() if title_match else ""
+                # 简单提取正文（取 <body> 内的文字）
+                body_match = re.search(r'<body[^>]*>(.*)</body>', html, re.IGNORECASE | re.DOTALL)
+                body = body_match.group(1) if body_match else html
+                # 移除标签
+                text = re.sub(r'<[^>]+>', ' ', body)
+                text = re.sub(r'\s+', ' ', text).strip()
+                print(f"  [ok] 抓取成功，{len(text)} 字符")
+            except Exception as e:
+                print(f"  [error] 抓取失败: {e}")
+                return False
 
-    # 确定来源标题：微信文章用source（发布账号），其他用None（默认"网络"）
-    source_title = source if (is_wechat_url(url) and source) else None
+        # 2. 提取标题
+        # WeChat: 用 wx_title（HTML <title>，真实标题）；其他: 取内容第一行
+        lines = [l.strip() for l in text.split('\n') if l.strip()]
+        if is_wechat_url(url) and wx_title:
+            title = wx_title
+        else:
+            title = lines[0][:80] if lines else "未命名"
+            if len(title) > 60:
+                title = title[:57] + "..."
+
+        # 确定来源标题：微信文章用source（发布账号），其他用None（默认"网络"）
+        source_title = source if (is_wechat_url(url) and source) else None
 
     # 3. 交互收集元信息
     interactive = not (hasattr(args, 'domain') and args.domain)
@@ -994,6 +1004,11 @@ def main():
 
     if args.url:
         process_url(args.url, args)
+        return
+
+    # --content without --url: use content as body, source defaults to "网络"
+    if hasattr(args, 'content') and args.content:
+        process_url(None, args)
         return
 
     try:
