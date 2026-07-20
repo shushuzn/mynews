@@ -296,6 +296,16 @@ def extract_author_from_html(html: str) -> str:
     match = re.search(r'<meta[^>]+name=["\']author["\'][^>]+content=["\']([^"\']+)["\']', html, re.IGNORECASE)
     if match:
         author = match.group(1).strip()
+        # HTML 反转义（&gt; -> >）
+        author = (author.replace("&amp;", "&")
+                        .replace("&gt;", ">")
+                        .replace("&lt;", "<")
+                        .replace("&quot;", "\"")
+                        .replace("&#39;", "'"))
+        # 过滤公众号自身的引导文案（这些不是真正的发布账号）
+        noise_patterns = ["点击蓝字关注", "点击关注", "扫一扫关注", "微信扫一扫", "关注该公众号"]
+        if any(p in author for p in noise_patterns):
+            return ""
         if author:
             return author
     # 次选从 og:site_name 提取
