@@ -371,7 +371,7 @@ def search_flomo(keyword):
 
 
 def _validate_and_extract_domain(content):
-    """从 flomo content 中提取并验证 domain/subdomain，返回 (domain, subdomain)"""
+    """从 flomo content 中提取并验证 domain/subdomain/标签，返回 (domain, subdomain)"""
     # 格式必填项检查
     colon = '：'
     if f'**概念**{colon}' not in content:
@@ -384,6 +384,40 @@ def _validate_and_extract_domain(content):
     first_line = content.strip().split('\n')[0] if content.strip() else ''
     if not (first_line.startswith('#') or first_line.startswith('@')):
         raise ValueError(f"第一行必须是标签行（#开头），当前第一行：'{first_line}'")
+    # 严格标签白名单校验：必须包含一级领域 + 二级领域 + 信号类型，禁止任何其他标签
+    SIGNAL_TYPES = {'#信号笔记', '#趋势信号', '#知识基座', '#分析框架', '#知识载体'}
+    CONSULT_LINES = {'@行业研究', '@战略规划', '@竞争情报', '@政策预警', '@运营诊断',
+                      '@市场进入', '@技术尽调', '@风险管理', '@组织人力', '@资本咨询'}
+    # 一级领域白名单（来自 DOMAIN_KEYWORDS，加 # 前缀）
+    PRIMARY_DOMAINS = {f"#{k}" for k in DOMAIN_KEYWORDS.keys()}
+    # 二级领域白名单（DOMAIN_KEYWORDS 全部 value keys，加 # 前缀）
+    SECONDARY_DOMAINS = set()
+    for sub_dict in DOMAIN_KEYWORDS.values():
+        SECONDARY_DOMAINS.update({f"#{k}" for k in sub_dict.keys()})
+    # 解析第一行所有标签
+    tag_tokens = first_line.split()
+    tag_set = set(tag_tokens)
+    # 信号类型校验：必须有且仅有一个信号类型标签
+    signal_in_tags = tag_set & SIGNAL_TYPES
+    if not signal_in_tags:
+        raise ValueError(f"第一行缺少信号类型标签（{', '.join(sorted(SIGNAL_TYPES))} 中任选一个），当前：'{first_line}'")
+    if len(signal_in_tags) > 1:
+        raise ValueError(f"第一行只能有一个信号类型标签，当前包含：{', '.join(sorted(signal_in_tags))}")
+    # 一级领域校验：必须有一个一级领域标签
+    primary_in_tags = tag_set & PRIMARY_DOMAINS
+    if not primary_in_tags:
+        raise ValueError(f"第一行缺少一级领域标签（{', '.join(sorted(PRIMARY_DOMAINS))} 中任选一个），当前：'{first_line}'")
+    if len(primary_in_tags) > 1:
+        raise ValueError(f"第一行只能有一个一级领域标签，当前包含：{', '.join(sorted(primary_in_tags))}")
+    # 二级领域校验：必须有一个二级领域标签
+    secondary_in_tags = tag_set & SECONDARY_DOMAINS
+    if not secondary_in_tags:
+        raise ValueError(f"第一行缺少二级领域标签（{', '.join(sorted(SECONDARY_DOMAINS))} 中任选一个），当前：'{first_line}'")
+    # 严格白名单：所有 tag tokens 必须属于 UNION（信号类型 | 一级领域 | 二级领域 | 咨询线）
+    allowed = SIGNAL_TYPES | PRIMARY_DOMAINS | SECONDARY_DOMAINS | CONSULT_LINES
+    invalid = tag_set - allowed
+    if invalid:
+        raise ValueError(f"第一行含非法标签 {sorted(invalid)}——只允许：信号类型（{', '.join(sorted(SIGNAL_TYPES))}）、一级领域（{', '.join(sorted(PRIMARY_DOMAINS))}）、二级领域、@咨询线")
     # 找 **domain_subdomain_knowledge** 格式的粗体标题行
     # 粗体内容中可能含中文、英文、数字、括号、空格，知识点中含 _ （下划线），因此分三段提取
     # 匹配格式：**领域_二级领域_知识点**（知识点中允许出现 _）
@@ -400,6 +434,12 @@ def _validate_and_extract_domain(content):
     valid_domains = list(DOMAIN_KEYWORDS.keys())
     if domain not in valid_domains:
         raise ValueError(f"无效领域 '{domain}'，有效领域：{', '.join(valid_domains)}")
+    # 标题里的 subdomain 必须与第一行标签中的二级领域一致
+    if f'#{subdomain}' not in tag_set:
+        raise ValueError(f"标题中的二级领域 '{subdomain}' 与第一行标签中的二级领域标签不一致")
+    # 标题里的一级领域必须与第一行标签中的一级领域一致
+    if f'#{domain}' not in tag_set:
+        raise ValueError(f"标题中的一级领域 '{domain}' 与第一行标签中的一级领域标签不一致")
     return domain, subdomain
 
 
