@@ -398,10 +398,15 @@ def _validate_and_extract_domain(content):
     sub_concept_lines = [line for line in content.splitlines() if line.strip().startswith(f'**子概念**{colon}')]
     if len(sub_concept_lines) != 1:
         raise ValueError(f"**子概念**{colon} 行必须恰好出现一次，当前出现 {len(sub_concept_lines)} 次")
-    # 标签行检查（第一行必须是 #xxx 或 @xxx）
-    first_line = content.strip().split('\n')[0] if content.strip() else ''
+    # 标签行检查（第一行必须是 #xxx 或 @xxx，且整个内容里只能有这一行标签）
+    lines = content.splitlines()
+    first_line = lines[0].strip() if lines else ''
     if not (first_line.startswith('#') or first_line.startswith('@')):
-        raise ValueError(f"第一行必须是标签行（#开头），当前第一行：'{first_line}'")
+        raise ValueError(f"第一行必须是标签行（#或@开头），当前第一行：'{first_line}'")
+    # 校验整个内容里标签行有且仅有一行（防止内容中间重复出现 #xxx 标签行）
+    tag_lines = [i for i, line in enumerate(lines) if line.strip().startswith('#') or line.strip().startswith('@')]
+    if len(tag_lines) != 1 or tag_lines[0] != 0:
+        raise ValueError(f"分类标签行有且仅有一行且必须在第一行，当前发现 {len(tag_lines)} 行（位置：{tag_lines}）")
     # 信号类型（必填，唯一）
     SIGNAL_TYPES = {'信号笔记', '趋势信号', '知识基座', '分析框架', '知识载体'}
     # 一级领域白名单（来自 DOMAIN_KEYWORDS keys）
