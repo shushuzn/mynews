@@ -465,7 +465,14 @@ def upload_flomo(content):
 
 
 def update_flomo(memo_id, content):
-    """更新 flomo 已有笔记"""
+    """更新 flomo 已有笔记（覆盖式更新，无版本控制——必须先比对旧内容再调用）
+
+    安全流程：
+    ①调用 search_flomo() 用 memo_id 关联的关键词拉取旧内容（relevance=1 时返回完整 content 字段）
+    ②打印"旧内容 vs 新内容"对比
+    ③AI 人工判断：完全相同 / 新增内容合并 / 新版整体替换
+    ④新版整体替换且会丢失旧 memo 中其他子概念条目时，必须用"新增内容合并"模式构造新 content
+    """
     # 验证 domain/subdomain
     _validate_and_extract_domain(content)
     def escape_underscore_in_bold(match):
@@ -473,6 +480,13 @@ def update_flomo(memo_id, content):
     content_escaped = re.sub(
         r'^\*\*([^*]+)\*\*$', escape_underscore_in_bold, content, flags=re.MULTILINE
     )
+
+    # === update_flomo 安全约束 ===
+    # 必须先调用 fetch_flomo_memo(memo_id) 拉取旧内容并人工比对，
+    # 确认 update 是合并新增内容而非整体覆盖；
+    # 严禁在未比对旧内容情况下直接调用本函数（会导致重大信息丢失且不可恢复）。
+    print(f"  [warning] update_flomo 是覆盖操作（flomo MCP 无版本控制），"
+          f"调用前必须已 fetch_flomo_memo({memo_id}) 比对旧内容")
 
     payload = json.dumps({
         "jsonrpc": "2.0",
