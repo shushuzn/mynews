@@ -17,6 +17,21 @@ description: Use when creating, generating, or producing structured theoretical/
 
 ### 1.1 URL 输入（微信公众号 / 网页）
 
+**微信公众号必须先 fetch 获取最新内容（禁用缓存），再传给 process_inbox.py。**
+
+第一步：抓取正文（`use_cache=False` 确保最新）：
+```bash
+cd /root/mynews/scripts && python3 -c "
+from mynews_utils import fetch_wechat_article
+t,s,e,wx = fetch_wechat_article('https://mp.weixin.qq.com/s/xxxx', use_cache=False)
+print(f'## 标题: {wx}')
+print(f'## 来源: {s}')
+print('## 正文:')
+print(t)
+"
+```
+
+第二步：用 process_inbox.py 上传：
 ```bash
 cd /root/mynews/scripts && python3 process_inbox.py \
   --url "https://mp.weixin.qq.com/s/xxxx" \
@@ -28,6 +43,8 @@ cd /root/mynews/scripts && python3 process_inbox.py \
 **子概念**：
 - <mark>要点一</mark>：..."
 ```
+
+**重要**：`process_inbox.py` 内部调用 `fetch_wechat_article(use_cache=True)`，会返回缓存内容导致信息过时。必须先用上面的命令 `use_cache=False` 抓取最新正文，再调用 process_inbox.py。
 
 假阳性（高相似但内容不同）时加 `--force-new` 强制新建。
 
@@ -123,7 +140,7 @@ cd /root/mynews/scripts && python3 process_inbox.py \
 | 规则 |
 |------|
 | **只用 process_inbox.py**，禁止直接调 upload_flomo / memo_create |
-| `--url` 模式自动抓取，无需手动 webfetch |
+| `--url` 模式由 process_inbox.py 内部抓取（默认缓存）；微信公众号需先用 fetch_wechat_article(use_cache=False) 单独抓取最新内容 |
 | `--ai-content` 是 AI 已生成的概念/子概念内容，不是原材料 |
 | relevance ≥ 0.9 时必须对比新旧内容，禁止跳过有新增的条目 |
 | 文件名知识点部分禁止连字符 `-` |
