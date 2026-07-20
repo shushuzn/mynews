@@ -785,7 +785,10 @@ def ask_tags() -> list:
     """Interactive tag input."""
     print("信号类型标签（五选一）: #趋势信号 #知识基座 #信号笔记 #分析框架 #知识载体")
     while True:
-        tag = input("输入信号类型标签（直接回车=信号笔记）: ").strip() or "#信号笔记"
+        tag = input("输入信号类型标签（必填，五选一）: ").strip()
+        if not tag:
+            print("  错误：信号类型标签不能为空")
+            continue
         if tag.startswith('#') or tag.startswith('@'):
             break
         print("  标签必须以 # 或 @ 开头，请重试")
@@ -883,7 +886,10 @@ def process_url(url: str, args):
     else:
         domain = args.domain
         subdomain = args.subdomain if args.subdomain else ask_subdomain()
-        tags = args.tags.split() if (hasattr(args, 'tags') and args.tags) else ["#信号笔记"]
+        if not (hasattr(args, 'tags') and args.tags):
+            print("错误：--tags 必须提供信号类型标签")
+            exit(1)
+        tags = args.tags.split()
         if args.title:
             knowledge = args.title
         else:
@@ -1084,8 +1090,8 @@ def main():
                         help="直接处理单个 URL（无需 inbox 文件，交互式输入正文）")
     parser.add_argument("--domain", type=str, help="领域（可选，配合 --url 使用，如 --domain 技术 --subdomain AI）")
     parser.add_argument("--subdomain", type=str, help="二级领域（可选）")
-    parser.add_argument("--tags", type=str,
-                        help="标签（可选，多个用空格分隔，如 --tags '#信号笔记 #AI'）")
+    parser.add_argument("--tags", type=str, required=True,
+                        help="标签（必填，第一个为信号类型标签：#知识基座/#趋势信号/#信号笔记/#分析框架/#知识载体，其余为领域/二级领域标签，如 --tags '#知识基座 #技术 #AI'）")
     parser.add_argument("--content", type=str,
                         help="原材料正文（作为 AI 理解的输入）")
     parser.add_argument("--ai-content", type=str,
