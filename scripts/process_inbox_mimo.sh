@@ -1,7 +1,7 @@
 #!/bin/bash
 # 用 mimo 自动处理 _inbox 中的条目
 # 流程：mimo 理解文章 → 生成 ai-content → process_inbox.py --url 上传
-# 改动：2026-07-20 重写，符合现在的 process_inbox.py + --ai-content-file + --force-new 流程
+# 改动：2026-07-20 重写，符合现在的 process_inbox.py + --ai-content + --force-new 流程
 
 INBOX_DIR="/root/mynews/_inbox"
 DONE_DIR="/root/mynews/_inbox_done"
@@ -63,21 +63,13 @@ Feed: $FEED
 
 4. 用 process_inbox.py 上传（这是唯一入口，不要直接调 upload_flomo）：
 
-   # 先把 ai-content 写到临时文件，再用 --ai-content-file 传入
-   AI_CONTENT_FILE=$(mktemp /tmp/ai_content.XXXXXX.md)
-   cat > "\$AI_CONTENT_FILE" <<'AI_CONTENT_EOF'
-<概念>...<子概念>...
-AI_CONTENT_EOF
-
    cd /root/mynews/scripts && python3 process_inbox.py \\
      --url "$URL" \\
      --domain "<领域>" \\
      --subdomain "<二级领域>" \\
      --title "<知识点中文标题，三段式>" \\
      --tags "#信号笔记 #<领域> #<二级领域>" \\
-     --ai-content-file "\$AI_CONTENT_FILE"
-
-   rm -f "\$AI_CONTENT_FILE"
+     --ai-content "<概念>...<子概念>..."
 
 5. 关键规则：
    - **禁止直接调 upload_flomo**：必须通过 process_inbox.py（它内置查重 + 校验）
@@ -86,10 +78,7 @@ AI_CONTENT_EOF
    - **查重处理**：若 process_inbox.py 检测到 relevance ≥ 0.9 高相似会停下并显示新旧内容对比——你需要判断：
      a. 内容确实重复 → 跳过（脚本本身已打印"已处理"，无需额外操作）
      b. 内容是假阳性（已有笔记和当前文章主题不同）→ 重跑加 --force-new：
-        AI_CONTENT_FILE=\$(mktemp /tmp/ai_content.XXXXXX.md)
-        # (写入 ai-content 到 \$AI_CONTENT_FILE)
-        cd /root/mynews/scripts && python3 process_inbox.py --url "$URL" --domain "..." --subdomain "..." --title "..." --tags "..." --ai-content-file "\$AI_CONTENT_FILE" --force-new
-        rm -f "\$AI_CONTENT_FILE"
+        cd /root/mynews/scripts && python3 process_inbox.py --url "$URL" --domain "..." --subdomain "..." --title "..." --tags "..." --ai-content "..." --force-new
      c. 新文章对已有 memo 有实质增量 → 用 update_flomo(id, new_content) 整合（旧 ID 从脚本打印中获取）
    - **flomo 内容中禁止 URL**：纯文本 https?:// 链接和 🔗+URL 都禁止
 
