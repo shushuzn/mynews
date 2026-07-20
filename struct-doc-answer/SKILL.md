@@ -29,6 +29,8 @@ cd /root/mynews/scripts && python3 process_inbox.py \
 - <mark>要点一</mark>：..."
 ```
 
+假阳性（高相似但内容不同）时加 `--force-new` 强制新建。
+
 - `--url`：必填，文章链接
 - `--domain`：必填，一级领域（技术/经济/政治/自然科学/社会科学等）
 - `--subdomain`：必填，二级领域
@@ -112,7 +114,7 @@ cd /root/mynews/scripts && python3 process_inbox.py \
 | 6 | AI 判断：完全相同 → 跳过；新增内容 → update；完全不同 → 新建 |
 | 7 | upload_flomo 或 update_flomo 上传 |
 
-**relevance ≥ 0.9 时**：脚本会打印"已有笔记内容"和"新文章内容"对比，AI 必须自己判断有无实质新增内容，有新增必须 update_flomo，无新增才允许跳过。
+**relevance ≥ 0.9 时**：脚本会打印"已有笔记内容"和"新文章内容"对比，AI 必须自己判断有无实质新增内容，有新增必须 update_flomo，无新增才允许跳过。**假阳性时**（relevance 高但内容完全不同），用 `--force-new` 参数强制新建。
 
 ---
 

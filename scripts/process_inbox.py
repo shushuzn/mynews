@@ -973,10 +973,14 @@ def process_url(url: str, args):
                     if old_content:
                         print(f"\n========== 已有笔记内容 ==========\n{old_content}\n===================================\n")
                     print(f"\n========== 新文章内容 ==========\n{body_text}\n===================================\n")
-                    print("  退出由我判断是否真的重复")
-                    print("  规则: 禁止跳过——有新内容（如参数/价格/时间/事件等增量信息）必须 update_flomo 整合，无任何新增才允许跳过")
-                    import sys
-                    sys.exit(1)
+                    if getattr(args, 'force_new', False):
+                        print("  [flomo] --force-new 强制新建，跳过检测")
+                        choice = None
+                    else:
+                        print("  退出由我判断是否真的重复")
+                        print("  规则: 禁止跳过——有新内容（如参数/价格/时间/事件等增量信息）必须 update_flomo 整合，无任何新增才允许跳过")
+                        import sys
+                        sys.exit(1)
                 else:
                     print(f"  [flomo] 低相关（relevance={relevance:.2f}），继续新建")
                     choice = None  # non-TTY, low relevance: 跳过choice逻辑，直接新建
@@ -1026,6 +1030,8 @@ def main():
                         help="AI 生成的概念和子概念内容（直接传入，跳过交互输入）")
     parser.add_argument("--title", type=str,
                         help="知识点标题（三段式，如：WAIC2026_中国AI_新产品发布；将作为文件名第三段）")
+    parser.add_argument("--force-new", action="store_true",
+                        help="强制新建，跳过高相似检测（用于内容明显不同却被误判为高相似的假阳性情况）")
     args = parser.parse_args()
 
     if args.url:
