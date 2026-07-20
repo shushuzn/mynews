@@ -32,10 +32,6 @@ INBOX_MAX_FILES = 10000
 # 确保数据目录存在
 PROCESSING_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-GITHUB_REPOS = [
-    "leanprover-community/mathlib4",
-]
-
 
 def fetch_wechat_article(url):
     """获取微信公众号文章内容（通过 iPhone UA 绕过验证）"""
@@ -70,7 +66,6 @@ def write_to_inbox(entry):
     feed_title = feed.get("title", "") if feed else ""
     entry_id = entry.get("id", "")
 
-    is_github = "/commit/" in url and "github.com" in url
     is_wechat = "mp.weixin.qq.com" in url
 
     # 微信公众号需要单独获取内容
@@ -80,17 +75,12 @@ def write_to_inbox(entry):
         if not content:
             content = f"# TITLE\n{title}\n\n请手动访问: {url}"
 
-    if is_github:
-        sha = str(entry_id).replace("gh_", "") if str(entry_id).startswith("gh_") else hashlib.md5(url.encode()).hexdigest()[:12]
-        filename = f"gh_{sha}.md"
-    else:
-        filename = f"mf_{entry_id}.md"
-
+    filename = f"mf_{entry_id}.md"
     filepath = INBOX_DIR / filename
 
     lines = [
         f"# SOURCE_URL\n{url}",
-        f"# SOURCE_TYPE\n{'github_commit' if is_github else 'rss_entry'}",
+        "# SOURCE_TYPE\nrss_entry",
         f"# FEED_TITLE\n{feed_title}",
         f"# ENTRY_ID\n{entry_id}",
         "",
@@ -179,82 +169,10 @@ def save_seen(urls):
         json.dump(sorted(list(updated)), f, indent=2)
 
 
-def fetch_github_commits(repo, limit=20):
-    try:
-        import urllib.request
-        url = f"https://api.github.com/repos/{repo}/commits?per_page={limit}"
-        req = urllib.request.Request(url)
-        req.add_header("Accept", "application/vnd.github.v3+json")
-        req.add_header("User-Agent", "mynews-processor")
-        with urllib.request.urlopen(req, timeout=30) as r:
-            commits = json.loads(r.read())
-            results = []
-            for c in commits:
-                sha = c["sha"]
-                message = c["commit"]["message"]
-                author = c["commit"]["author"]["name"]
-                date = c["commit"]["author"]["date"]
-                commit_url = c["html_url"]
-                diff_url = f"https://github.com/{repo}/commit/{sha}.diff"
-
-                diff_content = ""
-                try:
-                    diff_req = urllib.request.Request(diff_url)
-                    diff_req.add_header("Accept", "text/plain")
-                    diff_req.add_header("User-Agent", "mynews-processor")
-                    with urllib.request.urlopen(diff_req, timeout=15) as diff_r:
-                        diff_content = diff_r.read().decode("utf-8", errors="replace")[:8000]
-                except:
-                    pass
-
-                files_changed = c.get("stats", {}).get("total", 0)
-                additions = c.get("stats", {}).get("additions", 0)
-                deletions = c.get("stats", {}).get("deletions", 0)
-
-                content = f"""GitHub Commit
-
-Repo: {repo}
-SHA: {sha}
-Author: {author}
-Date: {date}
-Files changed: {files_changed} | +{additions} -{deletions}
-
-Message:
-{message}
-
-Diff URL: {diff_url}
-
-Diff (truncated):
-{diff_content}
-"""
-
-                results.append({
-                    "id": f"gh_{sha}",
-                    "url": commit_url,
-                    "title": f"[{repo}] {message.split(chr(10))[0][:80]}",
-                    "content": content,
-                    "feed": {
-                        "id": 0,
-                        "title": f"GitHub: {repo}",
-                        "feed_url": f"https://github.com/{repo}",
-                        "site_url": f"https://github.com/{repo}"
-                    }
-                })
-            return results
-    except Exception as e:
-        print(f"  GitHub API error for {repo}: {e}")
-        return []
-
-
 def get_new_entries():
     cleanup_stale_processing()
 
-    github_all = []
-    for repo in GITHUB_REPOS:
-        github_entries = fetch_github_commits(repo, limit=20)
-        github_all.extend(github_entries)
-
-    all_entries = list(github_all)
+    all_entries = []
     min_entries = BATCH_SIZE * 200
     offset = 0
 
