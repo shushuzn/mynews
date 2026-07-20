@@ -1090,11 +1090,16 @@ def main():
                         help="原材料正文（作为 AI 理解的输入）")
     parser.add_argument("--ai-content", type=str,
                         help="AI 生成的概念和子概念内容（直接传入，跳过交互输入）")
+    parser.add_argument("--ai-content-file", type=str, help="从文件读取AI生成的概念和子概念内容（替代--ai-content，避免bash引号问题）")
     parser.add_argument("--title", type=str,
                         help="知识点标题（三段式，如：WAIC2026_中国AI_新产品发布；将作为文件名第三段）")
     parser.add_argument("--force-new", action="store_true",
                         help="强制新建，跳过高相似检测（用于内容明显不同却被误判为高相似的假阳性情况）")
     args = parser.parse_args()
+
+    if hasattr(args, 'ai_content_file') and args.ai_content_file:
+        with open(args.ai_content_file, 'r', encoding='utf-8') as f:
+            args.ai_content = f.read().strip()
 
     if args.url:
         process_url(args.url, args)
