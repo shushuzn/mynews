@@ -386,6 +386,18 @@ def _validate_and_extract_domain(content):
         raise ValueError(f"内容缺少 **子概念**{colon}")
     if f'**来源**{colon}' not in content:
         raise ValueError(f"内容缺少 **来源**{colon}")
+    # 来源行有且仅有一行
+    source_lines = [line for line in content.splitlines() if line.strip().startswith(f'**来源**{colon}')]
+    if len(source_lines) != 1:
+        raise ValueError(f"**来源**{colon} 行必须恰好出现一次，当前出现 {len(source_lines)} 次")
+    # 概念行有且仅有一行
+    concept_lines = [line for line in content.splitlines() if line.strip().startswith(f'**概念**{colon}')]
+    if len(concept_lines) != 1:
+        raise ValueError(f"**概念**{colon} 行必须恰好出现一次，当前出现 {len(concept_lines)} 次")
+    # 子概念行有且仅有一行
+    sub_concept_lines = [line for line in content.splitlines() if line.strip().startswith(f'**子概念**{colon}')]
+    if len(sub_concept_lines) != 1:
+        raise ValueError(f"**子概念**{colon} 行必须恰好出现一次，当前出现 {len(sub_concept_lines)} 次")
     # 标签行检查（第一行必须是 #xxx 或 @xxx）
     first_line = content.strip().split('\n')[0] if content.strip() else ''
     if not (first_line.startswith('#') or first_line.startswith('@')):
