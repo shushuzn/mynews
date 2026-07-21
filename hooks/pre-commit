@@ -10,7 +10,7 @@
 # Validation rules:
 # 1. Only 11 approved top-level directories under answers/
 # 2. Only .md files checked (others skipped)
-# 3. Filename: Chinese/alphanumeric/underscore-dash-parentheses-dot allowed, no spaces, no special chars
+# 3. Filename: Chinese/alphanumeric/underscore-dash-parentheses-dot-percent allowed, no spaces
 # 4. No path traversal (..)
 # 5. Exact depth: answers/domain/subdomain/file.md (exactly 4 parts/3 slashes)
 # 6. Content is in flomo format:
@@ -45,7 +45,7 @@ ALLOWED_ROOT_FILES = {
 # 非 answers/ 路径不进行 4 层深度和 flomo 格式检查（基础设施文件）
 INFRA_PREFIXES = (".opencode/", "scripts/", "docs/")
 
-FILENAME_PATTERN = re.compile('^[a-zA-Z0-9_\\-\\.\\u4e00-\\u9fff()]+$')
+FILENAME_PATTERN = re.compile('^[a-zA-Z0-9_\\-\\.\\u4e00-\\u9fff()%]+$')
 PATH_TRAVERSAL = re.compile(r'\.\.')
 
 FORBIDDEN_PATTERNS = [
@@ -107,7 +107,7 @@ def validate_filename(filename):
     if ' ' in filename:
         return False, "文件名包含空格"
     if not FILENAME_PATTERN.match(filename):
-        return False, "文件名包含非法字符（允许：中文/字母/数字/_-().）"
+        return False, "文件名包含非法字符（允许：中文/字母/数字/_-().%）"
     name_part = filename[:-3] if filename.endswith('.md') else filename
     parts = split_segments(name_part)
     if len(parts) != 3:
