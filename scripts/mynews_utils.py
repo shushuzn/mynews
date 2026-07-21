@@ -351,7 +351,7 @@ def fetch_wechat_article(url: str, use_cache: bool = True) -> tuple:
         if text and len(text) > 100:
             title = extract_title_from_html(content)
             author = extract_author_from_html(content)
-            source = author if author else "iPhone UA"
+            source = author if author else "网络"
             with open(cache_path, "w", encoding="utf-8") as f:
                 json.dump({"content": text, "source": source, "url": url, "title": title}, f)
             return text, source, None, title
@@ -366,7 +366,7 @@ def fetch_wechat_article(url: str, use_cache: bool = True) -> tuple:
         if text and len(text) > 100:
             title = extract_title_from_html(content)
             author = extract_author_from_html(content)
-            source = author if author else "PC UA"
+            source = author if author else "网络"
             with open(cache_path, "w", encoding="utf-8") as f:
                 json.dump({"content": text, "source": source, "url": url, "title": title}, f)
             return text, source, None, title
@@ -381,7 +381,7 @@ def fetch_wechat_article(url: str, use_cache: bool = True) -> tuple:
         if text and len(text) > 100:
             title = extract_title_from_html(content)
             author = extract_author_from_html(content)
-            source = author if author else "Android UA"
+            source = author if author else "网络"
             with open(cache_path, "w", encoding="utf-8") as f:
                 json.dump({"content": text, "source": source, "url": url, "title": title}, f)
             return text, source, None, title
