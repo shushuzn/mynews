@@ -8,7 +8,7 @@
 
 **唯一入口**：`process_inbox.py`（位于 `scripts/process_inbox.py`）。禁止绕开脚本直接调 `upload_flomo` / `memo_create`。
 
-### 标准三步（顺序不可乱）
+### 标准四步（顺序不可乱）
 
 ```
 Step 1: fetch_wechat_article(use_cache=False)
@@ -18,14 +18,29 @@ Step 2: 构造完整长 ai-content
         → 必须有 **概念** 段（含 <mark> 高亮）
         → 必须有 **子概念** 段（≥6 个 <mark> 要点，论点+原文关键数据）
 
-Step 3: process_inbox.py --url ... --ai-content "<合并 markdown>"
+Step 3: 主题级决策（in-context 单独做）
+        ├─ 完全相同主题 + 有实质增量 → 下一步传 --update MEMO_ID
+        ├─ 完全相同主题 + 无增量 → skip（不重跑脚本）
+        ├─ 假阳性（关键词命中但主题不同）→ 下一步传 --force-new
+
+Step 4: process_inbox.py 一次跑完（带 --update 或 --force-new）
         → 脚本自动完成：抓取/创建文件/hook 验证/查重/上传
 ```
+
+总流程固定为 **4 步**：relevance ≥ 0.9 与 relevance < 0.9 都是 4 步完成；Step 3 决策在大脑做，Step 4 真正写。
 
 ### 禁止事项
 - 跳过 Step 1 拿 in-context 残留 Step 1 输出
 - 跑 process_inbox 不传完整 ai-content（短占位符事故：`MjQ4MDE2NjY8` 钛酸镍测试）
 - 同 memo_id 在一 session 内写入 > 1 次
+- 跑两次 process_inbox.py 拿 old_id（探测式 + 真实写）—— 探针会留 .md 残留
+- relevance ≥ 0.9 时手动 fetch_flomo_memo（旧文档脚本已自动打到 stderr）
+
+### 错误案例（禁止类比）
+
+**案例 1**：短 ai-content 探针跑一次 + 长 ai-content 真实再跑一次 = 流程里多了 1 步违规探针。
+**案例 2**：relevance ≥ 0.9 时 fetch_flomo_memo 取全文（脚本已打在 stderr）= 多 1 步冗余。
+**案例 3**：先 search_flomo 拿 old_id（脚本已 search）= 多 1 步冗余。
 
 ---
 
@@ -33,11 +48,12 @@ Step 3: process_inbox.py --url ... --ai-content "<合并 markdown>"
 
 | 用户说 | AI 必须做 |
 |---|---|
-| **"重做"** / "再跑一次" / "重新做" / "重新跑" | **整套重跑 Step 1 + Step 2 + Step 3** |
-| **"重写 ai-content"** / "重新构造 ai-content" | 仅重跑 Step 2 + Step 3 |
-| **"重新 update"** / "重新合并" | 仅重跑 Step 3（仍受同 memo_id ≤1 限制） |
+| **"重做"** / "再跑一次" / "重新做" / "重新跑" | **整套重跑 Step 1 + Step 2 + Step 3 + Step 4** |
+| **"重写 ai-content"** / "重新构造 ai-content" | 仅重跑 Step 2 + Step 3 + Step 4 |
+| **"重新 update"** / "重新合并" | 仅重跑 Step 3 + Step 4（仍受同 memo_id ≤1 限制） |
+| **"重跑 Step 4"** / "再写一次" | 仅重跑 Step 4（同 memo_id 仍受 ≤1 限制） |
 
-**铁规**：用户说"重做"未指定哪步 → 默认整套重跑 Step 1+2+3。
+**铁规**：用户说"重做"未指定哪步 → 默认整套重跑 Step 1+2+3+4。
 
 ---
 
