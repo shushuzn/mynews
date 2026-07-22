@@ -1134,6 +1134,7 @@ def process_url(url: str, args):
                     else:
                         print("  [flomo] relevance >= 0.9 但未传 --force-new/--update，请选择：新建 / 更新 / 跳过")
                         print("  决策依据：对比上方打印的新旧笔记内容——判断本次是否有实质增量")
+                        print("  内容质量要求：ai-content 必须详细，禁止压缩——子概念要展开论点+引用原文关键数据")
                         print("  强制规则: 有增量信息（参数/价格/时间/事件等）必须新建（--force-new）或更新（--update MEMO_ID），禁止跳过！")
                         print("  允许跳过的唯一情况：对比后确认完全没有任何增量内容")
                         print("  可选: --force-new 新建  |  --update MEMO_ID 更新  |  不重跑 = 跳过")
