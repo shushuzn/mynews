@@ -1155,8 +1155,19 @@ def process_url(url: str, args):
             else:
                 print(f"  [update-hint] fetch_flomo_memo 未能拉取完整旧文档（{len(old_content)} 字符原始内容），如需 update 请按 SKILL §8.3 停下报告", file=_sys_for_stderr.stderr)
             if old_content:
-                print(f"\n========== 已有笔记内容（id={old_id}，{len(old_content)} 字符） ==========\n{old_content}\n============================================\n", file=_sys_for_stderr.stderr)
-            print(f"\n========== 新文章内容（{len(body_text)} 字符） ==========\n{body_text}\n============================================\n", file=_sys_for_stderr.stderr)
+                # 用 8= 号清晰标识旧 markdown 开始/结束，让 AI 用 tail 也能抓到完整内容
+                print(f"\n==BEGIN_OLD==", file=_sys_for_stderr.stderr)
+                print(f"==旧笔记 id={old_id}（{len(old_content)} 字符）==", file=_sys_for_stderr.stderr)
+                print(f"==BEGIN_OLD_MARKDOWN==", file=_sys_for_stderr.stderr)
+                print(old_content, file=_sys_for_stderr.stderr)
+                print(f"==END_OLD_MARKDOWN==", file=_sys_for_stderr.stderr)
+                print(f"==END_OLD==\n", file=_sys_for_stderr.stderr)
+            print(f"\n==BEGIN_NEW==", file=_sys_for_stderr.stderr)
+            print(f"==新文章（{len(body_text)} 字符）==", file=_sys_for_stderr.stderr)
+            print(f"==BEGIN_NEW_MARKDOWN==", file=_sys_for_stderr.stderr)
+            print(body_text, file=_sys_for_stderr.stderr)
+            print(f"==END_NEW_MARKDOWN==", file=_sys_for_stderr.stderr)
+            print(f"==END_NEW==\n", file=_sys_for_stderr.stderr)
             import termios, tty, os
             if os.isatty(0):
                 if relevance >= 0.9:
