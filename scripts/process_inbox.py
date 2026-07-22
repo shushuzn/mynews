@@ -980,14 +980,14 @@ def process_url(url: str, args):
         # 非交互 --url 模式：fetch_wechat_article 已抓取完整 text
         # 将全文打印出来供 AI 读取理解，避免只读部分内容就处理
         if hasattr(args, 'content') and args.content:
-            # --content：原材料，打印出来让 AI 生成概念/子概念
+            # --content：原材料，打印出来让 AI 生成概念和子概念。
+            # 硬规则：不分页、不截断，完整打印全文——否则 AI 容易基于片段漏掉信息。
             print(f"\n{'='*60}")
             print("【AI 生成阶段】请理解下方原材料，自己生成概念和子概念：")
             print(f"{'='*60}")
-            raw = args.content
-            print(raw[:2000])
-            if len(raw) > 2000:
-                print(f"...（共 {len(raw)} 字符）")
+            print(f"【原文共 {len(args.content)} 字符，已完整打印，禁止跳读】")
+            print(f"{'='*60}")
+            print(args.content)
             print(f"{'='*60}")
             print("请粘贴你生成的 **概念** 和 **子概念**（直接粘贴，不要加额外说明）：")
             print("格式：\n**概念**：<mark>核心关键词</mark>...（核心词用<mark>高亮）\n\n**子概念**：\n- <mark>关键概念1</mark>：说明...\n- <mark>关键概念2</mark>：说明...\n（每个要点至少一个<mark>关键词</mark>高亮）")
@@ -1002,9 +1002,9 @@ def process_url(url: str, args):
                 content_lines.append(line)
             body_text = '\n'.join(content_lines).strip()
         else:
-            # --url 模式：打印抓取的完整文章内容，供 AI 读取理解
+            # --url 模式：打印抓取的完整文章内容，供 AI 读取理解。硬规则：不分页、不截断。
             print(f"\n{'='*60}")
-            print(f"【文章全文 {len(text)} 字符】请 AI 读取理解后再生成 flomo 内容：")
+            print(f"【文章全文 {len(text)} 字符 已完整打印，禁止跳读】请 AI 读取理解后再生成 flomo 内容：")
             print(f"{'='*60}")
             print(text)
             print(f"{'='*60}")

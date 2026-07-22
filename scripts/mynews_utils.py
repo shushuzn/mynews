@@ -195,22 +195,21 @@ def fetch_with_retry(url: str, headers: dict, timeout: int = 15, max_retries: in
 
 
 def extract_wechat_content(html: str) -> str:
-    """从微信公众号 HTML 中提取正文"""
+    """从微信公众号 HTML 中提取正文。硬规则：不截断——抓到 js_content 后取到 </body> 之前的所有内容。"""
     import html as html_module
 
     # 方法1: 提取 id=js_content（最可靠）
     match = re.search(r'<div[^>]*\sid=["\']js_content["\'][^>]*>(.*)', html, re.DOTALL)
     if match:
-        # 从匹配点开始，找到下一个 </div>
         rest = match.group(1)
-        # 找到第一个 </div> 之前的内容
-        end_idx = rest.find('</div>')
-        if end_idx > 0:
-            content_html = rest[:end_idx]
+        # 硬规则：取到 </body> 或 HTML 末尾之前的所有内容，
+        # 而非第一个 </div>——微信文章正文里嵌套 <div> 极多，第一个 </div> 是嵌套层关闭。
+        body_end = rest.lower().find('</body>')
+        if body_end > 0:
+            content_html = rest[:body_end]
         else:
-            content_html = rest
+            content_html = rest  # 不再截到第一个 </div>
 
-        # 清理 HTML
         content_html = _clean_html_content(content_html)
         if len(content_html) > 100:
             return html_module.unescape(content_html)
@@ -341,52 +340,44 @@ def fetch_wechat_article(url: str, use_cache: bool = True) -> tuple:
 
     raw_html = None  # 保存原始 HTML 以便提取标题
 
+    # 硬规则：跑完所有策略（iPhone→PC→Android→备用 API），保留所有成功解析的 text，
+    # 最终择优返回**最长**版本——避免 iPhone UA 截断文章时错失后半段。
+    candidates = []  # [(text, source, title, len), ...]
+
+    def _try_record(content, source_fallback):
+        text = extract_wechat_content(content)
+        if not text or len(text) <= 100:
+            return
+        title = extract_title_from_html(content)
+        author = extract_author_from_html(content)
+        source = author if author else source_fallback
+        candidates.append((text, source, title, len(text)))
+
     # 策略1: iPhone UA（最常用，成功率最高）
     print(f"    [wechat] 尝试 iPhone UA...")
     headers = {"User-Agent": IPHONE_UA}
     content, error = fetch_with_retry(url, headers, timeout=20, max_retries=4)
     if content:
         raw_html = content
-        text = extract_wechat_content(content)
-        if text and len(text) > 100:
-            title = extract_title_from_html(content)
-            author = extract_author_from_html(content)
-            source = author if author else "网络"
-            with open(cache_path, "w", encoding="utf-8") as f:
-                json.dump({"content": text, "source": source, "url": url, "title": title}, f)
-            return text, source, None, title
+        _try_record(content, "网络")
 
-    # 策略2: PC UA
+    # 策略2: PC UA（必跑，避免 iPhone 截断导致漏信息）
     print(f"    [wechat] 尝试 PC UA...")
     headers = {"User-Agent": PC_UA}
     content, error = fetch_with_retry(url, headers, timeout=20, max_retries=4)
     if content:
         raw_html = content
-        text = extract_wechat_content(content)
-        if text and len(text) > 100:
-            title = extract_title_from_html(content)
-            author = extract_author_from_html(content)
-            source = author if author else "网络"
-            with open(cache_path, "w", encoding="utf-8") as f:
-                json.dump({"content": text, "source": source, "url": url, "title": title}, f)
-            return text, source, None, title
+        _try_record(content, "网络")
 
-    # 策略3: Android UA
+    # 策略3: Android UA（必跑，再补一次）
     print(f"    [wechat] 尝试 Android UA...")
     headers = {"User-Agent": ANDROID_UA}
     content, error = fetch_with_retry(url, headers, timeout=20, max_retries=3)
     if content:
         raw_html = content
-        text = extract_wechat_content(content)
-        if text and len(text) > 100:
-            title = extract_title_from_html(content)
-            author = extract_author_from_html(content)
-            source = author if author else "网络"
-            with open(cache_path, "w", encoding="utf-8") as f:
-                json.dump({"content": text, "source": source, "url": url, "title": title}, f)
-            return text, source, None, title
+        _try_record(content, "网络")
 
-    # 策略4: 备用 API 中转
+    # 策略4: 备用 API 中转（必跑）
     for api_base in BACKUP_APIS:
         print(f"    [wechat] 尝试备用 API: {api_base}")
         try:
@@ -394,30 +385,26 @@ def fetch_wechat_article(url: str, use_cache: bool = True) -> tuple:
             headers = {"User-Agent": PC_UA}
             content, error = fetch_with_retry(api_url, headers, timeout=20)
             if content:
-                # 备用 API 可能直接返回文本或 JSON
                 try:
                     data = json.loads(content)
                     if isinstance(data, dict):
                         text = data.get("content", "") or data.get("text", "") or data.get("data", "")
                         if text:
                             title = data.get("title", "") or (extract_title_from_html(text) if not isinstance(text, str) else "")
-                            with open(cache_path, "w", encoding="utf-8") as f:
-                                json.dump({"content": text, "source": api_base, "url": url, "title": title}, f)
-                            return text, api_base, None, title
+                            candidates.append((text, api_base, title, len(text)))
                 except json.JSONDecodeError:
-                    # 直接返回文本
-                    raw_html = content
-                    text = extract_wechat_content(content)
-                    if text and len(text) > 100:
-                        title = extract_title_from_html(content)
-                        author = extract_author_from_html(content)
-                        source = author if author else api_base
-                        with open(cache_path, "w", encoding="utf-8") as f:
-                            json.dump({"content": text, "source": source, "url": url, "title": title}, f)
-                        return text, source, None, title
+                    _try_record(content, api_base)
         except Exception as e:
             print(f"    [wechat] API {api_base} 失败: {e}")
-            continue
+
+    # 择优：取所有候选中**最长**的版本（保证信息完整）
+    if candidates:
+        candidates.sort(key=lambda c: c[3], reverse=True)
+        best_text, best_source, best_title, best_len = candidates[0]
+        print(f"    [wechat] 候选版本数={len(candidates)}，选用最长 {best_len} 字符 (来源: {best_source})")
+        with open(cache_path, "w", encoding="utf-8") as f:
+            json.dump({"content": best_text, "source": best_source, "url": url, "title": best_title}, f)
+        return best_text, best_source, None, best_title
 
     # 全部失败，保存失败标记
     with open(cache_path, "w", encoding="utf-8") as f:
