@@ -1161,10 +1161,17 @@ def process_url(url: str, args):
             else:
                 if relevance >= 0.9:
                     print(f"  [flomo] 检测到高相似笔记 id={old_id}（relevance={relevance:.2f}）")
+                    # search 返回的 content 字段可能被服务端截断，额外调 fetch_flomo_memo 拉完整版本
                     old_content = best.get("content", "")
+                    fetched_content = fetch_flomo_memo(old_id, keyword=knowledge if knowledge else None)
+                    if fetched_content:
+                        old_content = fetched_content
+                        print(f"  [update-hint] 已自动获取旧文档（{len(old_content)} 字符），用 --update 时按 SKILL §8 构造合并 markdown")
+                    else:
+                        print(f"  [update-hint] fetch_flomo_memo 未能拉取完整旧文档（{len(old_content)} 字符原始内容），如需 update 请按 SKILL §8.3 停下报告")
                     if old_content:
-                        print(f"\n========== 已有笔记内容 ==========\n{old_content}\n===================================\n")
-                    print(f"\n========== 新文章内容 ==========\n{body_text}\n===================================\n")
+                        print(f"\n========== 已有笔记内容（id={old_id}，{len(old_content)} 字符） ==========\n{old_content}\n============================================\n")
+                    print(f"\n========== 新文章内容（{len(body_text)} 字符） ==========\n{body_text}\n============================================\n")
                     if getattr(args, 'force_new', False):
                         print("  [flomo] --force-new 强制新建，跳过检测")
                         choice = None
@@ -1181,6 +1188,7 @@ def process_url(url: str, args):
                         print("\n  决策依据：上方打印的'已有笔记内容' 与 '新文章内容' 对比；只看主题概念不看关键词。")
                         print("  增量识别：新增事实数据 / 新增事件 / 新增参数 / 新增时间点 / 新增主体视角")
                         print("  假阳性识别：主题不同（即便关键词重叠度高），用 --force-new")
+                        print("  旧文档已就绪：上方'已有笔记内容'段已自动 fetch_flomo_memo 拼好，可直接构造合并 markdown")
                         print("\n  强制规则：")
                         print("  - 有增量必须 --update MEMO_ID 或 --force-new，禁止跳过")
                         print("  - 零增量才能跳过（不重跑脚本）")
