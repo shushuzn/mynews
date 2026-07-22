@@ -1135,6 +1135,7 @@ def process_url(url: str, args):
                         print("  [flomo] relevance >= 0.9 但未传 --force-new/--update，等待用户决策")
                         print("  规则: 禁止跳过——有新内容（如参数/价格/时间/事件等增量信息）必须 update_flomo 整合，无任何新增才允许跳过")
                         print("  可选: 重跑加 --force-new 强制新建, 或 --update MEMO_ID 增量更新")
+                        choice = None  # 新增：让默认决策走"继续新建"
                 else:
                     print(f"  [flomo] 低相关（relevance={relevance:.2f}），继续新建")
                     choice = None  # non-TTY, low relevance: 跳过choice逻辑，直接新建
