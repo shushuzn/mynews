@@ -1145,8 +1145,23 @@ def process_url(url: str, args):
         relevance = best.get("relevance", 0) if isinstance(best, dict) else 0
         if old_id:
             print(f"  [flomo] 检测到相似笔记 id={old_id}（relevance={relevance:.2f}）")
+            # 所有路径（TTY + 非 TTY）都强制 fetch 旧 markdown 到 stderr，AI 1 次跑能拿到完整内容
+            import sys as _sys_for_stderr
+            old_content = best.get("content", "")
+            fetched_content = fetch_flomo_memo(old_id, keyword=knowledge if knowledge else None)
+            if fetched_content:
+                old_content = fetched_content
+                print(f"  [update-hint] 已自动获取旧文档（{len(old_content)} 字符），用 --update 时按 SKILL §8 构造合并 markdown", file=_sys_for_stderr.stderr)
+            else:
+                print(f"  [update-hint] fetch_flomo_memo 未能拉取完整旧文档（{len(old_content)} 字符原始内容），如需 update 请按 SKILL §8.3 停下报告", file=_sys_for_stderr.stderr)
+            if old_content:
+                print(f"\n========== 已有笔记内容（id={old_id}，{len(old_content)} 字符） ==========\n{old_content}\n============================================\n", file=_sys_for_stderr.stderr)
+            print(f"\n========== 新文章内容（{len(body_text)} 字符） ==========\n{body_text}\n============================================\n", file=_sys_for_stderr.stderr)
             import termios, tty, os
             if os.isatty(0):
+                if relevance >= 0.9:
+                    print(f"\n========== relevance >= 0.9 决策表 ==========", file=_sys_for_stderr.stderr)
+                    print(f"  主题对比：旧笔记内容已就绪（见上方），对比主题是否相同；如有实质增量选 [u]，无增量 [s]，假阳性 [n]", file=_sys_for_stderr.stderr)
                 print(f"  选择: [u]更新旧笔记  [s]跳过上传  [n]新建: ", end='', flush=True)
                 fd = os.open('/dev/tty', os.O_RDONLY)
                 old_settings = termios.tcgetattr(fd)
@@ -1161,43 +1176,32 @@ def process_url(url: str, args):
             else:
                 if relevance >= 0.9:
                     print(f"  [flomo] 检测到高相似笔记 id={old_id}（relevance={relevance:.2f}）")
-                    # search 返回的 content 字段可能被服务端截断，额外调 fetch_flomo_memo 拉完整版本
-                    old_content = best.get("content", "")
-                    fetched_content = fetch_flomo_memo(old_id, keyword=knowledge if knowledge else None)
-                    if fetched_content:
-                        old_content = fetched_content
-                        print(f"  [update-hint] 已自动获取旧文档（{len(old_content)} 字符），用 --update 时按 SKILL §8 构造合并 markdown")
-                    else:
-                        print(f"  [update-hint] fetch_flomo_memo 未能拉取完整旧文档（{len(old_content)} 字符原始内容），如需 update 请按 SKILL §8.3 停下报告")
-                    if old_content:
-                        print(f"\n========== 已有笔记内容（id={old_id}，{len(old_content)} 字符） ==========\n{old_content}\n============================================\n")
-                    print(f"\n========== 新文章内容（{len(body_text)} 字符） ==========\n{body_text}\n============================================\n")
                     if getattr(args, 'force_new', False):
                         print("  [flomo] --force-new 强制新建，跳过检测")
                         choice = None
                     else:
-                        print("\n========== relevance >= 0.9 决策表 ==========")
-                        print("  ┌─────────────────────┬──────────────┬─────────────┐")
-                        print("  │ 主题对比            │ 增量判断     │ 应选操作     │")
-                        print("  ├─────────────────────┼──────────────┼─────────────┤")
-                        print("  │ 完全相同主题          │ 有实质增量   │ --update    │")
-                        print("  │ 完全相同主题          │ 零增量       │ 跳过         │")
-                        print("  │ 假阳性（关键词命中   │ —            │ --force-new│")
-                        print("  │   但主题不同）       │              │             │")
-                        print("  └─────────────────────┴──────────────┴─────────────┘")
-                        print("\n  决策依据：上方打印的'已有笔记内容' 与 '新文章内容' 对比；只看主题概念不看关键词。")
-                        print("  增量识别：新增事实数据 / 新增事件 / 新增参数 / 新增时间点 / 新增主体视角")
-                        print("  假阳性识别：主题不同（即便关键词重叠度高），用 --force-new")
-                        print("  旧文档已就绪：上方'已有笔记内容'段已自动 fetch_flomo_memo 拼好，可直接构造合并 markdown")
-                        print("\n  强制规则：")
-                        print("  - 有增量必须 --update MEMO_ID 或 --force-new，禁止跳过")
-                        print("  - 零增量才能跳过（不重跑脚本）")
-                        print("  - ai-content 必须详细，禁止压缩——子概念要展开论点+引用原文关键数据")
-                        print("\n  可选操作：")
-                        print("  --force-new 新建（独立新笔记，假阳性或主题不同）")
-                        print("  --update MEMO_ID 更新（合并增量到已有笔记）")
-                        print("  不重跑脚本 = 跳过（仅在零增量时合法）")
-                        print("============================================\n")
+                        print("\n========== relevance >= 0.9 决策表 ==========", file=_sys_for_stderr.stderr)
+                        print("  ┌─────────────────────┬──────────────┬─────────────┐", file=_sys_for_stderr.stderr)
+                        print("  │ 主题对比            │ 增量判断     │ 应选操作     │", file=_sys_for_stderr.stderr)
+                        print("  ├─────────────────────┼──────────────┼─────────────┤", file=_sys_for_stderr.stderr)
+                        print("  │ 完全相同主题          │ 有实质增量   │ --update    │", file=_sys_for_stderr.stderr)
+                        print("  │ 完全相同主题          │ 零增量       │ 跳过         │", file=_sys_for_stderr.stderr)
+                        print("  │ 假阳性（关键词命中   │ —            │ --force-new│", file=_sys_for_stderr.stderr)
+                        print("  │   但主题不同）       │              │             │", file=_sys_for_stderr.stderr)
+                        print("  └─────────────────────┴──────────────┴─────────────┘", file=_sys_for_stderr.stderr)
+                        print("\n  决策依据：上方打印的'已有笔记内容' 与 '新文章内容' 对比；只看主题概念不看关键词。", file=_sys_for_stderr.stderr)
+                        print("  增量识别：新增事实数据 / 新增事件 / 新增参数 / 新增时间点 / 新增主体视角", file=_sys_for_stderr.stderr)
+                        print("  假阳性识别：主题不同（即便关键词重叠度高），用 --force-new", file=_sys_for_stderr.stderr)
+                        print("  旧文档已就绪：上方'已有笔记内容'段已自动 fetch_flomo_memo 拼好，可直接构造合并 markdown", file=_sys_for_stderr.stderr)
+                        print("\n  强制规则：", file=_sys_for_stderr.stderr)
+                        print("  - 有增量必须 --update MEMO_ID 或 --force-new，禁止跳过", file=_sys_for_stderr.stderr)
+                        print("  - 零增量才能跳过（不重跑脚本）", file=_sys_for_stderr.stderr)
+                        print("  - ai-content 必须详细，禁止压缩——子概念要展开论点+引用原文关键数据", file=_sys_for_stderr.stderr)
+                        print("\n  可选操作：", file=_sys_for_stderr.stderr)
+                        print("  --force-new 新建（独立新笔记，假阳性或主题不同）", file=_sys_for_stderr.stderr)
+                        print("  --update MEMO_ID 更新（合并增量到已有笔记）", file=_sys_for_stderr.stderr)
+                        print("  不重跑脚本 = 跳过（仅在零增量时合法）", file=_sys_for_stderr.stderr)
+                        print("============================================\n", file=_sys_for_stderr.stderr)
                         import sys
                         sys.exit(1)
                 else:
