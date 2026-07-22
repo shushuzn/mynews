@@ -214,24 +214,36 @@ def extract_wechat_content(html: str) -> str:
         if len(content_html) > 100:
             return html_module.unescape(content_html)
 
-    # 方法2: 提取 rich_media_content
-    match = re.search(r'<div[^>]*class=["\'][^"\']*rich_media_content[^"\']*["\'][^>]*>(.*?)</div>', html, re.DOTALL)
+    # 方法2: 提取 rich_media_content（取到 </body> 为止，避免被第一个 </div> 截断）
+    match = re.search(r'<div[^>]*class=["\'][^"\']*rich_media_content[^"\']*["\'][^>]*>(.*)', html, re.DOTALL)
     if match:
-        content_html = _clean_html_content(match.group(1))
+        rest = match.group(1)
+        body_end = rest.lower().find('</body>')
+        content_html = rest[:body_end] if body_end > 0 else rest
+        content_html = _clean_html_content(content_html)
         if len(content_html) > 100:
             return html_module.unescape(content_html)
 
-    # 方法3: 提取 img-content 容器
-    match = re.search(r'<div[^>]*id=["\']img-content["\'][^>]*>(.*?)</div>', html, re.DOTALL)
+    # 方法3: 提取 img-content 容器（同样不截到第一个 </div>）
+    match = re.search(r'<div[^>]*id=["\']img-content["\'][^>]*>(.*)', html, re.DOTALL)
     if match:
-        content_html = _clean_html_content(match.group(1))
+        rest = match.group(1)
+        body_end = rest.lower().find('</body>')
+        content_html = rest[:body_end] if body_end > 0 else rest
+        content_html = _clean_html_content(content_html)
         if len(content_html) > 100:
             return html_module.unescape(content_html)
 
-    # 方法4: 提取 section 标签内的正文（新版微信文章）
-    match = re.search(r'<section[^>]*class=["\'][^"\']*article-content[^"\']*["\'][^>]*>(.*?)</section>', html, re.DOTALL)
+    # 方法4: 提取 section 标签内的正文（同样不截到第一个 </section>）
+    match = re.search(r'<section[^>]*class=["\'][^"\']*article-content[^"\']*["\'][^>]*>(.*)', html, re.DOTALL)
     if match:
-        content_html = _clean_html_content(match.group(1))
+        rest = match.group(1)
+        # 取到 </body> 或下一个 <section 开始 前为止
+        body_end = rest.lower().find('</body>')
+        next_section = rest.lower().find('<section')
+        candidates = [e for e in [body_end, next_section] if e > 0]
+        content_html = rest[:min(candidates)] if candidates else rest
+        content_html = _clean_html_content(content_html)
         if len(content_html) > 100:
             return html_module.unescape(content_html)
 
