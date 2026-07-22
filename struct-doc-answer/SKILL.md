@@ -239,6 +239,23 @@ Step 3: process_inbox.py --url ... --ai-content "<完整合并 markdown>"
           (b) 跑 process_inbox 不传完整 ai-content（短占位符触发事故）
           (c) 反复跑 Step3 同 URL（同 memo_id 在一 session 内 ≤1 次写入）
 
+#### 6.0.1 用户说"重做 / 再做 / 重跑 / 同样这条"的强制定义
+
+| 用户原话 | AI 强制行为 |
+|---|---|
+| **"重做"** / "再跑一次" / "重新做" / "重新跑" | **完整重跑 Step1 + Step2 + Step3**——不允许跳过 Step1 重抓 fetch，也不允许用 in-context Step1 残留。理由：Step 1 输出（标题/字符数/正文预览）是 fetcher 时刻的状态，可能缓存已更新 |
+| **"重写 ai-content"** / "重新构造 ai-content" | **仅重跑 Step 2 + Step 3**——Step 1 已抓无需重抓 |
+| **"重新 update"** / "重新合并" / "再 update 一次" | **仅重跑 Step 3**——但同 memo_id 仍受 SKILL §8.2 ≤1 限制 |
+| **"重做 url list"** / "重做这些" / "重做 134-140" | 对每一条 URL 都跑**完整 Step 1 + 2 + 3** |
+
+**铁规**：用户说"重做"未指定哪步 → 默认**整套重跑 Step 1+2+3**，不允许只跑 Step 3。
+
+**事故案例**：本轮用户多次说"重做"AI 仅跑 Step 3 update 同一 memo_id，导致：
+- Step 1 重抓被跳过（错的——用户原意是整套重做）
+- 同 memo_id 被反复 update（错的——违反 §8.2 ≤1）
+
+AI 必须按上表死板判断——禁止按"上轮已经抓过"的 in-context 残留构造 Step 1 输出。
+
 ### 6.1 relevance 命中后的完整决策树
 
 ```
