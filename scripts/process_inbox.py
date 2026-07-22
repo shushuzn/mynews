@@ -1096,7 +1096,8 @@ def process_url(url: str, args):
         target_id = args.update
         print(f"  [update] 目标 memo_id={target_id}")
         print("  [update] 拉取旧内容...")
-        old_content = fetch_flomo_memo(target_id)
+        # 用 knowledge（=args.title slug）作为搜索关键词，避免 memo_id 被服务端解析为 int 报错
+        old_content = fetch_flomo_memo(target_id, keyword=knowledge if knowledge else None)
         if old_content is None:
             print(f"  [update] 拉取旧内容失败，退出")
             subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR))
