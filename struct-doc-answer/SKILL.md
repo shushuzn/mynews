@@ -247,3 +247,71 @@ process_inbox.py 调 search_flomo 返回相似笔记列表
 **领域冲突陷阱**：`管理`/`医学`/`经济`/`技术`/`政治`/`自然科学`/`社会科学` 都是**一级领域名**；`--subdomain 管理` 与 `--tags #管理` 同用会触发"一级领域冲突"错误，避免混用。
 
 ---
+
+## 八、update_flomo 的真实语义是"覆盖"，AI 责任前移
+
+**脚本机制**：`update_flomo` 通过 flomo MCP `memo_update` API 把传入的 content **整体覆盖**到指定 memo_id。所谓"合并"是 AI 的责任：AI 必须先把"旧+新"合并成单一 markdown，再传 `--ai-content` 走 update 路径。
+
+### 8.1 update 必须满足的 4 个前置条件
+
+| 前置条件 | 不满足时的后果 | AI 必须做的事 |
+|---|---|---|
+| ① `fetch_flomo_memo(old_id, keyword=slug)` 拉到旧 markdown content | API 返回 truncated 或空，AI 拿不到完整旧内容 | **停下报告**"fetcher 截断"，让用户决定（见 §8.3） |
+| ② in-context 拿到旧 ai-content 完整版（fetcher 给的 truncated 字符串不算） | AI 无依据判断哪些子概念该保留 | 显式要用户提供完整旧 ai-content |
+| ③ AI 构造"旧子概念 + 新子概念 + 调整后概念段"的单段 markdown | 旧子概念全部丢失 | 必须拼：旧子概念原文（按 fetcher 拿的）+ 新增子概念原文（按本轮 Step1 正文） |
+| ④ 把这份合并 markdown 走 `--ai-content --update MEMO_ID` 一次性写入 | 旧子概念全丢 | 禁止只传新内容当 ai-content 走 update |
+
+### 8.2 update 边界的强约束
+
+- **同 memo_id 在一 session 内写入次数 ≤ 1**——多次操作同一 memo_id 是严重错误，旧子概念会在每次 update 都被覆盖丢
+- **"重做"指令必须 Step1 重抓 + Step2 全流程重跑**——禁止复用 in-context 残留的抓取结论/fetcher 输出/历史 ai-content
+- **fetcher 拿不到完整旧文时禁止擅自决定**——见 §8.3
+- **禁止用 memory/history 工具召回本轮已写过的 ai-content**——属于"不读 memory 召回历史会话"红线
+- **禁止用 in-context 部分残留 + 上一轮上传的 ai-content 拼"旧版本"**——这等于擅自伪造旧内容
+
+### 8.3 fetcher 截断或拿不到完整旧文时的处置
+
+当 `fetch_flomo_memo` 返回 truncated content（包含 `[此处省略XX字]`）或返回 `None` 时：
+
+- ❌ 禁止擅自 `--force-new`（=伪造"新主题"决定跳过判断）
+- ❌ 禁止擅自 `--update`（=擅自当覆盖决定，旧子概念丢失）
+- ❌ 禁止用 in-context 残留 or 上一轮 upload 的 ai-content 拼"旧版本"后再 update
+- ✅ 必须停下报告，给用户 3 个选项让 ta 决定：
+
+```
+fetcher 截断/拿不到完整旧内容，请选择：
+(a) skip：放弃本轮新文，不写入
+(b) --force-new：写入独立新笔记（保留旧笔记不动）
+(c) 你提供完整旧 ai-content → 我构造合并 markdown 走 --update
+```
+
+### 8.4 update 决策表（在脚本 §6.1 基础上扩展）
+
+```
+fetcher 拿到的旧 content 状态：
+  │
+  ├─ 完整 markdown（含 #xxx 标签 + 概念段 + 子概念段，原文不截断）
+  │   ├─ 完全相同主题 + 新文有实质增量 → 构造 旧+新 合并 markdown → --update
+  │   ├─ 完全相同主题 + 新文零增量 → skip
+  │   └─ 假阳性（主题不同）→ --force-new
+  │
+  ├─ 截断 markdown（含 [此处省略XX字]）
+  │   └─ ❌ 禁止擅自行动，停下报告给用户 3 选 1（§8.3）
+  │
+  └─ 空 / None
+      └─ ❌ 禁止擅自行动，停下报告给用户 3 选 1（§8.3）
+```
+
+### 8.5 update 路径脚本修复后契约（commit `15502d8`）
+
+- `process_inbox.py:1099 fetch_flomo_memo(target_id, keyword=knowledge)`，`knowledge = args.title`
+- update 流程能拉到旧 markdown content 用于 AI 决策
+- 但脚本没法判断内容是否截断——AI 必须自己看 fetcher 返回字符串判断
+
+### 8.6 复盘段禁令（用户原话）
+
+- "承认错误有个屁用"——禁止复盘段
+- "不用你反思"——禁止反思段
+- "反思行，复盘写在 MEMORY 就行"——反思产物**写到 MEMORY/notes**，assistant text 输出越短越好
+
+---
