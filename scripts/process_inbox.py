@@ -570,10 +570,16 @@ def fetch_flomo_memo(memo_id):
                             if text_str:
                                 try:
                                     inner = json.loads(text_str)
-                                    memos = inner.get("memos", []) if isinstance(inner, dict) else []
-                                    for m in memos:
-                                        if isinstance(m, dict) and "content" in m:
-                                            return m["content"]
+                                    if isinstance(inner, dict):
+                                        memos = inner.get("memos", [])
+                                        if not memos:
+                                            print(f"    [flomo fetch] memo_id={memo_id} 不在本账号库或内容为空（memos=[]）")
+                                            return None
+                                        for m in memos:
+                                            if isinstance(m, dict) and "content" in m:
+                                                return m["content"]
+                                        print(f"    [flomo fetch] memo_id={memo_id} memos 无 content 字段")
+                                        return None
                                     return text_str
                                 except json.JSONDecodeError:
                                     return text_str
