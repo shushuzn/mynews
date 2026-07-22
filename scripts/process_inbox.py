@@ -526,8 +526,23 @@ def upload_flomo(content):
         return None
 
 
-def fetch_flomo_memo(memo_id):
-    """通过 flomo MCP memo_batch_get 拉取指定 memo 完整内容，用于 --update 前比对旧内容。"""
+def fetch_flomo_memo(memo_id, keyword=None):
+    """通过 flomo MCP 拉取指定 memo_id 的完整 markdown 内容。
+
+    优先用 memo_search 找 memo_id（搜索结果直接返回 content 字段），仅当搜索为空时
+    才走 memo_batch_get 兜底。两路都有则取 search.content（更稳定）。
+    """
+    if not keyword or keyword == memo_id or len(keyword) < 4:
+        # memo_id 不能当 slug 关键词用（flomo 服务端会尝试 int parse 失败）
+        # 调用方应传入笔记标题 slug
+        print(f"    [flomo fetch] memo_id={memo_id} 未传标题关键词；建议传入 --title 的 slug")
+        return None
+    search_result = search_flomo(keyword)
+    if search_result:
+        for m in search_result:
+            if isinstance(m, dict) and m.get("id") == memo_id and "content" in m:
+                return m["content"]
+    # 兜底：memo_batch_get（部分账号/记忆体快照走此路径）
     payload = json.dumps({
         "jsonrpc": "2.0",
         "id": 1,
@@ -1138,16 +1153,32 @@ def process_url(url: str, args):
                         print("  [flomo] --force-new 强制新建，跳过检测")
                         choice = None
                     else:
-                        print("  [flomo] relevance >= 0.9 但未传 --force-new/--update，请选择：新建 / 更新 / 跳过")
-                        print("  决策依据：对比上方打印的新旧笔记内容——判断本次是否有实质增量")
-                        print("  内容质量要求：ai-content 必须详细，禁止压缩——子概念要展开论点+引用原文关键数据")
-                        print("  强制规则: 有增量信息（参数/价格/时间/事件等）必须新建（--force-new）或更新（--update MEMO_ID），禁止跳过！")
-                        print("  允许跳过的唯一情况：对比后确认完全没有任何增量内容")
-                        print("  可选: --force-new 新建  |  --update MEMO_ID 更新  |  不重跑 = 跳过")
+                        print("\n========== relevance >= 0.9 决策表 ==========")
+                        print("  ┌─────────────────────┬──────────────┬─────────────┐")
+                        print("  │ 主题对比            │ 增量判断     │ 应选操作     │")
+                        print("  ├─────────────────────┼──────────────┼─────────────┤")
+                        print("  │ 完全相同主题          │ 有实质增量   │ --update    │")
+                        print("  │ 完全相同主题          │ 零增量       │ 跳过         │")
+                        print("  │ 假阳性（关键词命中   │ —            │ --force-new│")
+                        print("  │   但主题不同）       │              │             │")
+                        print("  └─────────────────────┴──────────────┴─────────────┘")
+                        print("\n  决策依据：上方打印的'已有笔记内容' 与 '新文章内容' 对比；只看主题概念不看关键词。")
+                        print("  增量识别：新增事实数据 / 新增事件 / 新增参数 / 新增时间点 / 新增主体视角")
+                        print("  假阳性识别：主题不同（即便关键词重叠度高），用 --force-new")
+                        print("\n  强制规则：")
+                        print("  - 有增量必须 --update MEMO_ID 或 --force-new，禁止跳过")
+                        print("  - 零增量才能跳过（不重跑脚本）")
+                        print("  - ai-content 必须详细，禁止压缩——子概念要展开论点+引用原文关键数据")
+                        print("\n  可选操作：")
+                        print("  --force-new 新建（独立新笔记，假阳性或主题不同）")
+                        print("  --update MEMO_ID 更新（合并增量到已有笔记）")
+                        print("  不重跑脚本 = 跳过（仅在零增量时合法）")
+                        print("============================================\n")
                         import sys
                         sys.exit(1)
                 else:
                     print(f"  [flomo] 低相关（relevance={relevance:.2f}），继续新建")
+                    print("  [decide-rule] relevance < 0.9 → 脚本自动 continue 新建（不需要 AI 介入）")
                     choice = None  # non-TTY, low relevance: 跳过choice逻辑，直接新建
             if choice is None:
                 pass  # 继续新建
