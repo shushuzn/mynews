@@ -1132,9 +1132,11 @@ def process_url(url: str, args):
                         print("  [flomo] --force-new 强制新建，跳过检测")
                         choice = None
                     else:
-                        print("  [flomo] relevance >= 0.9 但未传 --force-new/--update，等待用户决策")
-                        print("  规则: 禁止跳过——有新内容（如参数/价格/时间/事件等增量信息）必须 update_flomo 整合，无任何新增才允许跳过")
-                        print("  可选: 重跑加 --force-new 强制新建, 或 --update MEMO_ID 增量更新")
+                        print("  [flomo] relevance >= 0.9 但未传 --force-new/--update，请选择：新建 / 更新 / 跳过")
+                        print("  决策依据：对比上方打印的新旧笔记内容——判断本次是否有实质增量")
+                        print("  强制规则: 有增量信息（参数/价格/时间/事件等）必须新建（--force-new）或更新（--update MEMO_ID），禁止跳过！")
+                        print("  允许跳过的唯一情况：对比后确认完全没有任何增量内容")
+                        print("  可选: --force-new 新建  |  --update MEMO_ID 更新  |  不重跑 = 跳过")
                         import sys
                         sys.exit(1)
                 else:
