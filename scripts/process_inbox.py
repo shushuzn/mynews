@@ -229,7 +229,7 @@ DOMAIN_KEYWORDS = {
 def classify_content(title: str, content: str) -> tuple:
     """基于关键词分类 content，返回 (domain, subdomain, knowledge_slug)。
     如果无法分类，返回 (None, None, None)。"""
-    text = (title + " " + content[:3000]).lower()
+    text = (title + " " + content).lower()
 
     best_domain = None
     best_subdomain = None
@@ -682,7 +682,7 @@ SOURCE_URL: {source_url}
 来源: {feed_title or topic_source}
 类型: {source_type}
 
-{content[:2000]}
+{content}
 
 **步骤**：
 1. 先用 MCP 工具 `memo_search` 搜索类似内容查重（搜索主题：{topic_title}）
