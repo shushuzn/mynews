@@ -526,6 +526,64 @@ def upload_flomo(content):
         return None
 
 
+def fetch_flomo_memo(memo_id):
+    """通过 flomo MCP memo_batch_get 拉取指定 memo 完整内容，用于 --update 前比对旧内容。"""
+    payload = json.dumps({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+            "name": "memo_batch_get",
+            "arguments": {"ids": [memo_id]}
+        }
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        FLOMO_API_URL,
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream",
+            "Authorization": f"Bearer {FLOMO_TOKEN}"
+        },
+        method="POST"
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = resp.read().decode("utf-8")
+            for line in data.split("\n"):
+                if line.startswith("data:"):
+                    json_str = line[5:].strip()
+                    if not json_str:
+                        continue
+                    result = json.loads(json_str)
+                    if result.get("error"):
+                        print(f"    [flomo fetch] API error: {result['error'].get('message', result['error'])}")
+                        return None
+                    raw = result.get("result", {})
+                    if isinstance(raw, dict) and raw.get("isError"):
+                        print(f"    [flomo fetch] API error: {raw}")
+                        return None
+                    content_list = raw.get("content", []) if isinstance(raw, dict) else []
+                    for item in content_list:
+                        if isinstance(item, dict) and item.get("type") == "text":
+                            text_str = item.get("text", "")
+                            if text_str:
+                                try:
+                                    inner = json.loads(text_str)
+                                    memos = inner.get("memos", []) if isinstance(inner, dict) else []
+                                    for m in memos:
+                                        if isinstance(m, dict) and "content" in m:
+                                            return m["content"]
+                                    return text_str
+                                except json.JSONDecodeError:
+                                    return text_str
+                    return None
+        return None
+    except Exception as e:
+        print(f"    [flomo fetch] error: {e}")
+        return None
+
+
 def update_flomo(memo_id, content):
     """更新 flomo 已有笔记（覆盖式更新，无版本控制——必须先比对旧内容再调用）
 
@@ -1011,6 +1069,35 @@ def process_url(url: str, args):
 
     print("  [ok] 格式验证通过")
 
+    # 7. --update 分支：将 --ai-content 整体合并并覆盖更新到指定 memo_id
+    #    流程：fetch_flomo_memo 拉旧内容 → 打印新旧对比 → 调用 update_flomo 覆盖
+    if getattr(args, 'update', None):
+        target_id = args.update
+        print(f"  [update] 目标 memo_id={target_id}")
+        print("  [update] 拉取旧内容...")
+        old_content = fetch_flomo_memo(target_id)
+        if old_content is None:
+            print(f"  [update] 拉取旧内容失败，退出")
+            subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR))
+            full_path.unlink()
+            return False
+        print(f"\n========== 已有笔记内容（id={target_id}） ==========")
+        print(old_content)
+        print("==============================================\n")
+        print(f"========== 新合并内容（{len(body_text)} 字符） ==========")
+        print(body_text)
+        print("==============================================\n")
+        ok = update_flomo(target_id, flomo_content)
+        if ok:
+            print(f"  [update] 成功更新 id={target_id}")
+            subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR))
+            full_path.unlink()
+            print(f"  [cleanup] 已删除本地文件")
+        else:
+            print(f"  [update] 更新失败，文件保留在: {full_path}")
+        print(f"\n✅ --update 处理完成!")
+        return ok
+
     # 7. flomo 查重
     print("  [flomo] 查重...")
     dup_memos = search_flomo(knowledge)
@@ -1100,6 +1187,8 @@ def main():
                         help="知识点标题（三段式，如：WAIC2026_中国AI_新产品发布；将作为文件名第三段）")
     parser.add_argument("--force-new", action="store_true",
                         help="强制新建，跳过高相似检测（用于内容明显不同却被误判为高相似的假阳性情况）")
+    parser.add_argument("--update", type=str, metavar="MEMO_ID",
+                        help="更新指定 memo_id 的旧笔记。流程：先 fetch_flomo_memo 拉旧内容；用户对比后传入完整合并后的 --ai-content；脚本验证格式后调用 update_flomo 覆盖更新。")
     args = parser.parse_args()
 
     if args.url:
