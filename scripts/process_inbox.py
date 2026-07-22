@@ -606,13 +606,27 @@ def fetch_flomo_memo(memo_id, keyword=None):
 
 
 def update_flomo(memo_id, content):
-    """更新 flomo 已有笔记（覆盖式更新，无版本控制——必须先比对旧内容再调用）
+    """合并更新 flomo 已有笔记——AI 必须把旧内容与新内容合并成单一 markdown 后传入 content。
 
-    安全流程：
-    ①调用 search_flomo() 用 memo_id 关联的关键词拉取旧内容（relevance=1 时返回完整 content 字段）
-    ②打印"旧内容 vs 新内容"对比
-    ③AI 人工判断：完全相同 / 新增内容合并 / 新版整体替换
-    ④新版整体替换且会丢失旧 memo 中其他子概念条目时，必须用"新增内容合并"模式构造新 content
+    ⚠️ 此函数将传入的 content 整体覆盖到 flomo 笔记——如不合并旧内容，旧笔记的所有原有子概念将永久丢失。
+    ⚠️ flomo MCP 不保留历史版本——更新是不可逆操作。
+
+    调用方强制流程：
+    ① fetch_flomo_memo(memo_id, keyword=args.title_slug) 拉取旧内容
+    ② AI 比对旧内容 vs 新内容
+    ③ AI 构造完整合并 markdown（保留旧子概念 + 追加新子概念 + 写入概念/子概念/来源）
+    ④ 把合并后的完整 markdown 通过 process_inbox.py 的 --ai-content 传入
+    ⑤ update_flomo 把这个完整合并 markdown 整体覆盖写入 flomo 笔记
+
+    增量合并典型构造示例：
+        旧：子概念 A、B、C
+        新：子概念 D（新增）
+        合并后概念：综合 AB C 加上 D
+        合并后子概念：A、B、C、D（保留 A/B/C 原文，追加 D 原文）
+
+    边界情况：
+    - 完全重复（同主题无新增）→ 不调用 update，skip 即可
+    - 主题不同（假阳性）→ --force-new，不要用 --update
     """
     # 验证 domain/subdomain
     _validate_and_extract_domain(content)
@@ -623,11 +637,12 @@ def update_flomo(memo_id, content):
     )
 
     # === update_flomo 安全约束 ===
-    # 必须先调用 fetch_flomo_memo(memo_id) 拉取旧内容并人工比对，
-    # 确认 update 是合并新增内容而非整体覆盖；
-    # 严禁在未比对旧内容情况下直接调用本函数（会导致重大信息丢失且不可恢复）。
-    print(f"  [warning] update_flomo 是覆盖操作（flomo MCP 无版本控制），"
-          f"调用前必须已 fetch_flomo_memo({memo_id}) 比对旧内容")
+    # 此函数用 memo_update 把传入 content 整体覆盖写入 flomo。
+    # 调用方必须把"旧内容 + 新内容合并"的完整 markdown 传给 content（不是只传新的 ai-content）。
+    # 严禁在未拉旧内容、未构造合并 markdown 情况下调用本函数，否则旧子概念全部丢失不可恢复。
+    print(f"  [warning] update_flomo 是覆盖操作（flomo MCP 无版本控制、不可逆）")
+    print(f"  调用方必须已 fetch_flomo_memo({memo_id}) 拉旧内容 + 构造合并 markdown 传入 content")
+    print(f"  如不合并旧内容，旧笔记所有子概念将被永久覆盖丢失")
 
     payload = json.dumps({
         "jsonrpc": "2.0",
