@@ -529,20 +529,11 @@ def upload_flomo(content):
 def fetch_flomo_memo(memo_id, keyword=None):
     """通过 flomo MCP 拉取指定 memo_id 的完整 markdown 内容。
 
-    优先用 memo_search 找 memo_id（搜索结果直接返回 content 字段），仅当搜索为空时
-    才走 memo_batch_get 兜底。两路都有则取 search.content（更稳定）。
+    优先走 memo_batch_get（服务端尽量返回全文，无截断），失败再 fallback memo_search。
+    memo_search 服务端对单条笔记 content 截断到 ~500 字符（保留首尾+省略标记），
+    memo_batch_get 累计长度上限 30000 字——本项目单条 ai-content < 5000 字直接够用。
     """
-    if not keyword or keyword == memo_id or len(keyword) < 4:
-        # memo_id 不能当 slug 关键词用（flomo 服务端会尝试 int parse 失败）
-        # 调用方应传入笔记标题 slug
-        print(f"    [flomo fetch] memo_id={memo_id} 未传标题关键词；建议传入 --title 的 slug")
-        return None
-    search_result = search_flomo(keyword)
-    if search_result:
-        for m in search_result:
-            if isinstance(m, dict) and m.get("id") == memo_id and "content" in m:
-                return m["content"]
-    # 兜底：memo_batch_get（部分账号/记忆体快照走此路径）
+    # 优先：memo_batch_get 直接按 id 拉完整内容（不受 keyword 长度限制）
     payload = json.dumps({
         "jsonrpc": "2.0",
         "id": 1,
@@ -572,37 +563,37 @@ def fetch_flomo_memo(memo_id, keyword=None):
                         continue
                     result = json.loads(json_str)
                     if result.get("error"):
-                        print(f"    [flomo fetch] API error: {result['error'].get('message', result['error'])}")
-                        return None
-                    raw = result.get("result", {})
-                    if isinstance(raw, dict) and raw.get("isError"):
-                        print(f"    [flomo fetch] API error: {raw}")
-                        return None
-                    content_list = raw.get("content", []) if isinstance(raw, dict) else []
-                    for item in content_list:
-                        if isinstance(item, dict) and item.get("type") == "text":
-                            text_str = item.get("text", "")
-                            if text_str:
-                                try:
-                                    inner = json.loads(text_str)
-                                    if isinstance(inner, dict):
-                                        memos = inner.get("memos", [])
-                                        if not memos:
-                                            print(f"    [flomo fetch] memo_id={memo_id} 不在本账号库或内容为空（memos=[]）")
-                                            return None
-                                        for m in memos:
-                                            if isinstance(m, dict) and "content" in m:
-                                                return m["content"]
-                                        print(f"    [flomo fetch] memo_id={memo_id} memos 无 content 字段")
-                                        return None
-                                    return text_str
-                                except json.JSONDecodeError:
-                                    return text_str
-                    return None
-        return None
+                        print(f"    [flomo fetch] batch_get error: {result['error'].get('message', result['error'])}")
+                    else:
+                        raw = result.get("result", {})
+                        if isinstance(raw, dict) and not raw.get("isError"):
+                            content_list = raw.get("content", [])
+                            for item in content_list:
+                                if isinstance(item, dict) and item.get("type") == "text":
+                                    text_str = item.get("text", "")
+                                    if text_str:
+                                        try:
+                                            inner = json.loads(text_str)
+                                            if isinstance(inner, dict):
+                                                memos = inner.get("memos", [])
+                                                for m in memos:
+                                                    if isinstance(m, dict) and "content" in m:
+                                                        return m["content"]
+                                        except json.JSONDecodeError:
+                                            return text_str
     except Exception as e:
-        print(f"    [flomo fetch] error: {e}")
+        print(f"    [flomo fetch] batch_get error: {e}")
+
+    # fallback：memo_search（仅在 batch_get 失败时使用）
+    if not keyword or keyword == memo_id or len(keyword) < 4:
+        print(f"    [flomo fetch] memo_id={memo_id} 未传标题关键词；建议传入 --title 的 slug")
         return None
+    search_result = search_flomo(keyword)
+    if search_result:
+        for m in search_result:
+            if isinstance(m, dict) and m.get("id") == memo_id and "content" in m:
+                return m["content"]
+    return None
 
 
 def update_flomo(memo_id, content):
