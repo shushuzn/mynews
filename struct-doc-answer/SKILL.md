@@ -319,26 +319,17 @@ process_inbox.py 调 search_flomo 返回相似笔记列表
 
 当 `fetch_flomo_memo` 返回 truncated content（包含 `[此处省略XX字]`）或返回 `None` 时：
 
-**核心原则：必须获取全文，禁止依靠片段判断，禁止报告用户。**
-
-AI 必须自行穷尽一切途径获取完整旧 markdown，包括但不限于：
-
-1. 重试 `fetch_flomo_memo` 用不同 keyword（包括 title slug / 标题片段 / 完整标题 / 子概念关键词等多次尝试）
-2. 调整 flomo MCP 请求参数（如分页/范围参数）
-3. 调 flomo API 的其他接口（list_memos、search_memos 等）找到目标 memo_id 的完整内容
-4. 查本地文件（`/tmp/*_ai.md`、`answers/`、`_inbox/`、`_inbox_done/`、`logs/`、`data/`）
-5. 查 flomo 历史会话/脚本 log 是否有完整 ai-content 备份
-6. 用 memory/history 工具 recall 之前会话里是否保存过完整旧 ai-content
-
-获取完整旧 markdown 后，按 §8.4 决策表正常决策 update/force-new/skip。
-
-**禁止行为**：
-
-- ❌ 禁止依靠片段（旧 markdown 截断后的 457 字符片段）做 update/skip/force-new 判断
-- ❌ 禁止报告用户让用户决定——AI 必须自行解决 fetcher 截断问题
 - ❌ 禁止擅自 `--force-new`（=伪造"新主题"决定跳过判断）
 - ❌ 禁止擅自 `--update`（=擅自当覆盖决定，旧子概念丢失）
 - ❌ 禁止用 in-context 残留 or 上一轮 upload 的 ai-content 拼"旧版本"后再 update
+- ✅ 必须停下报告，给用户 3 个选项让 ta 决定：
+
+```
+fetcher 截断/拿不到完整旧内容，请选择：
+(a) skip：放弃本轮新文，不写入
+(b) --force-new：写入独立新笔记（保留旧笔记不动）
+(c) 你提供完整旧 ai-content → 我构造合并 markdown 走 --update
+```
 
 ### 8.4 update 决策表（在脚本 §6.1 基础上扩展）
 
