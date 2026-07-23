@@ -319,21 +319,21 @@ process_inbox.py 调 search_flomo 返回相似笔记列表
 
 当 `fetch_flomo_memo` 返回 truncated content（包含 `[此处省略XX字]`）或返回 `None` 时：
 
-**核心原则：必须获取全文，禁止依靠片段判断，禁止报告用户。**
+**核心原则：必须获取全文，禁止依靠片段判断，禁止报告用户，禁止查本地文件。**
 
 AI 必须自行穷尽一切途径获取完整旧 markdown，包括但不限于：
 
 1. 重试 `fetch_flomo_memo` 用不同 keyword（包括 title slug / 标题片段 / 完整标题 / 子概念关键词等多次尝试）
 2. 调整 flomo MCP 请求参数（如分页/范围参数）
 3. 调 flomo API 的其他接口（list_memos、search_memos 等）找到目标 memo_id 的完整内容
-4. 查本地文件（`/tmp/*_ai.md`、`answers/`、`_inbox/`、`_inbox_done/`、`logs/`、`data/`）
-5. 查 flomo 历史会话/脚本 log 是否有完整 ai-content 备份
-6. 用 memory/history 工具 recall 之前会话里是否保存过完整旧 ai-content
+4. 查 flomo 历史会话/脚本 log 是否有完整 ai-content 备份
+5. 用 memory/history 工具 recall 之前会话里是否保存过完整旧 ai-content
 
 获取完整旧 markdown 后，按 §8.4 决策表正常决策 update/force-new/skip。
 
 **禁止行为**：
 
+- ❌ 禁止查本地文件（`/tmp/*_ai.md`、`answers/`、`_inbox/`、`_inbox_done/`、`logs/`、`data/` 等）——本地副本可能被 in-context 残留污染
 - ❌ 禁止依靠片段（旧 markdown 截断后的 457 字符片段）做 update/skip/force-new 判断
 - ❌ 禁止报告用户让用户决定——AI 必须自行解决 fetcher 截断问题
 - ❌ 禁止擅自 `--force-new`（=伪造"新主题"决定跳过判断）
