@@ -148,11 +148,7 @@ FILENAME_PATTERN = re.compile('^[a-zA-Z0-9_\-\.\u4e00-\u9fff()%]+$')
 
 ---
 
-## 9. 反思 vs 复盘段
-
-- **复盘段禁令**：禁止 assistant 输出里写"我错了 / 我反思了 / 请原谅"。
-- **反思产物**：写到 `/root/.local/share/mimocode/memory/projects/global/MEMORY.md` 的 `## Discovered durable knowledge` 下，或 `sessions/{sid}/notes.md`。
-- **被骂时的最小回执**：`.` 或 `等下一条命令`。
+## 9. （已删除）
 
 ---
 
