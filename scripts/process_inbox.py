@@ -1209,6 +1209,7 @@ def process_url(url: str, args):
                         print(f"  [flomo]   → 主题不同（关键词命中但内容无关，假阳性）→ 重跑加 --force-new")
                         print(f"  [flomo]   → 主题相同且有新增信息 → 重跑加 --update {old_id}")
                         print(f"  [flomo]   → 主题相同且无新增信息（真重复）→ 跳过，不动")
+                        print(f"\n⏭️  已跳过（未上传）")
                         subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR), capture_output=True)
                         if full_path.exists():
                             full_path.unlink()
