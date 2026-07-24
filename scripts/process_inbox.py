@@ -1159,8 +1159,9 @@ def process_url(url: str, args):
             print(body_text, file=_sys_for_stderr.stderr)
             print(f"==END_NEW_MARKDOWN==", file=_sys_for_stderr.stderr)
             print(f"==END_NEW==\n", file=_sys_for_stderr.stderr)
-            import termios, tty, os
-            if os.isatty(0):
+            import os as _os_for_tty
+            if _os_for_tty.isatty(0):
+                import termios, tty
                 if relevance >= 0.9:
                     print(f"\n========== relevance >= 0.9 决策表 ==========", file=_sys_for_stderr.stderr)
                     print(f"  主题对比：旧笔记内容已就绪（见上方），对比主题是否相同；如有实质增量选 [u]，无增量 [s]，假阳性 [n]", file=_sys_for_stderr.stderr)
@@ -1204,6 +1205,11 @@ def process_url(url: str, args):
                         print("  --update MEMO_ID 更新（合并增量到已有笔记）", file=_sys_for_stderr.stderr)
                         print("  不重跑脚本 = 跳过（仅在零增量时合法）", file=_sys_for_stderr.stderr)
                         print("============================================\n", file=_sys_for_stderr.stderr)
+                        # 清理已创建的本地文件，避免重跑时残留导致二次命中
+                        subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR), capture_output=True)
+                        if full_path.exists():
+                            full_path.unlink()
+                            print(f"  [cleanup] 决策等待，已清理本地文件", file=_sys_for_stderr.stderr)
                         import sys
                         sys.exit(1)
                 else:
