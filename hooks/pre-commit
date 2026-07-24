@@ -316,7 +316,7 @@ def main():
             errors.append((file, "路径遍历 (..) 不允许"))
             continue
 
-        parts = decoded_file.split(os.sep)
+        parts = decoded_file.replace('\\', '/').split('/')
 
         if len(parts) < 2:
             errors.append((file, "缺少顶级目录"))

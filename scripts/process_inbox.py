@@ -1160,7 +1160,10 @@ def process_url(url: str, args):
             print(f"==END_NEW_MARKDOWN==", file=_sys_for_stderr.stderr)
             print(f"==END_NEW==\n", file=_sys_for_stderr.stderr)
             import os as _os_for_tty
-            if _os_for_tty.isatty(0):
+            import sys as _sys_platform
+            # Windows 不存在 termios/tty 模块，且本环境 stdin 为 TTY 会误入此分支导致崩溃；
+            # 因此 Windows 一律走非 TTY 逻辑（自动继续新建 / --force-new 新建 / 高相似且无 force-new 则跳过）。
+            if _os_for_tty.isatty(0) and _sys_platform.platform != 'win32':
                 import termios, tty
                 if relevance >= 0.9:
                     print(f"\n========== relevance >= 0.9 决策表 ==========", file=_sys_for_stderr.stderr)
