@@ -1205,9 +1205,8 @@ def process_url(url: str, args):
                         print("  --update MEMO_ID 更新（合并增量到已有笔记）", file=_sys_for_stderr.stderr)
                         print("  不重跑脚本 = 跳过（仅在零增量时合法）", file=_sys_for_stderr.stderr)
                         # 非 TTY 模式：打印对比后干净退出，明确告知状态
-                        print(f"  [flomo] 自检命中：旧笔记 id={old_id}（relevance={relevance:.2f}）已存在，内容一致，未上传（已防止重复）。")
-                        print(f"  [flomo] 如需强制新建：--force-new")
-                        print(f"  [flomo] 如需合并更新：--update {old_id}")
+                        print(f"  [flomo] 笔记已存在（未重复上传）。旧笔记 id={old_id}（relevance={relevance:.2f}），本次未写入。")
+                        print(f"  [flomo] 如需强制新建请加 --force-new，如需更新请加 --update {old_id}")
                         subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR), capture_output=True)
                         if full_path.exists():
                             full_path.unlink()
