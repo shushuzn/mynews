@@ -1182,36 +1182,17 @@ def process_url(url: str, args):
                     if getattr(args, 'force_new', False):
                         print("  [flomo] --force-new 强制新建，跳过检测")
                         choice = None
+                    elif getattr(args, 'update', None):
+                        print(f"  [flomo] --update {args.update} 模式，跳过新建检测")
+                        choice = None
                     else:
-                        print("\n========== relevance >= 0.9 决策表 ==========", file=_sys_for_stderr.stderr)
-                        print("  ┌─────────────────────┬──────────────┬─────────────┐", file=_sys_for_stderr.stderr)
-                        print("  │ 主题对比            │ 增量判断     │ 应选操作     │", file=_sys_for_stderr.stderr)
-                        print("  ├─────────────────────┼──────────────┼─────────────┤", file=_sys_for_stderr.stderr)
-                        print("  │ 完全相同主题          │ 有实质增量   │ --update    │", file=_sys_for_stderr.stderr)
-                        print("  │ 完全相同主题          │ 零增量       │ 跳过         │", file=_sys_for_stderr.stderr)
-                        print("  │ 假阳性（关键词命中   │ —            │ --force-new│", file=_sys_for_stderr.stderr)
-                        print("  │   但主题不同）       │              │             │", file=_sys_for_stderr.stderr)
-                        print("  └─────────────────────┴──────────────┴─────────────┘", file=_sys_for_stderr.stderr)
-                        print("\n  决策依据：上方打印的'已有笔记内容' 与 '新文章内容' 对比；只看主题概念不看关键词。", file=_sys_for_stderr.stderr)
-                        print("  增量识别：新增事实数据 / 新增事件 / 新增参数 / 新增时间点 / 新增主体视角", file=_sys_for_stderr.stderr)
-                        print("  假阳性识别：主题不同（即便关键词重叠度高），用 --force-new", file=_sys_for_stderr.stderr)
-                        print("  旧文档已就绪：上方'已有笔记内容'段已自动 fetch_flomo_memo 拼好，可直接构造合并 markdown", file=_sys_for_stderr.stderr)
-                        print("\n  强制规则：", file=_sys_for_stderr.stderr)
-                        print("  - 有增量必须 --update MEMO_ID 或 --force-new，禁止跳过", file=_sys_for_stderr.stderr)
-                        print("  - 零增量才能跳过（不重跑脚本）", file=_sys_for_stderr.stderr)
-                        print("  - ai-content 必须详细，禁止压缩——子概念要展开论点+引用原文关键数据", file=_sys_for_stderr.stderr)
-                        print("\n  可选操作：", file=_sys_for_stderr.stderr)
-                        print("  --force-new 新建（独立新笔记，假阳性或主题不同）", file=_sys_for_stderr.stderr)
-                        print("  --update MEMO_ID 更新（合并增量到已有笔记）", file=_sys_for_stderr.stderr)
-                        print("  不重跑脚本 = 跳过（仅在零增量时合法）", file=_sys_for_stderr.stderr)
-                        print("============================================\n", file=_sys_for_stderr.stderr)
-                        # 清理已创建的本地文件，避免重跑时残留导致二次命中
+                        # 非 TTY 模式 + 无决策参数：自动跳过，不退出
+                        print(f"  [flomo] 自动跳过（relevance={relevance:.2f}，使用 --force-new 或 --update 可覆盖）")
                         subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR), capture_output=True)
                         if full_path.exists():
                             full_path.unlink()
-                            print(f"  [cleanup] 决策等待，已清理本地文件", file=_sys_for_stderr.stderr)
-                        import sys
-                        sys.exit(1)
+                        print(f"  [cleanup] 已清理本地文件")
+                        return True
                 else:
                     print(f"  [flomo] 低相关（relevance={relevance:.2f}），继续新建")
                     print("  [decide-rule] relevance < 0.9 → 脚本自动 continue 新建（不需要 AI 介入）")
