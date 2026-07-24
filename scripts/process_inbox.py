@@ -1204,14 +1204,12 @@ def process_url(url: str, args):
                         print("  --force-new 新建（独立新笔记，假阳性或主题不同）", file=_sys_for_stderr.stderr)
                         print("  --update MEMO_ID 更新（合并增量到已有笔记）", file=_sys_for_stderr.stderr)
                         print("  不重跑脚本 = 跳过（仅在零增量时合法）", file=_sys_for_stderr.stderr)
-                        print("============================================\n", file=_sys_for_stderr.stderr)
-                        # 清理已创建的本地文件，避免重跑时残留导致二次命中
+                        # 非 TTY 模式：打印对比后干净退出，不 exit(1)，不误导
+                        print(f"  [flomo] 已跳过（relevance={relevance:.2f}，使用 --force-new 或 --update 可覆盖）")
                         subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR), capture_output=True)
                         if full_path.exists():
                             full_path.unlink()
-                            print(f"  [cleanup] 决策等待，已清理本地文件", file=_sys_for_stderr.stderr)
-                        import sys
-                        sys.exit(1)
+                        return True
                 else:
                     print(f"  [flomo] 低相关（relevance={relevance:.2f}），继续新建")
                     print("  [decide-rule] relevance < 0.9 → 脚本自动 continue 新建（不需要 AI 介入）")
