@@ -542,11 +542,11 @@ def process_content(args):
                 print("  [auto] AI 分析失败，回退到手动模式")
                 break
             if not args.domain and result.get("domain"):
-                args.domain = result["domain"].replace(' ', '_')
+                args.domain = result["domain"].replace(' ', '-')
             if not args.subdomain and result.get("subdomain"):
-                args.subdomain = result["subdomain"].replace(' ', '_')
+                args.subdomain = result["subdomain"].replace(' ', '-')
             if not args.title and result.get("title"):
-                args.title = result["title"].replace('_', '').replace(' ', '_')[:60]
+                args.title = result["title"].replace('_', '').replace(' ', '-')[:60]
             if not args.tags and result.get("tags"):
                 args.tags = ' '.join(result["tags"])
             if not args.ai_content and result.get("ai_content"):
@@ -555,7 +555,7 @@ def process_content(args):
             test_title = f"{args.domain}_{args.subdomain}_{args.title}"
             if test_title.count('_') != 2:
                 print(f"  [auto] 标题格式不对（{test_title}），重试...")
-                text += f"\n\n[系统反馈：上轮生成的标题 {args.title} 包含下划线或格式错误（{test_title} 含 {test_title.count('_')} 个 _，应为 2 个），请修正标题，不要使用下划线]"
+                text += f"\n\n[系统反馈：上轮生成的知识点名称 '{args.title}' 导致标题 '{test_title}' 含 {test_title.count('_')} 个下划线（应为 2 个）。请只提供知识点名称（第三段），不要加领域和子领域，名称中不要使用下划线、空格、斜杠。]"
                 continue
             print(f"  [auto] 领域: {args.domain}")
             print(f"  [auto] 二级领域: {args.subdomain}")
