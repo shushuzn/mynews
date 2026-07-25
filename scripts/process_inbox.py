@@ -167,6 +167,8 @@ def _validate_and_extract_domain(content):
     full_title = match.group(0)[2:-2]  # 去掉首尾 **
     if '-' in full_title:
         raise ValueError(f"标题禁止使用连字符（-）：'{full_title}'")
+    if full_title.count('_') != 2:
+        raise ValueError(f"标题必须恰好 2 个下划线（domain_subdomain_knowledge），当前 {full_title.count('_')} 个：'{full_title}'")
     parts = full_title.split('_', 2)
     if len(parts) < 2:
         raise ValueError(f"标题 '{full_title}' 不符合 三段式格式（领域_二级领域_知识点）")
@@ -431,6 +433,13 @@ def process_content(args):
     else:
         print("  [error] 必须指定 --title 知识点名称")
         print("  示例: --title 'WAIC2026新品发布'")
+        return False
+
+    # 验证标题必须恰好两个 _（domain_subdomain_knowledge）
+    test_title = f"{domain}_{subdomain}_{knowledge}"
+    if test_title.count('_') != 2:
+        print(f"  [error] 标题 '{test_title}' 含 {test_title.count('_')} 个下划线，必须恰好 2 个（domain_subdomain_knowledge）")
+        print("  提示：domain、subdomain、knowledge 自身不能包含下划线")
         return False
 
     # 4. 正文内容
