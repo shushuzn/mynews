@@ -1,6 +1,6 @@
 ---
 name: struct-doc-answer
-description: Use when creating, generating, or producing structured theoretical/knowledge documents in textbook format from any text content. Can accept raw text (articles, web pages, user input) directly without pre-formatting. Do not use for code generation or general Q&A. **This skill is designed to be delegated to a subagent when the user provides a URL input.**
+description: Use when creating, generating, or producing structured theoretical/knowledge documents in textbook format from any text content. Can accept raw text (articles, web pages, user input) directly without pre-formatting. Do not use for code generation or general Q&A.
 ---
 
 # struct-doc-answer
@@ -20,8 +20,7 @@ description: Use when creating, generating, or producing structured theoretical/
 
 | 参数 | 说明 |
 |------|------|
-| `--url URL` | 文章链接（脚本内部抓取，默认缓存） |
-| `--content TEXT` | 原材料正文（与 `--url` 二选一） |
+| `--content TEXT` | 原材料正文 |
 | `--domain`, `--subdomain` | 一级/二级领域 |
 | `--title NAME` | 知识点名称（文件名一部分，禁用字符见下文） |
 | `--tags "T1 T2 T3"` | ≥3 标签，首位信号类型（下节） |
@@ -34,9 +33,9 @@ description: Use when creating, generating, or producing structured theoretical/
 ## 操作流程（三步）
 
 ```
-Step 1 — 获取原文：--url（脚本内部抓取）或 --content（用户直接提供正文）
+Step 1 — 获取原文（agent 抓取或接收正文）
 Step 2 — 构造：AI 写出完整 ai-content（**概念** + **子概念** + mark 高亮）
-Step 3 — 上传：process_inbox.py --url / --content（含查重+relevance 决策）
+Step 3 — 上传：process_inbox.py（含查重+relevance 决策）
 ```
 
 **Step 3 内部流程**：脚本自动抓取→创建本地文件→hook 校验格式→search_flomo 查重→
@@ -49,7 +48,7 @@ Step 3 — 上传：process_inbox.py --url / --content（含查重+relevance 决
 
 ```bash
 cd /root/mynews/scripts && python3 process_inbox.py \
-  --url "https://..." \              # 或用 --content "原材料正文…" 直接传文本
+  --content "正文" \
   --domain "技术" --subdomain "AI" \
   --title "知识点名称" \
   --tags "#信号笔记 #技术 #AI" \
