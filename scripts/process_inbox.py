@@ -529,28 +529,42 @@ def process_content(args):
     if len(title) > 60:
         title = title[:57] + "..."
 
-    # 全自动模式：用 AI 补全缺少的参数
+    # 全自动模式：用 AI 补全缺少的参数（失败自动重试修正）
     if getattr(args, 'auto', False):
-        print("  [auto] AI 正在分析内容...")
-        result = _auto_analyze(text)
-        if result:
+        for retry in range(3):
+            if retry > 0:
+                print(f"  [auto] 第 {retry+1} 次尝试（修正上次错误）...")
+            result = _auto_analyze(text)
+            if not result:
+                if retry < 2:
+                    print("  [auto] 分析失败，重试...")
+                    continue
+                print("  [auto] AI 分析失败，回退到手动模式")
+                break
             if not args.domain and result.get("domain"):
                 args.domain = result["domain"]
-                print(f"  [auto] 领域: {args.domain}")
             if not args.subdomain and result.get("subdomain"):
                 args.subdomain = result["subdomain"]
-                print(f"  [auto] 二级领域: {args.subdomain}")
             if not args.title and result.get("title"):
                 args.title = result["title"].replace('_', '').replace(' ', '_')[:60]
-                print(f"  [auto] 标题: {args.title}")
             if not args.tags and result.get("tags"):
                 args.tags = ' '.join(result["tags"])
-                print(f"  [auto] 标签: {args.tags}")
             if not args.ai_content and result.get("ai_content"):
                 args.ai_content = result["ai_content"]
-                print(f"  [auto] ai-content 已生成（{len(args.ai_content)} 字符）")
+            # 校验关键字段，失败则重试
+            test_title = f"{args.domain}_{args.subdomain}_{args.title}"
+            if test_title.count('_') != 2:
+                print(f"  [auto] 标题格式不对（{test_title}），重试...")
+                text += f"\n\n[系统反馈：上轮生成的标题 {args.title} 包含下划线或格式错误（{test_title} 含 {test_title.count('_')} 个 _，应为 2 个），请修正标题，不要使用下划线]"
+                continue
+            print(f"  [auto] 领域: {args.domain}")
+            print(f"  [auto] 二级领域: {args.subdomain}")
+            print(f"  [auto] 标题: {args.title}")
+            print(f"  [auto] 标签: {args.tags}")
+            print(f"  [auto] ai-content 已生成（{len(args.ai_content)} 字符）")
+            break
         else:
-            print("  [auto] AI 分析失败，回退到手动模式")
+            print("  [auto] 重试耗尽，跳过")
     elif hasattr(args, 'auto') and not args.auto:
         pass  # 未启用 auto
 
