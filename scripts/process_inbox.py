@@ -884,71 +884,22 @@ def ask_tags() -> list:
     return tags
 
 
-def process_url(url: str, args):
-    """处理单个 URL，直接完成 fetch → 构建 → 验证 → 上传全流程。"""
-    from mynews_utils import is_wechat_url, fetch_wechat_article
-    import urllib.request
-    import urllib.error
+def process_content(args):
+    """处理 --content 正文，直接完成 → 构建 → 验证 → 上传全流程。"""
+    if not (hasattr(args, 'content') and args.content):
+        print("  [error] 需要提供 --content 参数")
+        return False
+    text = args.content
+    source = None  # will default to "网络"
+    source_title = None
+    wx_title = ""
+    print(f"\n[文本模式] 使用提供的 --content（{len(text)} 字符）")
 
-    # --content without --url: skip fetching, use provided content
-    if url is None:
-        if not (hasattr(args, 'content') and args.content):
-            print("  [error] --content 模式需要提供 --content 参数")
-            return False
-        text = args.content
-        source = None  # will default to "网络"
-        source_title = None  # explicitly None so it defaults to "网络" in format string
-        wx_title = ""
-        print(f"\n[内容模式] 使用提供的 --content（{len(text)} 字符）")
-    else:
-        print(f"\n[URL 模式] {url[:60]}{'...' if len(url) > 60 else ''}")
-
-        # 1. 抓取内容
-        if is_wechat_url(url):
-            print("  [wechat] 抓取中...")
-            text, source, error, wx_title = fetch_wechat_article(url, use_cache=True)
-            if not text:
-                print(f"  [error] 抓取失败: {error}")
-                return False
-            print(f"  [ok] 抓取成功 ({source})，{len(text)} 字符")
-        else:
-            print("  [http] 抓取中...")
-            try:
-                req = urllib.request.Request(
-                    url,
-                    headers={
-                        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                    }
-                )
-                with urllib.request.urlopen(req, timeout=30) as resp:
-                    html = resp.read().decode("utf-8", errors="replace")
-                # 简单提取 <title>
-                title_match = re.search(r'<title[^>]*>([^<]+)</title>', html, re.IGNORECASE)
-                wx_title = title_match.group(1).strip() if title_match else ""
-                # 简单提取正文（取 <body> 内的文字）
-                body_match = re.search(r'<body[^>]*>(.*)</body>', html, re.IGNORECASE | re.DOTALL)
-                body = body_match.group(1) if body_match else html
-                # 移除标签
-                text = re.sub(r'<[^>]+>', ' ', body)
-                text = re.sub(r'\s+', ' ', text).strip()
-                print(f"  [ok] 抓取成功，{len(text)} 字符")
-            except Exception as e:
-                print(f"  [error] 抓取失败: {e}")
-                return False
-
-        # 2. 提取标题
-        # WeChat: 用 wx_title（HTML <title>，真实标题）；其他: 取内容第一行
-        lines = [l.strip() for l in text.split('\n') if l.strip()]
-        if is_wechat_url(url) and wx_title:
-            title = wx_title
-        else:
-            title = lines[0][:80] if lines else "未命名"
-            if len(title) > 60:
-                title = title[:57] + "..."
-
-        # 确定来源标题：微信文章用source（发布账号），其他用None（默认"网络"）
-        source_title = source if (is_wechat_url(url) and source) else None
+    # 取首行做标题参考
+    lines = [l.strip() for l in text.split('\n') if l.strip()]
+    title = lines[0][:60] if lines else "未命名"
+    if len(title) > 60:
+        title = title[:57] + "..."
 
     # 3. 交互收集元信息
     interactive = not (hasattr(args, 'domain') and args.domain)
@@ -979,7 +930,7 @@ def process_url(url: str, args):
             knowledge = args.title
         else:
             # 禁用自动生成，要求必须指定 --title
-            print("  [error] --url 模式必须指定 --title 知识点名称")
+            print("  [error] 必须指定 --title 知识点名称")
             print("  示例: --title 'WAIC2026新品发布'")
             return False
 
@@ -1004,10 +955,8 @@ def process_url(url: str, args):
             content_lines.append(line)
         body_text = '\n'.join(content_lines).strip()
     else:
-        # 非交互 --url 模式：fetch_wechat_article 已抓取完整 text
-        # 将全文打印出来供 AI 读取理解，避免只读部分内容就处理
+        # 非交互模式：打印 --content 原文，供 AI 读取后生成概念和子概念
         if hasattr(args, 'content') and args.content:
-            # --content：原材料，打印出来让 AI 生成概念和子概念。
             # 硬规则：不分页、不截断，完整打印全文——否则 AI 容易基于片段漏掉信息。
             print(f"\n{'='*60}")
             print("【AI 生成阶段】请理解下方原材料，自己生成概念和子概念：")
@@ -1015,25 +964,6 @@ def process_url(url: str, args):
             print(f"【原文共 {len(args.content)} 字符，已完整打印，禁止跳读】")
             print(f"{'='*60}")
             print(args.content)
-            print(f"{'='*60}")
-            print("请粘贴你生成的 **概念** 和 **子概念**（直接粘贴，不要加额外说明）：")
-            print("格式：\n**概念**：<mark>核心关键词</mark>...（核心词用<mark>高亮）\n\n**子概念**：\n- <mark>关键概念1</mark>：说明...\n- <mark>关键概念2</mark>：说明...\n（每个要点至少一个<mark>关键词</mark>高亮）")
-            content_lines = []
-            while True:
-                try:
-                    line = input()
-                except EOFError:
-                    break
-                if line.strip() == '.':
-                    break
-                content_lines.append(line)
-            body_text = '\n'.join(content_lines).strip()
-        else:
-            # --url 模式：打印抓取的完整文章内容，供 AI 读取理解。硬规则：不分页、不截断。
-            print(f"\n{'='*60}")
-            print(f"【文章全文 {len(text)} 字符 已完整打印，禁止跳读】请 AI 读取理解后再生成 flomo 内容：")
-            print(f"{'='*60}")
-            print(text)
             print(f"{'='*60}")
             print("请粘贴你生成的 **概念** 和 **子概念**（直接粘贴，不要加额外说明）：")
             print("格式：\n**概念**：<mark>核心关键词</mark>...（核心词用<mark>高亮）\n\n**子概念**：\n- <mark>关键概念1</mark>：说明...\n- <mark>关键概念2</mark>：说明...\n（每个要点至少一个<mark>关键词</mark>高亮）")
@@ -1255,14 +1185,12 @@ def main():
     parser.add_argument("--source-type", choices=["rss_entry", "github_commit", "all"],
                         default="all", help="过滤源类型")
     parser.add_argument("--verbose", "-v", action="store_true", help="显示详细输出")
-    parser.add_argument("--url", type=str,
-                        help="直接处理单个 URL（无需 inbox 文件，交互式输入正文）")
-    parser.add_argument("--domain", type=str, help="领域（可选，配合 --url 使用，如 --domain 技术 --subdomain AI）")
-    parser.add_argument("--subdomain", type=str, help="二级领域（可选）")
+    parser.add_argument("--domain", type=str, help="领域（必填，如 --domain 技术 --subdomain AI）")
+    parser.add_argument("--subdomain", type=str, help="二级领域（必填）")
     parser.add_argument("--tags", type=str, required=True,
                         help="标签（必填，第一个为信号类型标签：#知识基座/#趋势信号/#信号笔记/#分析框架/#知识载体，其余为领域/二级领域标签，如 --tags '#知识基座 #技术 #AI'）")
     parser.add_argument("--content", type=str,
-                        help="原材料正文（作为 AI 理解的输入）")
+                        help="原材料正文（必填，传递给 AI 处理的文本）")
     parser.add_argument("--ai-content", type=str,
                         help="AI 生成的概念和子概念内容（直接传入，跳过交互输入）")
     parser.add_argument("--title", type=str,
@@ -1273,13 +1201,9 @@ def main():
                         help="更新指定 memo_id 的旧笔记。流程：先 fetch_flomo_memo 拉旧内容；用户对比后传入完整合并后的 --ai-content；脚本验证格式后调用 update_flomo 覆盖更新。")
     args = parser.parse_args()
 
-    if args.url:
-        process_url(args.url, args)
-        return
-
-    # --content without --url: use content as body, source defaults to "网络"
+    # --content 模式：直接处理正文
     if hasattr(args, 'content') and args.content:
-        process_url(None, args)
+        process_content(args)
         return
 
     try:
