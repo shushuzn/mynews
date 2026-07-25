@@ -32,11 +32,6 @@ import re
 import os
 from pathlib import Path
 
-ALLOWED_TOP_DIRS = {
-    "医学", "安全", "技术", "政治", "教育科学", "法律",
-    "游戏", "社会科学", "管理", "经济", "自然科学"
-}
-
 ALLOWED_ROOT_FILES = {
     "README.md", "SKILL.md", "AGENTS.md", "ROADMAP.md", "_sidebar.md",
     "_welcome.md", "P0Audit.md", "setup_hooks.sh", ".gitignore"
@@ -330,11 +325,6 @@ def main():
 
         top_dir = parts[1]
 
-        if top_dir not in ALLOWED_TOP_DIRS:
-            fix = f"顶级目录必须为以下之一: {' '.join(sorted(ALLOWED_TOP_DIRS))}；将文件移动到正确目录下"
-            errors.append((file, f"顶级目录 '{top_dir}' 不在白名单内", fix))
-            continue
-
         name_part = filename[:-3] if filename.endswith('.md') else filename
         name_first_part = name_part.split('_')[0]
         if name_first_part != top_dir:
@@ -394,7 +384,6 @@ def main():
                 print(f"  💡 修复: {data['fix']}")
             print()
 
-        print("允许的顶级目录:", " ".join(sorted(ALLOWED_TOP_DIRS)))
         print()
         print("解决方案:")
         print("1. 文件名只允许: 中文/字母/数字/()/ .")
