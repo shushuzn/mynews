@@ -401,6 +401,48 @@ def update_flomo(memo_id, content):
 
 
 
+def _call_kimi(prompt: str, timeout: int = 120) -> str:
+    """调用本地 kimi CLI 处理提示，返回 stdout。"""
+    import subprocess as _sp
+    try:
+        r = _sp.run(
+            ["kimi", "-p", prompt, "--output-format", "text"],
+            capture_output=True, text=True, timeout=timeout
+        )
+        return r.stdout or r.stderr
+    except Exception as e:
+        return f"[error] kimi 调用失败: {e}"
+
+
+def _auto_analyze(text: str) -> dict:
+    """全自动模式：调用 AI 分析正文，返回 {{domain, subdomain, title, tags, ai_content}}。"""
+    prompt = '你是一个知识文档分析助手。请分析以下文章，输出 JSON（不要其他文字）：\n\n' + json.dumps({
+        "domain": "一级领域（如 技术/经济/自然科学/政治/社会科学/医学/游戏/管理/教育科学/安全/法律）",
+        "subdomain": "二级领域（根据内容自选，如 AI芯片/大模型/外交/产业）",
+        "title": "知识点名称（10字以内，不含下划线，如 WAIC2026新品发布）",
+        "tags": ["#信号类型标签", "#领域标签", "#二级领域标签"],
+        "ai_content": "**概念**：<mark>核心概念</mark>定义...\\n\\n**子概念**：\\n- <mark>关键点一</mark>：说明..."
+    }, ensure_ascii=False, indent=2) + '\n\n信号类型（五选一贴在第一行）：#知识基座（概念/定理）、#趋势信号（正在发生的结构性变化）、#信号笔记（单次事件）、#分析框架（方法论）、#知识载体（工具/资源）\n\n规则：\n- ai_content 的 **概念** 段必须精确定义核心概念\n- **子概念** 段必须 ≥3 条，每条用 mark 高亮关键词\n- 禁止使用 flomo 不支持的语法：#标题、>引用、代码块、链接、图片、---、表格\n- 只能用 **加粗** 和 <mark>高亮</mark>\n- tags 三个标签用 #信号类型 #一级领域 #二级领域 格式\n\n文章：\n' + text[:8000]
+
+    out = _call_kimi(prompt)
+    import re as _re
+    m = _re.search(r'\{[^{}]*"domain"[^{}]*"ai_content"[^{}]*\}', out, _re.DOTALL)
+    if m:
+        try:
+            return json.loads(m.group(0))
+        except json.JSONDecodeError:
+            pass
+    start = out.find('{')
+    end = out.rfind('}')
+    if start >= 0 and end > start:
+        try:
+            return json.loads(out[start:end+1])
+        except json.JSONDecodeError:
+            pass
+    print(f"  [auto] AI 输出解析失败，原始输出：{out[:500]}")
+    return {}
+
+
 def process_content(args):
     """处理 --content 正文，直接完成 → 构建 → 验证 → 上传全流程。"""
     if not (hasattr(args, 'content') and args.content):
@@ -417,6 +459,31 @@ def process_content(args):
     title = lines[0][:60] if lines else "未命名"
     if len(title) > 60:
         title = title[:57] + "..."
+
+    # 全自动模式：用 AI 补全缺少的参数
+    if getattr(args, 'auto', False):
+        print("  [auto] AI 正在分析内容...")
+        result = _auto_analyze(text)
+        if result:
+            if not args.domain and result.get("domain"):
+                args.domain = result["domain"]
+                print(f"  [auto] 领域: {args.domain}")
+            if not args.subdomain and result.get("subdomain"):
+                args.subdomain = result["subdomain"]
+                print(f"  [auto] 二级领域: {args.subdomain}")
+            if not args.title and result.get("title"):
+                args.title = result["title"].replace(' ', '_')[:60]
+                print(f"  [auto] 标题: {args.title}")
+            if not args.tags and result.get("tags"):
+                args.tags = ' '.join(result["tags"])
+                print(f"  [auto] 标签: {args.tags}")
+            if not args.ai_content and result.get("ai_content"):
+                args.ai_content = result["ai_content"]
+                print(f"  [auto] ai-content 已生成（{len(args.ai_content)} 字符）")
+        else:
+            print("  [auto] AI 分析失败，回退到手动模式")
+    elif hasattr(args, 'auto') and not args.auto:
+        pass  # 未启用 auto
 
     # 3. 参数校验
     domain = args.domain
@@ -691,10 +758,11 @@ def main():
     parser.add_argument("--source-type", choices=["rss_entry", "github_commit", "all"],
                         default="all", help="过滤源类型")
     parser.add_argument("--verbose", "-v", action="store_true", help="显示详细输出")
+    parser.add_argument("--auto", action="store_true", help="全自动模式：脚本自行调用 AI 分析正文并生成全部参数")
     parser.add_argument("--domain", type=str, help="领域（必填，如 --domain 技术 --subdomain AI）")
     parser.add_argument("--subdomain", type=str, help="二级领域（必填）")
-    parser.add_argument("--tags", type=str, required=True,
-                        help="标签（必填，第一个为信号类型标签：#知识基座/#趋势信号/#信号笔记/#分析框架/#知识载体，其余为领域/二级领域标签，如 --tags '#知识基座 #技术 #AI'）")
+    parser.add_argument("--tags", type=str,
+                        help="标签（第一个为信号类型标签：#知识基座/#趋势信号/#信号笔记/#分析框架/#知识载体，其余为领域/二级领域标签，如 --tags '#知识基座 #技术 #AI'）")
     parser.add_argument("--content", type=str,
                         help="原材料正文（必填，传递给 AI 处理的文本）")
     parser.add_argument("--ai-content", type=str,
