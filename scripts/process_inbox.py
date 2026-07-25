@@ -401,20 +401,21 @@ def update_flomo(memo_id, content):
 
 
 
-def _call_kimi(prompt: str, timeout: int = 120) -> str:
+def _call_kimi(prompt: str, timeout: int = 300) -> str:
     """调用本地 kimi CLI 处理提示，返回 stdout。"""
     import subprocess as _sp
     from pathlib import Path as _Path
-    # 查找 kimi 二进制：优先用完整路径
     _kimi_bin = str(_Path.home() / ".kimi-code" / "bin" / "kimi")
     if not _Path(_kimi_bin).exists():
-        _kimi_bin = "kimi"  # 回退到 PATH
+        _kimi_bin = "kimi"
     try:
         r = _sp.run(
             [_kimi_bin, "-p", prompt, "--output-format", "text"],
             capture_output=True, text=True, timeout=timeout
         )
         return r.stdout or r.stderr
+    except _sp.TimeoutExpired:
+        return "[error] kimi 调用超时"
     except Exception as e:
         return f"[error] kimi 调用失败: {e}"
 
@@ -434,6 +435,10 @@ def _auto_analyze(text: str) -> dict:
     # 去掉 markdown 代码块包裹和行首列表符号
     out = _re.sub(r'^\s*[•\-*]\s*', '', out, flags=_re.MULTILINE)
     out = _re.sub(r'```(?:json)?\s*', '', out)
+    # 检查是否为截断输出（缺少完整的 } 结尾）
+    if out.count('{') > out.count('}'):
+        print("  [auto] AI 输出不完整（被截断），重试...")
+        return {}
     # 提取第一个 { 到最后一个 }
     start = out.find('{')
     end = out.rfind('}')
