@@ -503,92 +503,11 @@ def move_to_done(filepath):
         shutil.move(filepath, done_path)
 
 
-# ------------------------------------------------------------
-# 域名/二级领域分类器（基于关键词）
-# ------------------------------------------------------------
-DOMAIN_KEYWORDS = {
-    "技术": {
-        "AI芯片": ["芯片", "CPU", "GPU", "AI芯片", "处理器", "算力", "真武", "T-Head", "NPU", "HBM", "半导体"],
-        "大模型": ["大模型", "LLM", "GPT", "ChatGPT", "模型训练", "参数", "AGI", "多模态", "推理", "RAG", "Embedding"],
-        "软件开发": ["软件", "代码", "开源", "框架", "API", "SDK", "算法", "编程", "GitHub", "开发", "程序员"],
-        "互联网": ["互联网", "平台", "电商", "SaaS", "云计算", "数据中心", "服务器", "CDN", "运营商"],
-        "AI应用": ["AI", "人工智能", "机器学习", "深度学习", "NLP", "CV", "计算机视觉", "语音", "AIGC", "Copilot"],
-    },
-    "社会科学": {
-        "军事历史": ["红军", "长征", "军事", "战争", "军队", "国防", "战役", "士兵", "革命"],
-        "社会治理": ["社会", "治理", "社区", "基层", "民生", "公共服务", "治理"],
-        "政治学": ["政治", "政府", "政党", "政策", "外交", "国际关系", "主权", "政治学"],
-        "经济学": ["经济", "市场", "金融", "投资", "贸易", "货币", "银行", "GDP", "通胀"],
-        "教育": ["教育", "学校", "教学", "学生", "教师", "课程", "高等教育", "义务教育"],
-        "法律": ["法律", "法规", "法案", "司法", "法院", "律师", "判决", "立法", "合规"],
-        "哲学": ["哲学", "存在", "意识", "形而上学", "认识论", "本体论", "伦理学", "斯多葛", "塞涅卡", "西西弗斯", "生命之短暂", "焦虑", "精神困境"],
-        "心理学": ["心理", "焦虑", "抑郁", "精神", "认知", "情感", "压力", "创伤", "潜意识"],
-    },
-    "自然科学": {
-        "物理": ["物理", "量子", "相对论", "粒子", "天体", "宇宙", "黑洞", "引力", "磁场"],
-        "化学": ["化学", "分子", "反应", "元素", "化合物", "材料"],
-        "生物": ["生物", "基因", "细胞", "进化", "生态", "蛋白质", "DNA", "RNA"],
-        "环境科学": ["环境", "气候", "碳排放", "污染", "生态", "能源", "可持续发展"],
-    },
-    "政治": {
-        "外交": ["外交", "国际", "双边", "多边", "峰会", "外交关系", "使领馆"],
-        "国际关系": ["国际关系", "地缘政治", "大国关系", "联盟", "制裁", "核武"],
-        "国防": ["国防", "军队现代化", "军工", "武器装备", "军事演习"],
-    },
-    "医学": {
-        "临床医学": ["临床", "诊断", "治疗", "手术", "药物", "医疗器械", "医院"],
-        "药物学": ["药物", "靶点", "临床试验", "化合物", "生物制药", "疫苗"],
-        "公共卫生": ["公共卫生", "流行病", "疫情防控", "疫苗接种", "CDC"],
-    },
-    "经济": {
-        "产业": ["产业", "制造业", "供应链", "产业链", "工业", "实体经济"],
-        "企业": ["企业", "公司", "创业", "融资", "上市", "商业模式"],
-        "市场": ["市场", "消费", "零售", "房地产", "股市", "资本市场"],
-    },
-    "管理": {
-        "企业战略": ["战略", "商业模式", "竞争", "增长", "转型", "并购"],
-        "组织管理": ["组织", "管理", "领导力", "人才", "团队", "绩效"],
-    },
-    "教育科学": {
-        "教育政策": ["教育政策", "双减", "素质教育", "新课改", "高考改革"],
-        "教育技术": ["教育技术", "智慧教育", "在线教育", "EdTech"],
-    },
-    "安全": {
-        "网络安全": ["网络", "安全", "漏洞", "数据泄露", "黑客", "加密", "隐私"],
-        "信息安全": ["信息", "安全", "认证", "权限", "风控"],
-    },
-    "游戏": {
-        "游戏产业": ["游戏", "电竞", "手游", "端游", "游戏开发", "VR", "AR", "元宇宙"],
-    },
-    "法律": {
-        "法律研究": ["法律", "法学", "判例", "法律解释", "司法实践"],
-    },
-}
-
-
-def classify_content(title: str, content: str) -> tuple:
-    """基于关键词分类 content，返回 (domain, subdomain, knowledge_slug)。
-    如果无法分类，返回 (None, None, None)。"""
-    text = (title + " " + content).lower()
-
-    best_domain = None
-    best_subdomain = None
-    best_score = 0
-
-    for domain, subdomains in DOMAIN_KEYWORDS.items():
-        for subdomain, keywords in subdomains.items():
-            score = sum(1 for kw in keywords if kw.lower() in text)
-            if score > best_score:
-                best_score = score
-                best_domain = domain
-                best_subdomain = subdomain
-
-    if best_score == 0:
-        # 默认归入社会科学-其他
-        return "社会科学", "其他", slugify(title)[:20]
-
-    knowledge = slugify(title)[:20]
-    return best_domain, best_subdomain, knowledge
+# 有效领域列表（domain 校验用）
+VALID_DOMAINS = [
+    "技术", "社会科学", "自然科学", "政治", "医学",
+    "经济", "管理", "教育科学", "安全", "游戏", "法律",
+]
 
 
 
@@ -714,7 +633,7 @@ def _validate_and_extract_domain(content):
     """从 flomo content 中提取并验证 domain/subdomain/标签，返回 (domain, subdomain)。
 
     第一行必须有且仅有一组：①信号类型标签（必填且唯一，#信号笔记/#趋势信号/#知识基座/#分析框架/#知识载体）
-                                ②一级领域标签（必填且唯一，必须是 DOMAIN_KEYWORDS 的有效一级领域）
+                                ②一级领域标签（必填且唯一，必须是有效一级领域）
                                 ③二级领域标签（必填且唯一，可以是任意字符串；只需与标题中的二级领域一致即可，不强制预注册）
     其他任何 # 标签均视为非法（如 #学习强国、#Others 等）；@ 标签允许但暂不校验白名单。
     """
@@ -749,8 +668,8 @@ def _validate_and_extract_domain(content):
         raise ValueError(f"分类标签行有且仅有一行且必须在第一行，当前发现 {len(tag_lines)} 行（位置：{tag_lines}）")
     # 信号类型（必填，唯一）
     SIGNAL_TYPES = {'信号笔记', '趋势信号', '知识基座', '分析框架', '知识载体'}
-    # 一级领域白名单（来自 DOMAIN_KEYWORDS keys）
-    PRIMARY_DOMAINS = set(DOMAIN_KEYWORDS.keys())
+    # 一级领域白名单（来自 VALID_DOMAINS）
+    PRIMARY_DOMAINS = set(VALID_DOMAINS)
     # 解析第一行所有标签
     tag_tokens = first_line.split()
     parsed_tags = {}
@@ -793,7 +712,7 @@ def _validate_and_extract_domain(content):
     if len(parts) < 2:
         raise ValueError(f"标题 '{full_title}' 不符合 三段式格式（领域_二级领域_知识点）")
     domain, subdomain = parts[0], parts[1]
-    valid_domains = list(DOMAIN_KEYWORDS.keys())
+    valid_domains = list(VALID_DOMAINS)
     if domain not in valid_domains:
         raise ValueError(f"无效领域 '{domain}'，有效领域：{', '.join(valid_domains)}")
     # 标题里的 subdomain 必须与第一行标签中的二级领域一致
@@ -1322,7 +1241,7 @@ def process_content(args):
         return False
 
     # 5. 验证 domain 是否在有效领域列表中
-    valid_domains = list(DOMAIN_KEYWORDS.keys())
+    valid_domains = list(VALID_DOMAINS)
     if domain not in valid_domains:
         print(f"  [error] 无效领域 '{domain}'，有效领域：{', '.join(valid_domains)}")
         return False
