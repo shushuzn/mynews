@@ -31,7 +31,21 @@ description: Use when creating, generating, or producing structured theoretical/
 
 ---
 
-## 操作命令
+## 操作流程（三步）
+
+```
+Step 1 — 抓取：fetch_wechat_article(use_cache=False)   （仅微信公众号）
+Step 2 — 构造：AI 在上下文内写出完整 ai-content（**概念** + ≥6 **子概念** + mark 高亮）
+Step 3 — 上传：process_inbox.py --url / --content（含查重+relevance 决策）
+```
+
+**Step 3 内部流程**：脚本自动抓取→创建本地文件→hook 校验格式→search_flomo 查重→
+- relevance < 0.9 → 自动新建
+- relevance ≥ 0.9 → 打印新旧内容，AI 比对后决定 `--update` / `--force-new` / skip
+
+---
+
+## 命令速查
 
 ```bash
 # URL 模式
