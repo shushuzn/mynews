@@ -7,85 +7,225 @@
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f5; color: #333; padding: 20px; }
-.container { max-width: 900px; margin: 0 auto; }
-h1 { font-size: 22px; margin-bottom: 6px; }
+.container { max-width: 960px; margin: 0 auto; }
+h1 { font-size: 22px; margin-bottom: 4px; }
 .sub { color: #666; font-size: 13px; margin-bottom: 20px; }
 .card { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+.card-title { font-size: 15px; font-weight: 600; margin-bottom: 12px; color: #333; }
 label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 14px; }
-textarea { width: 100%; height: 200px; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; resize: vertical; font-family: inherit; }
+textarea { width: 100%; height: 160px; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; resize: vertical; font-family: inherit; }
 textarea:focus { outline: none; border-color: #4a90d9; }
 .btn-row { display: flex; gap: 10px; align-items: center; margin-top: 12px; }
 .btn { padding: 10px 24px; border: none; border-radius: 6px; font-size: 14px; cursor: pointer; font-weight: 600; }
 .btn-primary { background: #4a90d9; color: #fff; }
 .btn-primary:hover { background: #357abd; }
 .btn-primary:disabled { background: #a0c4e8; cursor: not-allowed; }
-.btn-secondary { background: #e8e8e8; color: #555; }
-.btn-secondary:hover { background: #d5d5d5; }
 .status { font-size: 13px; color: #888; }
 .status.running { color: #4a90d9; }
 .status.done { color: #28a745; }
 .status.error { color: #dc3545; }
-#output { background: #1e1e1e; color: #d4d4d4; padding: 16px; border-radius: 6px; font-family: "Cascadia Code", "Fira Code", monospace; font-size: 13px; white-space: pre-wrap; overflow-x: auto; max-height: 500px; overflow-y: auto; display: none; }
-#output .stderr { color: #ffa07a; }
-#output .ok { color: #6bcf7f; }
-#output .error { color: #f48771; }
-#output .info { color: #6cb6ff; }
+
+/* Tabs for results */
+.tab-bar { display: flex; gap: 0; margin-bottom: 0; border-bottom: 2px solid #e0e0e0; }
+.tab { padding: 10px 20px; cursor: pointer; font-size: 13px; border-bottom: 2px solid transparent; margin-bottom: -2px; color: #888; }
+.tab:hover { color: #333; }
+.tab.active { color: #4a90d9; border-bottom-color: #4a90d9; font-weight: 600; }
+.tab-content { display: none; padding-top: 16px; }
+.tab-content.active { display: block; }
+
+/* Flomo note style */
+.flomo-note { font-size: 14px; line-height: 1.7; padding: 16px; background: #fafafa; border-radius: 6px; border: 1px solid #eee; }
+.flomo-note .tag-line { color: #4a90d9; font-size: 12px; margin-bottom: 8px; }
+.flomo-note .bold-title { font-weight: 700; font-size: 15px; margin-bottom: 8px; }
+.flomo-note .source { color: #888; font-size: 12px; margin-bottom: 12px; }
+.flomo-note .concept { margin-bottom: 8px; }
+.flomo-note .subconcept { margin-bottom: 4px; }
+.flomo-note mark { background: #fff3b0; padding: 1px 3px; border-radius: 2px; }
+
+/* Side-by-side comparison */
+.compare { display: flex; gap: 16px; }
+.compare > div { flex: 1; min-width: 0; }
+.compare h4 { font-size: 13px; color: #666; margin-bottom: 8px; }
+.compare .panel { background: #fafafa; border: 1px solid #eee; border-radius: 6px; padding: 12px; font-size: 13px; line-height: 1.6; max-height: 400px; overflow-y: auto; }
+.compare .panel mark { background: #fff3b0; padding: 1px 3px; border-radius: 2px; }
+
+/* Raw log */
+.raw-log { background: #1e1e1e; color: #d4d4d4; padding: 16px; border-radius: 6px; font-family: "Cascadia Code", "Fira Code", monospace; font-size: 12px; white-space: pre-wrap; overflow-x: auto; max-height: 500px; overflow-y: auto; }
+
+/* Input tabs */
+.input-tabs { display: flex; gap: 0; margin-bottom: 12px; }
+.input-tab { padding: 8px 20px; border: 1px solid #ddd; background: #f5f5f5; cursor: pointer; font-size: 13px; }
+.input-tab:first-child { border-radius: 6px 0 0 6px; }
+.input-tab:last-child { border-radius: 0 6px 6px 0; }
+.input-tab.active { background: #fff; border-bottom-color: #fff; font-weight: 600; }
+.input-tab-content { display: none; }
+.input-tab-content.active { display: block; }
+.url-input { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box; }
+.url-input:focus { outline: none; border-color: #4a90d9; }
 .check-group { display: flex; gap: 16px; margin: 10px 0; flex-wrap: wrap; }
 .check-group label { font-weight: 400; font-size: 13px; cursor: pointer; }
 input[type="checkbox"] { margin-right: 4px; }
-.url-input { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
-.url-input:focus { outline: none; border-color: #4a90d9; }
-.tab-bar { display: flex; gap: 0; margin-bottom: 12px; }
-.tab { padding: 8px 20px; border: 1px solid #ddd; background: #f5f5f5; cursor: pointer; font-size: 13px; }
-.tab:first-child { border-radius: 6px 0 0 6px; }
-.tab:last-child { border-radius: 0 6px 6px 0; }
-.tab.active { background: #fff; border-bottom-color: #fff; font-weight: 600; }
-.tab-content { display: none; }
-.tab-content.active { display: block; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+.badge-old { background: #fff3cd; color: #856404; }
+.badge-new { background: #d4edda; color: #155724; }
 </style>
 </head>
 <body>
 <div class="container">
 <h1>📝 mynews 知识笔记处理器</h1>
-<p class="sub">输入内容 → 自动调用 AI 分析 → 上传到 flomo</p>
+<p class="sub">输入内容 → 自动分析 → 上传 flomo</p>
 
 <div class="card">
-  <div class="tab-bar">
-    <div class="tab active" onclick="switchTab('text')">直接输入正文</div>
-    <div class="tab" onclick="switchTab('url')">从 URL 抓取</div>
+  <div class="input-tabs">
+    <div class="input-tab active" onclick="switchInput('text')">直接输入正文</div>
+    <div class="input-tab" onclick="switchInput('url')">从 URL 抓取</div>
   </div>
-
-  <div id="tab-text" class="tab-content active">
-    <label for="content">正文内容</label>
+  <div id="input-text" class="input-tab-content active">
     <textarea id="content" placeholder="粘贴文章正文或笔记内容……"></textarea>
   </div>
-  <div id="tab-url" class="tab-content">
-    <label for="url">文章 URL</label>
+  <div id="input-url" class="input-tab-content">
     <input type="text" id="url" class="url-input" placeholder="https://example.com/article">
   </div>
-
   <div class="check-group">
     <label><input type="checkbox" id="forceNew"> 强制新建 (--force-new)</label>
   </div>
-
   <div class="btn-row">
     <button class="btn btn-primary" id="submitBtn" onclick="process()">🚀 处理并上传</button>
     <span class="status" id="status">就绪</span>
   </div>
 </div>
 
-<div class="card" id="result-card" style="display:none">
-  <label>处理结果</label>
-  <div id="output"></div>
+<div id="result-section" style="display:none">
+  <div class="card">
+    <div class="card-title">执行结果</div>
+    <div class="tab-bar">
+      <div class="tab active" onclick="switchResult('note')">📄 上传的笔记</div>
+      <div class="tab" onclick="switchResult('compare')">🔍 相似笔记对比</div>
+      <div class="tab" onclick="switchResult('log')">📋 完整日志</div>
+    </div>
+    <div id="res-note" class="tab-content active"></div>
+    <div id="res-compare" class="tab-content"></div>
+    <div id="res-log" class="tab-content"></div>
+  </div>
 </div>
 </div>
 
 <script>
-function switchTab(tab) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+function switchInput(tab) {
+  document.querySelectorAll('.input-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.input-tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelector(`.input-tab[onclick*="'${tab}'"]`).classList.add('active');
+  document.getElementById(`input-${tab}`).classList.add('active');
+}
+
+function switchResult(tab) {
+  document.querySelectorAll('#result-section .tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('#result-section .tab-content').forEach(t => t.classList.remove('active'));
   document.querySelector(`.tab[onclick*="'${tab}'"]`).classList.add('active');
-  document.getElementById(`tab-${tab}`).classList.add('active');
+  document.getElementById(`res-${tab}`).classList.add('active');
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function renderFlomoNote(text) {
+  let html = '<div class="flomo-note">';
+  const lines = text.split('\n');
+  let inConcept = false, inSub = false;
+  for (const line of lines) {
+    if (line.startsWith('#')) {
+      html += `<div class="tag-line">${escapeHtml(line)}</div>`;
+    } else if (line.startsWith('**') && line.endsWith('**')) {
+      html += `<div class="bold-title">${escapeHtml(line)}</div>`;
+    } else if (line.startsWith('**来源**')) {
+      html += `<div class="source">${escapeHtml(line)}</div>`;
+    } else if (line.startsWith('**概念**')) {
+      inConcept = true; inSub = false;
+      html += `<div class="concept">${line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/<mark>(.*?)<\/mark>/g, '<mark>$1</mark>')}</div>`;
+    } else if (line.startsWith('**子概念**')) {
+      inConcept = false; inSub = true;
+      html += `<div><strong>子概念</strong></div>`;
+    } else if (line.startsWith('- ') && inSub) {
+      html += `<div class="subconcept">${line.replace(/<mark>(.*?)<\/mark>/g, '<mark>$1</mark>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')}</div>`;
+    } else if (line.trim() === '') {
+      html += '<br>';
+    } else if (inConcept || inSub) {
+      html += `<div>${escapeHtml(line)}</div>`;
+    }
+  }
+  html += '</div>';
+  return html;
+}
+
+function parseMarkers(text) {
+  // Extract sections
+  const sections = {};
+
+  // Flomo note
+  const noteMatch = text.match(/==BEGIN_FLOMO_NOTE==\n([\s\S]*?)==END_FLOMO_NOTE==/);
+  if (noteMatch) sections.flomoNote = noteMatch[1].trim();
+
+  // Old note comparison
+  const oldMatch = text.match(/==BEGIN_OLD_MARKDOWN==\n([\s\S]*?)==END_OLD_MARKDOWN==/);
+  if (oldMatch) sections.oldNote = oldMatch[1].trim();
+
+  const newMatch = text.match(/==BEGIN_NEW_MARKDOWN==\n([\s\S]*?)==END_NEW_MARKDOWN==/);
+  if (newMatch) sections.newNote = newMatch[1].trim();
+
+  // Old note id
+  const idMatch = text.match(/旧笔记 id=([a-zA-Z0-9_]+)/);
+  if (idMatch) sections.oldId = idMatch[1];
+
+  // New note id
+  const nidMatch = text.match(/上传成功 id=([a-zA-Z0-9_]+)/);
+  if (nidMatch) sections.newId = nidMatch[1];
+
+  // Relevance
+  const relMatch = text.match(/relevance=([\d.]+)/);
+  if (relMatch) sections.relevance = parseFloat(relMatch[1]);
+
+  return sections;
+}
+
+function renderResults(data) {
+  const sections = parseMarkers(data.output || '');
+  const log = data.output || '';
+
+  // Tab 1: Flomo note
+  const noteDiv = document.getElementById('res-note');
+  if (sections.flomoNote) {
+    noteDiv.innerHTML = renderFlomoNote(sections.flomoNote);
+    if (sections.newId) {
+      noteDiv.innerHTML += `<div style="margin-top:12px;font-size:12px;color:#888">flomo ID: ${sections.newId}</div>`;
+    }
+  } else if (data.success) {
+    noteDiv.innerHTML = '<div style="color:#888">已上传成功，但未能获取笔记内容（检查完整日志）</div>';
+  } else {
+    noteDiv.innerHTML = '<div style="color:#c00">处理未完成，笔记未上传</div>';
+  }
+
+  // Tab 2: Comparison
+  const compDiv = document.getElementById('res-compare');
+  if (sections.oldNote) {
+    let relHtml = '';
+    if (sections.relevance !== undefined) {
+      const pct = Math.round(sections.relevance * 100);
+      const color = sections.relevance >= 0.9 ? '#c00' : '#a80';
+      relHtml = `<div style="margin-bottom:12px;font-size:13px">相似度: <strong style="color:${color}">${pct}%</strong></div>`;
+    }
+    compDiv.innerHTML = relHtml + '<div class="compare">' +
+      '<div><h4><span class="badge badge-old">已有笔记</span></h4><div class="panel">' + renderFlomoNote(sections.oldNote) + '</div></div>' +
+      '<div><h4><span class="badge badge-new">新内容</span></h4><div class="panel">' + renderFlomoNote(sections.newNote || '(无)') + '</div></div>' +
+      '</div>';
+  } else {
+    compDiv.innerHTML = '<div style="color:#888">未检测到相似笔记，已直接上传</div>';
+  }
+
+  // Tab 3: Raw log
+  document.getElementById('res-log').innerHTML = `<div class="raw-log">${escapeHtml(log)}</div>`;
+
+  document.getElementById('result-section').style.display = 'block';
 }
 
 async function process() {
@@ -106,9 +246,8 @@ async function process() {
   status.textContent = '⏳ 正在调用 AI 分析...';
   status.className = 'status running';
 
-  const output = document.getElementById('output');
-  output.style.display = 'block';
-  output.textContent = '';
+  // Hide previous results
+  document.getElementById('result-section').style.display = 'none';
 
   try {
     const resp = await fetch('/process', {
@@ -117,15 +256,14 @@ async function process() {
       body: JSON.stringify({ content, url, forceNew })
     });
     const data = await resp.json();
-    output.textContent = data.output || data.error || '(无输出)';
+    renderResults(data);
     status.textContent = data.success ? '✅ 上传成功！' : '❌ 处理失败';
     status.className = data.success ? 'status done' : 'status error';
-    document.getElementById('result-card').style.display = 'block';
   } catch (e) {
-    output.textContent = `请求失败: ${e.message}`;
+    document.getElementById('res-log').innerHTML = `<div class="raw-log">请求失败: ${escapeHtml(e.message)}</div>`;
+    document.getElementById('result-section').style.display = 'block';
     status.textContent = '❌ 网络错误';
     status.className = 'status error';
-    document.getElementById('result-card').style.display = 'block';
   } finally {
     btn.disabled = false;
     btn.textContent = '🚀 处理并上传';

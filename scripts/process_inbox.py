@@ -737,6 +737,7 @@ def process_content(args):
                 sys.exit(1)
 
     # 8. 上传到 flomo
+    print(f"\n==BEGIN_FLOMO_NOTE==\n{flomo_content}\n==END_FLOMO_NOTE==")
     flomo_id = upload_flomo(flomo_content)
     if flomo_id:
         print(f"  [flomo] 上传成功 id={flomo_id}")
