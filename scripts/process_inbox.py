@@ -421,27 +421,33 @@ def _call_kimi(prompt: str, timeout: int = 120) -> str:
 
 def _auto_analyze(text: str) -> dict:
     """全自动模式：调用 AI 分析正文，返回 {{domain, subdomain, title, tags, ai_content}}。"""
-    prompt = '你是一个知识文档分析助手。请分析以下文章，输出 JSON（不要其他文字）：\n\n' + json.dumps({
+    prompt = '你是一个知识文档分析助手。只输出 JSON，不要 markdown 代码块、不要额外文字。\n\n' + json.dumps({
         "domain": "一级领域（如 技术/经济/自然科学/政治/社会科学/医学/游戏/管理/教育科学/安全/法律）",
         "subdomain": "二级领域（根据内容自选，如 AI芯片/大模型/外交/产业）",
-        "title": "知识点名称（10字以内，不含下划线，如 WAIC2026新品发布）",
+        "title": "知识点名称（10字以内，不含下划线/空格/斜杠，如 WAIC2026新品发布）",
         "tags": ["#信号类型标签", "#领域标签", "#二级领域标签"],
         "ai_content": "**概念**：<mark>核心概念</mark>定义...\\n\\n**子概念**：\\n- <mark>关键点一</mark>：说明..."
-    }, ensure_ascii=False, indent=2) + '\n\n信号类型（五选一贴在第一行）：#知识基座（概念/定理）、#趋势信号（正在发生的结构性变化）、#信号笔记（单次事件）、#分析框架（方法论）、#知识载体（工具/资源）\n\n规则：\n- ai_content 的 **概念** 段必须精确定义核心概念\n- **子概念** 段必须 ≥3 条，每条用 mark 高亮关键词\n- 禁止使用 flomo 不支持的语法：#标题、>引用、代码块、链接、图片、---、表格\n- 只能用 **加粗** 和 <mark>高亮</mark>\n- tags 三个标签用 #信号类型 #一级领域 #二级领域 格式\n\n文章：\n' + text[:8000]
+    }, ensure_ascii=False, indent=2) + '\n\n信号类型（五选一贴在第一行）：#知识基座（概念/定理）、#趋势信号（正在发生的结构性变化）、#信号笔记（单次事件）、#分析框架（方法论）、#知识载体（工具/资源）\n\n⚠️ 严格遵守：\n- ai_content 必须包含 **概念**：和 **子概念**：两个段落（用中文冒号：）\n- **子概念** 段必须 ≥3 条，每条用 <mark>高亮</mark>\n- 禁止：代码块、链接、图片、表格、>引用\n- JSON 内所有引号必须用 \\" 转义，值内不能出现未转义的双引号\n- 不要用 ```json 包裹\n\n文章：\n' + text[:8000]
 
     out = _call_kimi(prompt)
     import re as _re
-    m = _re.search(r'\{[^{}]*"domain"[^{}]*"ai_content"[^{}]*\}', out, _re.DOTALL)
-    if m:
-        try:
-            return json.loads(m.group(0))
-        except json.JSONDecodeError:
-            pass
+    # 去掉 markdown 代码块包裹和行首列表符号
+    out = _re.sub(r'^\s*[•\-*]\s*', '', out, flags=_re.MULTILINE)
+    out = _re.sub(r'```(?:json)?\s*', '', out)
+    # 提取第一个 { 到最后一个 }
     start = out.find('{')
     end = out.rfind('}')
     if start >= 0 and end > start:
+        raw = out[start:end+1]
+        # 尝试修复值内未转义的双引号（将 "xxx" 替换为 \"xxx\"）
+        fixed = _re.sub(r'(?<=[:,\s])"([^":,\}\]]+)"(?=\s*[:,\}\]])', r'\\"\1\\"', raw)
         try:
-            return json.loads(out[start:end+1])
+            return json.loads(fixed)
+        except json.JSONDecodeError:
+            pass
+        # 更暴力的修复：把值内所有非结构性的 " 转义
+        try:
+            return json.loads(raw.replace('"', '\\"').replace('\\"{', '{').replace('\\"\\[', '[').replace('\\\\\\"', '\\"'))
         except json.JSONDecodeError:
             pass
     print(f"  [auto] AI 输出解析失败，原始输出：{out[:500]}")
