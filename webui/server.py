@@ -12,6 +12,16 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = BASE_DIR / "scripts"
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
 
+# 优先环境变量，其次 .env 文件
+FLOMO_TOKEN = os.environ.get("FLOMO_TOKEN")
+if not FLOMO_TOKEN:
+    env_file = BASE_DIR / ".flomo_env"
+    if env_file.exists():
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            if line.startswith("FLOMO_TOKEN="):
+                FLOMO_TOKEN = line.split("=", 1)[1].strip().strip("\"'")
+                break
+
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -67,7 +77,8 @@ class Handler(BaseHTTPRequestHandler):
             cmd.append("--force-new")
 
         env = os.environ.copy()
-        env["FLOMO_TOKEN"] = env.get("FLOMO_TOKEN", "")
+        if FLOMO_TOKEN:
+            env["FLOMO_TOKEN"] = FLOMO_TOKEN
 
         try:
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=300, env=env, cwd=str(SCRIPTS_DIR))

@@ -5,3 +5,4 @@ _inbox_failed/
 data/
 __pycache__/
 .mcp.json
+.flomo_env
