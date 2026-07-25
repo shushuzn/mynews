@@ -473,6 +473,40 @@ def _auto_decide(old_note: str, new_note: str) -> str:
     return 'skip'
 
 
+def _auto_merge(old_note: str, new_content: str) -> str:
+    """全自动模式下，让 AI 将旧笔记和新内容合并为单一 flomo markdown。返回合并后的 markdown。"""
+    prompt = f"""你是一个知识库编辑。请将以下"已有笔记"和"新内容"合并为单一 flomo 笔记。
+
+要求：
+- 保留已有笔记的标签行、标题行、来源行
+- 将新内容的 **概念** 和 **子概念** 合并到已有笔记中
+- 如果已有笔记和新内容有相同/重叠的子概念，合并去重
+- 保持 flomo 格式：只允许 **加粗** 和 <mark>高亮</mark>
+- 直接输出合并后的完整 flomo markdown，不要额外文字
+
+## 已有笔记
+{old_note}
+
+## 新内容
+{new_content}
+"""
+
+    out = _call_kimi(prompt)
+    # 尝试提取标记围栏内的内容
+    import re as _re
+    for delim in ['```markdown', '```', '---']:
+        if delim in out:
+            parts = out.split(delim)
+            for i, p in enumerate(parts):
+                if '**概念**' in p or '#信号' in p or '#知识' in p or '#趋势' in p:
+                    return p.strip()
+    # 直接取包含 **概念** 的部分
+    idx = out.find('**概念**')
+    if idx > 0:
+        return out[idx:].strip()
+    return out.strip()
+
+
 def process_content(args):
     """处理 --content 正文，直接完成 → 构建 → 验证 → 上传全流程。"""
     if not (hasattr(args, 'content') and args.content):
@@ -704,7 +738,27 @@ def process_content(args):
                             choice = None  # 继续新建
                         elif _decision == "update":
                             print(f"  [auto] AI 决定：有增量 → 更新 id={old_id}")
-                            print("  [auto] update 暂不支持全自动，请手动使用 --update MEMO_ID")
+                            print("  [auto] 正在合并旧笔记和新内容...")
+                            merged = _auto_merge(old_content, body_text)
+                            if merged and len(merged) > 20:
+                                # 构建完整的 flomo content 用于 update
+                                tag_line = ' '.join(tags)
+                                bold_title = f"**{domain}_{subdomain}_{knowledge}**"
+                                update_content = f"""{tag_line}
+
+{bold_title}
+
+**来源**：{source_title if source_title else "网络"}
+
+{merged}
+"""
+                                ok = update_flomo(old_id, update_content)
+                                if ok:
+                                    print(f"  [auto] 更新成功 id={old_id}")
+                                else:
+                                    print(f"  [auto] 更新失败")
+                            else:
+                                print(f"  [auto] 合并失败，跳过")
                             subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR), capture_output=True)
                             if full_path.exists(): full_path.unlink()
                             return True
