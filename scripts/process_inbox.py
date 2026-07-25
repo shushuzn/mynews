@@ -404,9 +404,14 @@ def update_flomo(memo_id, content):
 def _call_kimi(prompt: str, timeout: int = 120) -> str:
     """调用本地 kimi CLI 处理提示，返回 stdout。"""
     import subprocess as _sp
+    from pathlib import Path as _Path
+    # 查找 kimi 二进制：优先用完整路径
+    _kimi_bin = str(_Path.home() / ".kimi-code" / "bin" / "kimi")
+    if not _Path(_kimi_bin).exists():
+        _kimi_bin = "kimi"  # 回退到 PATH
     try:
         r = _sp.run(
-            ["kimi", "-p", prompt, "--output-format", "text"],
+            [_kimi_bin, "-p", prompt, "--output-format", "text"],
             capture_output=True, text=True, timeout=timeout
         )
         return r.stdout or r.stderr
