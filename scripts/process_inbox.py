@@ -175,8 +175,8 @@ def _validate_and_extract_domain(content):
     if subdomain != matched_secondary:
         raise ValueError(f"标题中的二级领域 '{subdomain}' 与第一行二级领域标签 '{matched_secondary}' 不一致")
     # 标题里的一级领域必须与第一行标签中的一级领域一致
-    if domain != matched_primary[0]:
-        raise ValueError(f"标题中的一级领域 '{domain}' 与第一行一级领域标签 '{matched_primary[0]}' 不一致")
+    if domain != matched_primary:
+        raise ValueError(f"标题中的一级领域 '{domain}' 与第一行一级领域标签 '{matched_primary}' 不一致")
     return domain, subdomain
 
 
