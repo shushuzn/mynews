@@ -31,11 +31,13 @@ def get_temp_dir() -> Path:
 BASE_DIR = get_base_dir()
 PYTHON_BIN = sys.executable if sys.executable else ("python" if os.name == "nt" else "python3")
 FLOMO_API_URL = "https://flomoapp.com/mcp"
-FLOMO_TOKEN = "FLOMO_TOKEN_PLACEHOLDER"
+FLOMO_TOKEN = os.environ.get("FLOMO_TOKEN") or ""
+if not FLOMO_TOKEN:
+    print("[error] 环境变量 FLOMO_TOKEN 未设置")
+    sys.exit(1)
 
 
 
-# 有效领域列表（domain 校验用）
 
 
 
