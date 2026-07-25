@@ -542,9 +542,9 @@ def process_content(args):
                 print("  [auto] AI 分析失败，回退到手动模式")
                 break
             if not args.domain and result.get("domain"):
-                args.domain = result["domain"]
+                args.domain = result["domain"].replace(' ', '_')
             if not args.subdomain and result.get("subdomain"):
-                args.subdomain = result["subdomain"]
+                args.subdomain = result["subdomain"].replace(' ', '_')
             if not args.title and result.get("title"):
                 args.title = result["title"].replace('_', '').replace(' ', '_')[:60]
             if not args.tags and result.get("tags"):
