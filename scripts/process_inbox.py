@@ -444,6 +444,11 @@ def _auto_analyze(text: str) -> dict:
     end = out.rfind('}')
     if start >= 0 and end > start:
         raw = out[start:end+1]
+        # 优先尝试直接解析（AI 输出有效的 JSON 时走此路径）
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            pass
         # 尝试修复值内未转义的双引号（将 "xxx" 替换为 \"xxx\"）
         fixed = _re.sub(r'(?<=[:,\s])"([^":,\}\]]+)"(?=\s*[:,\}\]])', r'\\"\1\\"', raw)
         try:
