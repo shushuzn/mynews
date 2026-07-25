@@ -35,7 +35,7 @@ description: Use when creating, generating, or producing structured theoretical/
 
 ```
 Step 1 — 抓取：fetch_wechat_article(use_cache=False)   （仅微信公众号）
-Step 2 — 构造：AI 在上下文内写出完整 ai-content（**概念** + ≥6 **子概念** + mark 高亮）
+Step 2 — 构造：AI 在上下文内写出完整 ai-content（**概念** + **子概念** + mark 高亮）
 Step 3 — 上传：process_inbox.py --url / --content（含查重+relevance 决策）
 ```
 
