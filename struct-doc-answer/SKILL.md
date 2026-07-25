@@ -3,172 +3,122 @@ name: struct-doc-answer
 description: Use when creating, generating, or producing structured theoretical/knowledge documents in textbook format from any text content. Can accept raw text (articles, web pages, user input) directly without pre-formatting. Do not use for code generation or general Q&A. **This skill is designed to be delegated to a subagent when the user provides a URL input.**
 ---
 
-# struct-doc-answer — 知识文档生成
+# struct-doc-answer
 
-## ⚠️ 核心原则
+## ⚠️ 铁律（违反=失职）
 
-**唯一流程：process_inbox.py**。所有输入（URL 或纯文本）统一通过 `process_inbox.py` 处理，它内部完成：抓取 → 分类 → 创建本地文件 → hook 验证 → flomo 查重 → 上传/更新/跳过。
-
-禁止绕开 process_inbox.py 直接调用 upload_flomo / memo_create。
+1. **唯一入口 `process_inbox.py`**，禁止直调 `upload_flomo` / `memo_create`
+2. **微信公众号必须 `fetch_wechat_article(use_cache=False)` 抓最新内容**（禁用缓存）
+3. **`--ai-content` 只写 `**概念**` + `**子概念**`**（tag 行/标题/来源行由脚本自动拼接，写在 ai-content 里会触发校验失败）
+4. **relevance ≥ 0.9 时**：必须比对脚本打印的旧/新内容做决策——有增量→`--update OLD_ID`、假阳性→`--force-new`、无增量→skip
+5. **relevance < 0.9**：脚本自动新建，AI 不插手（禁止 fetch_flomo_memo 复盘）
+6. **提交/推送等用户批准**，禁止擅自 commit / push / rm
 
 ---
 
-## 一、输入类型与调用方式
+## 参数速查
 
-### 1.1 URL 输入（微信公众号 / 网页）—— 标准三步
+| 参数 | 说明 |
+|------|------|
+| `--url URL` | 文章链接（脚本内部抓取，默认缓存） |
+| `--content TEXT` | 原材料正文（与 `--url` 二选一） |
+| `--domain`, `--subdomain` | 一级/二级领域 |
+| `--title NAME` | 知识点名称（文件名一部分，禁用字符见下文） |
+| `--tags "T1 T2 T3"` | ≥3 标签，首位信号类型（下节） |
+| `--ai-content MD` | **仅写 `**概念**` + `**子概念**`** 两段，不含 tag/标题/来源 |
+| `--force-new` | 假阳性时强制新建笔记 |
+| `--update MEMO_ID` | 增量追加到已有笔记 |
 
-**微信公众号必须先 fetch 获取最新内容（禁用缓存），再传给 process_inbox.py。**
+---
 
-> 完整流程由 `process_inbox.py` 自动完成（抓取→查重→上传），AI 在上下文内完成概念提取与 ai-content 构造后，执行下方第三步上传。
-
-#### 第一步：抓取正文（`use_cache=False` 确保最新）
-
-```bash
-cd /root/mynews/scripts && python3 -c "
-from mynews_utils import fetch_wechat_article
-t,s,e,wx = fetch_wechat_article('https://mp.weixin.qq.com/s/xxxx', use_cache=False)
-print(f'## 标题: {wx}')
-print(f'## 来源: {s}')
-print(f'## 字符: {len(t) if t else 0}')
-print('## 正文预览:')
-print(t[:600] if t else 'None')
-"
-```
-
-#### 上传（含 relevance 检查 + 决策）
+## 操作命令
 
 ```bash
+# URL 模式
 cd /root/mynews/scripts && python3 process_inbox.py \
-  --url "https://mp.weixin.qq.com/s/xxxx" \
-  --domain "技术" \
-  --subdomain "AI" \
+  --url "https://..." \
+  --domain "技术" --subdomain "AI" \
   --title "知识点名称" \
   --tags "#信号笔记 #技术 #AI" \
-  --ai-content "<完整合并 markdown 见第二步>"
+  --ai-content "**概念**：<mark>核心概念</mark>定义...\n**子概念**：\n- <mark>要点一</mark>：...\n- <mark>要点二</mark>：..."
+
+# 纯文本模式（--url 换成 --content "原材料正文…"，其余相同）
 ```
-
-参数约束：
-- `--url`：必填，文章链接
-- `--domain`：必填，一级领域
-- `--subdomain`：必填，二级领域
-- `--title`：必填，知识点名称（将作为文件名第三段；6 类禁用字符见 §2.4）
-- `--tags`：必填，≥3 个标签，第一行必须是信号类型标签（5 类见 §3.1）
-- `--ai-content`：必填，文档结构见 §2
-
-### 1.2 纯文本输入（无 URL）
-
-```bash
-cd /root/mynews/scripts && python3 process_inbox.py \
-  --content "原材料正文（用户输入的原始内容）" \
-  --domain "教育科学" \
-  --subdomain "家庭教育" \
-  --title "知识点名称" \
-  --tags "#信号笔记 #教育科学 #家庭教育" \
-  --ai-content "**概念**：<mark>核心概念</mark>定义...
-**子概念**：
-- <mark>要点一</mark>：..."
-```
-
-- `--content`：原材料正文（用户输入的原始内容，不是 AI 加工后的内容）
-- 其余参数同 URL 模式
 
 ---
 
-## 二、文档结构（flomo 格式）
+## 文档格式（flomo 笔记）
 
-```markdown
+```
 #信号笔记 #技术 #AI
 
 **技术_AI_知识点名称**
 
 **来源**：来源（微信用发布账号，其他默认"网络"）
 
-**概念**：<mark>核心概念</mark>精确定义。<mark>核心数据</mark>用高亮强调。
+**概念**：<mark>核心概念</mark>精确定义。
 
 **子概念**：
-- <mark>关键发现一</mark>：高亮要展示核心数据
-- <mark>关键发现二</mark>：高亮关键实体名称
+- <mark>关键发现一</mark>：高亮核心数据
+- <mark>关键发现二</mark>：高亮关键实体
 ```
 
-### 2.1 允许的 flomo 语法
+### 允许语法
+`**加粗**` —标题/强调　`<mark>高亮</mark>` —关键术语/核心数据　`- xxx` / `1. xxx` —列表
 
-| 语法 | 用途 |
-|------|------|
-| `**加粗**` | 标题/段落强调 |
-| `<mark>高亮</mark>` | 关键术语、核心数据 |
-| `- xxx` | 无序列表 |
-| `1. xxx` | 有序列表 |
-
-### 2.2 禁止的语法
-
-`#` 标题 / `>` 引用 / ` ``` ` 代码块 / `[标题](url)` 链接 / `![图片](url)` / `---` 水平线 / `|` 表格
-
-### 2.3 文件名格式
-
-`领域_二级领域_知识点.md`，三段式，路径 `answers/领域/二级领域/文件名.md`（4 层）。
-
-**文件名知识点部分禁止 `-`**：只允许 `中文/字母/数字/()/ .`，英文词汇用 `_` 分隔或合并。如 `WAIC2026重磅成果` 而非 `WAIC-2026-重磅成果`。
-
-### 2.4 文件名 6 类禁用字符（pre-commit hook 必校验）
-
-hook FILENAME_PATTERN = re.compile('^[a-zA-Z0-9_\-\.\u4e00-\u9fff()%]+$')。下列 6 类在 `--title` 中**必须手动替换**，否则 hook 直接失败、文件留在 answers/ 中：
-
-| 禁用字符 | 替代方案 | 示例 |
-|---|---|---|
-| 半角空格 | `-` | `WAIC 2026` → `WAIC_2026` |
-| 半角斜杠 `/` | `拼` 或合并 | `NPO/CPO` → `NPOCPO` |
-| 半角加号 `+` | `加` | `1+1` → `1加1` |
-| 全角冒号 `：` | `-` | `标题：副标题` → `标题-副标题` |
-| en-dash `–`（U+2013）| `-` | `M–O–Si` → `M_O_Si` |
-| 连续 `_`+字母数字混合（如 `RISC_V`、`M_O_Si`、`F_m`、`5_7`） | 合并或加字母 | `RISC_V` → `RISCV`；`M_O_Si` → `MOSi` |
-
-**经验**：regex 字符集理论允许 `_`，但 hook 实际拒绝"连续 `_`+字母数字"形式。建议遇到专有技术词（包含 `-` 或 `_`）一律**合并**或**改成全拼**，不依赖 `_` 分隔。
+### 禁止语法
+`# 标题` / `> 引用` / `` ``` `` 代码块 / `[标题](url)` 链接 / `![图片](url)` / `---` 水平线 / `|` 表格
 
 ---
 
-## 三、标签规则
+## 标签规则
 
-### 3.1 信号类型标签（五选一，根据内容判断）
+### 信号类型（五选一，根据核心内容判断）
 
-| 标签 | 内容特征 | 适用场景 |
+| 标签 | 适用场景 | 误用示例 |
 |------|---------|---------|
-| `#知识基座` | 概念/定理/历史/机制 | 客观知识、定律、历史事件、技术原理 |
-| `#趋势信号` | 正在发生的结构性变化 | 行业动态、政策转向、市场趋势、事件性新闻 |
-| `#信号笔记` | 单次事件/数据点 | 具体的新闻事件、数据点、具体案例 |
-| `#分析框架` | 可复用的思维模型/方法论 | 思维工具、认知模型、分析方法 |
-| `#知识载体` | 工具/资源/数据集 | 工具介绍、资源列表、数据集、书单 |
+| `#知识基座` | 概念/定理/机制 | 衍射极限→用 `#信号笔记` ❌ |
+| `#趋势信号` | 正在发生的结构性变化 | 玻璃基封装→用 `#信号笔记` ❌ |
+| `#信号笔记` | 单次事件/数据点 | — |
+| `#分析框架` | 可复用的方法论 | 行动优于纠结→用 `#信号笔记` ❌ |
+| `#知识载体` | 工具/资源/数据集 | — |
 
-**判断方法**：看文档的**核心内容**是什么——
-- 讲"是什么/怎么样" → `#知识基座`
-- 讲"正在发生/正在变化" → `#趋势信号`
-- 讲"某年某月某日发生了什么" → `#信号笔记`
-- 讲"如何思考/如何分析" → `#分析框架`
-- 讲"用什么工具/资源" → `#知识载体`
-
-**常见错误**：所有内容都用 `#信号笔记`。例如：
-- 衍射极限（物理知识）→ `#知识基座` ❌ `#信号笔记`
-- 玻璃基封装（行业趋势）→ `#趋势信号` ❌ `#信号笔记`
-- 行动优于纠结（思维方法）→ `#分析框架` ❌ `#信号笔记`
-- 中国核电提速（具体事件）→ `#信号笔记` ✅
-
-### 3.2 其他标签
-
-- ≥3 个标签，信号类型标签为第一项
-- 微信文章：标签含领域，如 `#技术` `#AI`
-- `--tags` 参数第一项即为信号类型标签
+### 其他规则
+- ≥3 标签，**信号类型为首项**
+- 微信文章：带领域标签如 `#技术` `#AI`
 
 ---
 
-## 四、流程说明
+## 文件名禁用字符（hook 强制执行）
 
-| 步骤 | 内部自动完成 |
-|------|------------|
-| 1 | fetch_wechat_article 抓取（URL 模式）或使用 --content |
-| 2 | 关键词分类确定 domain/subdomain |
-| 3 | 创建本地文件 answers/领域/二级领域/文件名.md |
-| 4 | pre-commit hook 验证格式 |
-| 5 | search_flomo 查重（relevance ≥ 0.9 时显示新旧内容对比） |
-| 6 | AI 判断：完全相同 → 跳过；新增内容 → update；完全不同 → 新建 |
-| 7 | upload_flomo 或 update_flomo 上传 |
+格式：`领域_二级领域_知识点.md`，路径 `answers/领域/二级领域/文件名.md`
 
-**relevance ≥ 0.9 时**：脚本会打印"已有笔记内容"和"新文章内容"对比，AI 必须自己判断有无实质新增内容，有新增必须 update_flomo，无新增才允许跳过。**假阳性时**（relevance 高但内容完全不同），用 `--force-new` 参数强制新建。
+`--title` 中必须替换以下 6 类，否则 hook 直接失败：
+
+| 禁用 | 替代 | 示例 |
+|------|------|------|
+| 半角空格 | `_` | `WAIC 2026`→`WAIC_2026` |
+| `/` 斜杠 | 合并 | `NPO/CPO`→`NPOCPO` |
+| `+` 加号 | `加` | `1+1`→`1加1` |
+| `：` 全角冒号 | `-` | `标题：副标题`→`标题-副标题` |
+| `–` en-dash | `-` | `M–O–Si`→`M_O_Si` |
+| 连续 `_`+字母数字 | 合并或加字母 | `RISC_V`→`RISCV`；`M_O_Si`→`MOSi` |
+
+---
+
+## 查重决策流程
+
+```
+process_inbox.py 自动 call search_flomo
+  │
+  ├─ relevance < 0.9 → 自动新建（AI 不插手）
+  │
+  └─ relevance ≥ 0.9
+      ├─ 脚本打印旧内容 + 新内容
+      ├─ AI 比对：
+      │   ├─ 同主题 + 有增量 → --update OLD_ID
+      │   ├─ 同主题 + 无增量 → skip
+      │   └─ 假阳性（同关键词不同主题）→ --force-new
+      │
+      └─ 假阳性时必须先 fetch_flomo_memo 读旧笔记确认主题不同，再用 --force-new
+```
