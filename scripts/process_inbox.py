@@ -718,8 +718,7 @@ SOURCE_URL: {source_url}
 4. 运行 `python3 scripts/title_to_path.py "<标题>"` 获取完整路径
 5. 创建 flomo 格式文件（见下方格式要求）
 6. 在文件开头加上 `# SOURCE_URL {source_url}` 行
-7. 运行 `python3 scripts/validate_flomo.py <文件路径>` 验证格式
-8. 打印创建的文件路径
+7. 打印创建的文件路径
 
 **⚠️ flomo 格式要求**：
 ```
