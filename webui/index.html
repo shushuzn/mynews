@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>mynews 知识笔记处理器</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f5; color: #333; padding: 20px; }
+.container { max-width: 900px; margin: 0 auto; }
+h1 { font-size: 22px; margin-bottom: 6px; }
+.sub { color: #666; font-size: 13px; margin-bottom: 20px; }
+.card { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 14px; }
+textarea { width: 100%; height: 200px; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; resize: vertical; font-family: inherit; }
+textarea:focus { outline: none; border-color: #4a90d9; }
+.btn-row { display: flex; gap: 10px; align-items: center; margin-top: 12px; }
+.btn { padding: 10px 24px; border: none; border-radius: 6px; font-size: 14px; cursor: pointer; font-weight: 600; }
+.btn-primary { background: #4a90d9; color: #fff; }
+.btn-primary:hover { background: #357abd; }
+.btn-primary:disabled { background: #a0c4e8; cursor: not-allowed; }
+.btn-secondary { background: #e8e8e8; color: #555; }
+.btn-secondary:hover { background: #d5d5d5; }
+.status { font-size: 13px; color: #888; }
+.status.running { color: #4a90d9; }
+.status.done { color: #28a745; }
+.status.error { color: #dc3545; }
+#output { background: #1e1e1e; color: #d4d4d4; padding: 16px; border-radius: 6px; font-family: "Cascadia Code", "Fira Code", monospace; font-size: 13px; white-space: pre-wrap; overflow-x: auto; max-height: 500px; overflow-y: auto; display: none; }
+#output .stderr { color: #ffa07a; }
+#output .ok { color: #6bcf7f; }
+#output .error { color: #f48771; }
+#output .info { color: #6cb6ff; }
+.check-group { display: flex; gap: 16px; margin: 10px 0; flex-wrap: wrap; }
+.check-group label { font-weight: 400; font-size: 13px; cursor: pointer; }
+input[type="checkbox"] { margin-right: 4px; }
+.url-input { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
+.url-input:focus { outline: none; border-color: #4a90d9; }
+.tab-bar { display: flex; gap: 0; margin-bottom: 12px; }
+.tab { padding: 8px 20px; border: 1px solid #ddd; background: #f5f5f5; cursor: pointer; font-size: 13px; }
+.tab:first-child { border-radius: 6px 0 0 6px; }
+.tab:last-child { border-radius: 0 6px 6px 0; }
+.tab.active { background: #fff; border-bottom-color: #fff; font-weight: 600; }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+</style>
+</head>
+<body>
+<div class="container">
+<h1>📝 mynews 知识笔记处理器</h1>
+<p class="sub">输入内容 → 自动调用 AI 分析 → 上传到 flomo</p>
+
+<div class="card">
+  <div class="tab-bar">
+    <div class="tab active" onclick="switchTab('text')">直接输入正文</div>
+    <div class="tab" onclick="switchTab('url')">从 URL 抓取</div>
+  </div>
+
+  <div id="tab-text" class="tab-content active">
+    <label for="content">正文内容</label>
+    <textarea id="content" placeholder="粘贴文章正文或笔记内容……"></textarea>
+  </div>
+  <div id="tab-url" class="tab-content">
+    <label for="url">文章 URL</label>
+    <input type="text" id="url" class="url-input" placeholder="https://example.com/article">
+  </div>
+
+  <div class="check-group">
+    <label><input type="checkbox" id="forceNew"> 强制新建 (--force-new)</label>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-primary" id="submitBtn" onclick="process()">🚀 处理并上传</button>
+    <span class="status" id="status">就绪</span>
+  </div>
+</div>
+
+<div class="card" id="result-card" style="display:none">
+  <label>处理结果</label>
+  <div id="output"></div>
+</div>
+</div>
+
+<script>
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelector(`.tab[onclick*="'${tab}'"]`).classList.add('active');
+  document.getElementById(`tab-${tab}`).classList.add('active');
+}
+
+async function process() {
+  const content = document.getElementById('content').value.trim();
+  const url = document.getElementById('url').value.trim();
+  const forceNew = document.getElementById('forceNew').checked;
+
+  if (!content && !url) {
+    document.getElementById('status').textContent = '⚠️ 请填写正文或 URL';
+    document.getElementById('status').className = 'status error';
+    return;
+  }
+
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ 处理中...';
+  const status = document.getElementById('status');
+  status.textContent = '⏳ 正在调用 AI 分析...';
+  status.className = 'status running';
+
+  const output = document.getElementById('output');
+  output.style.display = 'block';
+  output.textContent = '';
+
+  try {
+    const resp = await fetch('/process', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, url, forceNew })
+    });
+    const data = await resp.json();
+    output.textContent = data.output || data.error || '(无输出)';
+    status.textContent = data.success ? '✅ 上传成功！' : '❌ 处理失败';
+    status.className = data.success ? 'status done' : 'status error';
+    document.getElementById('result-card').style.display = 'block';
+  } catch (e) {
+    output.textContent = `请求失败: ${e.message}`;
+    status.textContent = '❌ 网络错误';
+    status.className = 'status error';
+    document.getElementById('result-card').style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🚀 处理并上传';
+  }
+}
+</script>
+</body>
+</html>
