@@ -542,20 +542,25 @@ def process_content(args):
                 print("  [auto] AI 分析失败，回退到手动模式")
                 break
             if not args.domain and result.get("domain"):
-                args.domain = result["domain"].replace(' ', '-')
+                args.domain = result["domain"]
             if not args.subdomain and result.get("subdomain"):
-                args.subdomain = result["subdomain"].replace(' ', '-')
+                args.subdomain = result["subdomain"]
             if not args.title and result.get("title"):
-                args.title = result["title"].replace('_', '').replace(' ', '-')[:60]
+                args.title = result["title"]
             if not args.tags and result.get("tags"):
                 args.tags = ' '.join(result["tags"])
             if not args.ai_content and result.get("ai_content"):
                 args.ai_content = result["ai_content"]
-            # 校验关键字段，失败则重试
+            # 三段统一清洗：每段自身不能含 _ 和空格，否则三段拼起来会超 2 个 _
+            for _field in ['domain', 'subdomain', 'title']:
+                val = getattr(args, _field, '') or ''
+                val = val.replace('_', '').replace(' ', '-').replace('/', '')[:60]
+                setattr(args, _field, val)
+            # 构造标题并验证
             test_title = f"{args.domain}_{args.subdomain}_{args.title}"
             if test_title.count('_') != 2:
-                print(f"  [auto] 标题格式不对（{test_title}），重试...")
-                text += f"\n\n[系统反馈：上轮生成的知识点名称 '{args.title}' 导致标题 '{test_title}' 含 {test_title.count('_')} 个下划线（应为 2 个）。请只提供知识点名称（第三段），不要加领域和子领域，名称中不要使用下划线、空格、斜杠。]"
+                print(f"  [auto] 标题格式不对（{test_title}，{test_title.count('_')}个_），重试...")
+                text += f"\n\n[系统反馈：生成失败。领域、二级领域、知识点名称自身都不能包含下划线、空格、斜杠。当前产生的三段：领域='{args.domain}' 二级领域='{args.subdomain}' 知识点='{args.title}'。请修正后重试。]"
                 continue
             print(f"  [auto] 领域: {args.domain}")
             print(f"  [auto] 二级领域: {args.subdomain}")
