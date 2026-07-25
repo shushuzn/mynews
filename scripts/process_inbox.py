@@ -138,8 +138,6 @@ def _validate_and_extract_domain(content):
         raise ValueError(f"分类标签行有且仅有一行且必须在第一行，当前发现 {len(tag_lines)} 行（位置：{tag_lines}）")
     # 信号类型（必填，唯一）
     SIGNAL_TYPES = {'信号笔记', '趋势信号', '知识基座', '分析框架', '知识载体'}
-    # 一级领域白名单（来自 VALID_DOMAINS）
-    PRIMARY_DOMAINS = set(VALID_DOMAINS)
     # 解析第一行所有标签
     tag_tokens = first_line.split()
     parsed_tags = {}
@@ -148,29 +146,22 @@ def _validate_and_extract_domain(content):
             raise ValueError(f"标签 '{t}' 必须以 # 或 @ 开头")
         prefix, name = t[0], t[1:]
         parsed_tags.setdefault(prefix, []).append(name)
-    # 信号类型校验：必须有一个且仅一个（必须属于 SIGNAL_TYPES）
-    matched_signal = [t for t in parsed_tags.get('#', []) if t in SIGNAL_TYPES]
-    if not matched_signal:
-        raise ValueError(f"第一行缺少信号类型标签（{', '.join(SIGNAL_TYPES)} 中任选一个），当前：'{first_line}'")
-    if len(matched_signal) > 1:
-        raise ValueError(f"第一行只能有一个信号类型标签，当前包含：{', '.join(matched_signal)}")
-    # 一级领域校验：必须有一个且仅一个（必须属于 PRIMARY_DOMAINS）
-    matched_primary = [t for t in parsed_tags.get('#', []) if t in PRIMARY_DOMAINS]
-    if not matched_primary:
-        raise ValueError(f"第一行缺少一级领域标签（{', '.join(sorted(PRIMARY_DOMAINS))} 中任选一个），当前：'{first_line}'")
-    if len(matched_primary) > 1:
-        raise ValueError(f"第一行只能有一个一级领域标签，当前包含：{', '.join(matched_primary)}")
-    # 二级领域校验：必须有一个（任意字符串都可以，但必须与标题中 subdomain 一致——一致性校验在下面进行）
-    # 排除掉信号类型和一级领域后，剩下的 # 标签就是二级领域
-    used_names = set(matched_signal) | set(matched_primary)
-    secondary_candidates = [t for t in parsed_tags.get('#', []) if t not in used_names]
-    if len(secondary_candidates) != 1:
-        raise ValueError(f"第一行必须恰好一个二级领域标签，当前匹配到：{secondary_candidates}（去掉信号类型和一级领域后的 # 标签）")
-    matched_secondary = secondary_candidates[0]
-    # 严格白名单：第一行所有 # 标签必须能归类为 信号类型 / 一级领域 / 二级领域 三者之一（禁止其他任何 # 标签）
-    # 因为已经强制 1+1+1=3 个 # 标签，且每个都校验过分类，所以这里隐含通过；再显式断言 # 标签总数
+
+    # 必须恰好 3 个 # 标签：信号类型 + 一级领域 + 二级领域（均自由填写，无白名单）
     if len(parsed_tags.get('#', [])) != 3:
         raise ValueError(f"第一行 # 标签必须恰好 3 个（信号类型 + 一级领域 + 二级领域），当前 {len(parsed_tags.get('#', []))} 个：{parsed_tags.get('#', [])}")
+    # 信号类型校验：必须有一个且仅一个（必须属于 SIGNAL_TYPES）
+    SIGNAL_TYPES = {'信号笔记', '趋势信号', '知识基座', '分析框架', '知识载体'}
+    matched_signal = [t for t in parsed_tags.get('#', []) if t in SIGNAL_TYPES]
+    if not matched_signal:
+        raise ValueError(f"缺少信号类型标签（{', '.join(SIGNAL_TYPES)} 中任选一个），当前：'{first_line}'")
+    if len(matched_signal) > 1:
+        raise ValueError(f"只能有一个信号类型标签，当前包含：{', '.join(matched_signal)}")
+    # 去掉信号类型的 # 标签后，剩下的就是领域标签（按顺序为一级领域、二级领域）
+    domain_tags = [t for t in parsed_tags.get('#', []) if t not in matched_signal]
+    if len(domain_tags) != 2:
+        raise ValueError(f"除信号类型外，必须恰好 2 个 # 标签（一级领域 + 二级领域），当前：{domain_tags}")
+    matched_primary, matched_secondary = domain_tags
     # 找 **domain_subdomain_knowledge** 格式的粗体标题行
     match = re.search(r'^\*\*(?:\\\_|[^_])*\_(?:\\\_|[^_])*\_(?:\\\_|[^*])*\*\*$', content, re.MULTILINE)
     if not match:
@@ -182,9 +173,6 @@ def _validate_and_extract_domain(content):
     if len(parts) < 2:
         raise ValueError(f"标题 '{full_title}' 不符合 三段式格式（领域_二级领域_知识点）")
     domain, subdomain = parts[0], parts[1]
-    valid_domains = list(VALID_DOMAINS)
-    if domain not in valid_domains:
-        raise ValueError(f"无效领域 '{domain}'，有效领域：{', '.join(valid_domains)}")
     # 标题里的 subdomain 必须与第一行标签中的二级领域一致
     if subdomain != matched_secondary:
         raise ValueError(f"标题中的二级领域 '{subdomain}' 与第一行二级领域标签 '{matched_secondary}' 不一致")
@@ -552,12 +540,6 @@ def process_content(args):
 
     if not body_text:
         print("  [error] 正文内容为空")
-        return False
-
-    # 5. 验证 domain 是否在有效领域列表中
-    valid_domains = list(VALID_DOMAINS)
-    if domain not in valid_domains:
-        print(f"  [error] 无效领域 '{domain}'，有效领域：{', '.join(valid_domains)}")
         return False
 
     # 6. 构建 flomo 内容
