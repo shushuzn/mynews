@@ -36,10 +36,6 @@ FLOMO_TOKEN = "FLOMO_TOKEN_PLACEHOLDER"
 
 
 # 有效领域列表（domain 校验用）
-VALID_DOMAINS = [
-    "技术", "社会科学", "自然科学", "政治", "医学",
-    "经济", "管理", "教育科学", "安全", "游戏", "法律",
-]
 
 
 
@@ -399,49 +395,6 @@ def update_flomo(memo_id, content):
 
 
 
-def ask_domain() -> str:
-    """Interactive domain selection."""
-    print("\n可选领域:")
-    sorted_dirs = sorted(VALID_DOMAINS)
-    for i, d in enumerate(sorted_dirs, 1):
-        print(f"  {i}. {d}")
-    while True:
-        choice = input("选择领域编号（或直接输入领域名）: ").strip()
-        if choice.isdigit():
-            idx = int(choice) - 1
-            if 0 <= idx < len(sorted_dirs):
-                return sorted_dirs[idx]
-        # Try direct name match
-        if choice in VALID_DOMAINS:
-            return choice
-        print(f"  无效选择，请重试")
-
-
-def ask_subdomain() -> str:
-    """Interactive subdomain input."""
-    while True:
-        d = input("二级领域（如：AI芯片, 外交, 军事历史）: ").strip()
-        if d and len(d) >= 2:
-            return d
-        print("  二级领域至少2个字符，请重试")
-
-
-def ask_tags() -> list:
-    """Interactive tag input."""
-    print("信号类型标签（五选一）: #趋势信号 #知识基座 #信号笔记 #分析框架 #知识载体")
-    while True:
-        tag = input("输入信号类型标签（必填，五选一）: ").strip()
-        if not tag:
-            print("  错误：信号类型标签不能为空")
-            continue
-        if tag.startswith('#') or tag.startswith('@'):
-            break
-        print("  标签必须以 # 或 @ 开头，请重试")
-    extra = input("额外标签（如：#AI #开源，输入空格分隔，回车跳过）: ").strip()
-    tags = [tag]
-    if extra:
-        tags.extend([t.strip() for t in extra.split() if t.strip()])
-    return tags
 
 
 def process_content(args):
@@ -461,59 +414,28 @@ def process_content(args):
     if len(title) > 60:
         title = title[:57] + "..."
 
-    # 3. 交互收集元信息
-    interactive = not (hasattr(args, 'domain') and args.domain)
-    print()
-    if interactive:
-        domain = ask_domain()
-        subdomain = ask_subdomain()
-        tags = ask_tags()
-        print(f"\n  文章标题: {title}")
-        print("  文件名格式: 领域_二级领域_知识点.md（三段式，知识点为第三段）")
-        while True:
-            knowledge = input("知识点名称（第三段，如：WAIC2026新产品发布）: ").strip()
-            if not knowledge:
-                print("  不能为空，请重新输入")
-                continue
-            if ' ' in knowledge:
-                print("  禁止使用空格")
-                continue
-            break
+    # 3. 参数校验
+    domain = args.domain
+    subdomain = args.subdomain
+    if not domain or not subdomain:
+        print("  [error] 必须指定 --domain 和 --subdomain")
+        return False
+    if not (hasattr(args, 'tags') and args.tags):
+        print("错误：--tags 必须提供信号类型标签")
+        exit(1)
+    tags = args.tags.split()
+    if args.title:
+        knowledge = args.title
     else:
-        domain = args.domain
-        subdomain = args.subdomain if args.subdomain else ask_subdomain()
-        if not (hasattr(args, 'tags') and args.tags):
-            print("错误：--tags 必须提供信号类型标签")
-            exit(1)
-        tags = args.tags.split()
-        if args.title:
-            knowledge = args.title
-        else:
-            # 禁用自动生成，要求必须指定 --title
-            print("  [error] 必须指定 --title 知识点名称")
-            print("  示例: --title 'WAIC2026新品发布'")
-            return False
+        print("  [error] 必须指定 --title 知识点名称")
+        print("  示例: --title 'WAIC2026新品发布'")
+        return False
 
     # 4. 正文内容
     if hasattr(args, 'ai_content') and args.ai_content:
         # --ai-content：已生成的AI内容，直接使用
         body_text = args.ai_content
         print(f"  [ai] 使用 --ai-content 内容（{len(body_text)} 字符）")
-    elif interactive:
-        # 交互模式：通过 stdin 收集
-        print(f"\n请输入正文内容（flomo 格式，用空行分隔段落，输入单独的 '.' 结束）:")
-        print("  格式提示: **概念**：<mark>核心定义</mark>...  |  **子概念**： |  - 要点列表")
-        print("  (输入 '.' 回车结束输入)\n")
-        content_lines = []
-        while True:
-            try:
-                line = input()
-            except EOFError:
-                break
-            if line.strip() == '.':
-                break
-            content_lines.append(line)
-        body_text = '\n'.join(content_lines).strip()
     else:
         # 非交互模式：打印 --content 原文，供 AI 读取后生成概念和子概念
         if hasattr(args, 'content') and args.content:
