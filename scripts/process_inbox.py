@@ -541,7 +541,7 @@ def process_content(args):
                 args.subdomain = result["subdomain"]
                 print(f"  [auto] 二级领域: {args.subdomain}")
             if not args.title and result.get("title"):
-                args.title = result["title"].replace(' ', '_')[:60]
+                args.title = result["title"].replace('_', '').replace(' ', '_')[:60]
                 print(f"  [auto] 标题: {args.title}")
             if not args.tags and result.get("tags"):
                 args.tags = ' '.join(result["tags"])
