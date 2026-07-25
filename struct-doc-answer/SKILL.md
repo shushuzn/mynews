@@ -34,8 +34,8 @@ description: Use when creating, generating, or producing structured theoretical/
 ## 操作流程（三步）
 
 ```
-Step 1 — 抓取：fetch_wechat_article(use_cache=False)   （仅微信公众号）
-Step 2 — 构造：AI 在上下文内写出完整 ai-content（**概念** + **子概念** + mark 高亮）
+Step 1 — 获取原文：--url（脚本内部抓取）或 --content（用户直接提供正文）
+Step 2 — 构造：AI 写出完整 ai-content（**概念** + **子概念** + mark 高亮）
 Step 3 — 上传：process_inbox.py --url / --content（含查重+relevance 决策）
 ```
 
@@ -48,15 +48,12 @@ Step 3 — 上传：process_inbox.py --url / --content（含查重+relevance 决
 ## 命令速查
 
 ```bash
-# URL 模式
 cd /root/mynews/scripts && python3 process_inbox.py \
-  --url "https://..." \
+  --url "https://..." \              # 或用 --content "原材料正文…" 直接传文本
   --domain "技术" --subdomain "AI" \
   --title "知识点名称" \
   --tags "#信号笔记 #技术 #AI" \
   --ai-content "**概念**：<mark>核心概念</mark>定义...\n**子概念**：\n- <mark>要点一</mark>：...\n- <mark>要点二</mark>：..."
-
-# 纯文本模式（--url 换成 --content "原材料正文…"，其余相同）
 ```
 
 ---
