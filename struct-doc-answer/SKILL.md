@@ -19,7 +19,7 @@ description: Use when creating, generating, or producing structured theoretical/
 
 **微信公众号必须先 fetch 获取最新内容（禁用缓存），再传给 process_inbox.py。**
 
-> 三步标准流程的完整定义、判断规则、红线请见 §6.0。本节只列调用代码。
+> 完整流程由 `process_inbox.py` 自动完成（抓取→查重→上传），AI 在上下文内完成概念提取与 ai-content 构造后，执行下方第三步上传。
 
 #### 第一步：抓取正文（`use_cache=False` 确保最新）
 
@@ -35,7 +35,7 @@ print(t[:600] if t else 'None')
 "
 ```
 
-#### 第三步：上传 + relevance 检查 + 决策
+#### 上传（含 relevance 检查 + 决策）
 
 ```bash
 cd /root/mynews/scripts && python3 process_inbox.py \
