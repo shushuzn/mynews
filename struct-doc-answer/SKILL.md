@@ -55,8 +55,6 @@ cd /root/mynews/scripts && python3 process_inbox.py \
 - `--tags`：必填，≥3 个标签，第一行必须是信号类型标签（5 类见 §3.1）
 - `--ai-content`：必填，文档结构见 §2
 
-**⚠️ `--ai-content` 内容契约（实测，易踩坑）**：`--ai-content` 里**只写 `**概念**` + `**子概念**` 两段正文**，不要写 tag 行、加粗标题行、`**来源**` 行。脚本会自动在前面拼接：① tag 行（来自 `--tags`）② 加粗标题 `**{domain}_{subdomain}_{title}**`（来自 domain/subdomain/title）③ `**来源**：{抓取来源}`（来自 fetch 元数据）。若 ai-content 里再写 tag 行 / 标题 / `**来源**`，会触发格式校验失败（`标签行只能有一行`、`**来源**行只能有一行`）。期刊/出处等信息请并入 `**概念**` 段首。
-
 ### 1.2 纯文本输入（无 URL）
 
 ```bash
