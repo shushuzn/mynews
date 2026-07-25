@@ -110,9 +110,7 @@ mynews/
 ├── logs/                     # cron 日志
 ├── scripts/
 │   ├── process_miniflux.py   # 从 Miniflux 拉取条目
-│   ├── process_inbox.py      # 处理 inbox 并上传 flomo
-│   ├── process_inbox_mimo.sh # mimo 自动处理脚本
-│   └── mynews_utils.py       # 工具函数
+│   └── process_inbox.py      # 处理 inbox 并上传 flomo（含工具函数）
 ├── hooks/pre-commit          # flomo 格式验证 hook
 └── struct-doc-answer/SKILL.md
 ```
