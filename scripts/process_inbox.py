@@ -599,6 +599,25 @@ def process_content(args):
             else:
                 if relevance >= 0.9:
                     print(f"  [flomo] 检测到高相似笔记 id={old_id}（relevance={relevance:.2f}）")
+                    # 首次运行保护：必须无 --force-new/--update 先跑一次跳过，第二次才允许
+                    reviewed_file = BASE_DIR / "data" / "reviewed_pass.json"
+                    try:
+                        reviewed = json.loads(reviewed_file.read_text(encoding="utf-8")) if reviewed_file.exists() else {}
+                    except Exception:
+                        reviewed = {}
+                    first_pass_key = f"{old_id}:{knowledge}"
+                    if getattr(args, 'force_new', False) or getattr(args, 'update', False):
+                        if first_pass_key not in reviewed:
+                            print("  [protect] 首次运行禁止使用 --force-new / --update，已跳过。请先无参数运行一次确认后，再重试")
+                            print(f"  [flomo] 检测到高相似笔记 id={old_id}（relevance={relevance:.2f}），请比对上方内容后人工判断：")
+                            print(f"  [flomo]   → 主题不同（关键词命中但内容无关，假阳性）→ 重跑加 --force-new")
+                            print(f"  [flomo]   → 有实质增量 → 重跑加 --update {old_id}")
+                            print(f"  [flomo]   → 零增量 → 跳过，不做任何操作")
+                            return True
+                    # 标记为已审查
+                    reviewed[first_pass_key] = True
+                    reviewed_file.parent.mkdir(parents=True, exist_ok=True)
+                    reviewed_file.write_text(json.dumps(reviewed, indent=2, ensure_ascii=False), encoding="utf-8")
                     if getattr(args, 'force_new', False):
                         print("  [flomo] --force-new 强制新建，跳过检测")
                         choice = None
