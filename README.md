@@ -1,125 +1,151 @@
 # mynews
 
-AI 处理 RSS（通过 Miniflux）生成 flomo 格式笔记并上传到 flomo。
+AI 内容处理管道：输入文本/URL → 自动分析 → 生成 flomo 格式笔记 → 上传 flomo。
 
-## 文档格式
-
-```
-#信号类型 #领域 #二级领域 #具体概念
-
-**领域_二级领域_知识点**
-
-**来源**：出处
-
-**概念**：<mark>核心定义</mark>——正文
-
-**子概念**：
-
-- <mark>要点1</mark>：说明
-- <mark>要点2</mark>：说明
-```
-
-标签行后无空行。高亮用 `<mark>`。
-
-## 处理管道
-
-```
-Miniflux RSS ──→ process_miniflux.py ──→ _inbox/ ──→ 人工逐条处理 ──→ flomo
-```
-
-- **process_miniflux.py**：从 Miniflux API 拉取新条目写入 `_inbox`
-- **process_inbox.py**：处理单条条目，验证格式，上传 flomo
-- **process_inbox_mimo.sh**：调用 mimo headless 自动处理（需手动触发或配 cron）
-
-## Cron 自动化
+## 快速开始
 
 ```bash
-# 抓取 RSS（每5分钟）
-*/5 * * * * cd /root/mynews && python3 scripts/process_miniflux.py >> logs/miniflux_cron.log 2>&1
+# 一行命令全自动处理
+cd scripts && python3 process_inbox.py --auto --content "你的正文"
 
-# 自动处理 inbox（每10分钟，需先启动 mimo 服务）
-*/10 * * * * /root/mynews/scripts/process_inbox_mimo.sh >> logs/inbox_mimo.log 2>&1
+# 或启动 Web UI
+cd webui && python3 server.py
+# 打开 http://localhost:8080
 ```
 
-**推荐做法**：关闭自动处理 cron，改为人工逐条处理（`process_inbox.py --url ...`），质量更高。
+`--auto` 模式自动完成：AI 分析内容 → 分类领域 → 生成概念/子概念 → 查重去重 → 假阳性/增量判断 → 上传/更新/跳过。
 
-## Miniflux 配置
-
-在 `miniflux.env` 中配置：
+## 工作流
 
 ```
-MINIFLUX_URL=http://localhost:8080
-MINIFLUX_API_KEY=your_api_key
+你输入正文/URL
+  → [--auto] 调用 kimi AI 分析
+    → 自动分类 domain/subdomain
+    → 生成标题、标签
+    → 生成 **概念** + ≥3 条 **子概念**（含 mark 高亮）
+  → hook 格式校验
+  → search_flomo 查重
+    ├─ relevance < 0.9 → 自动新建
+    └─ relevance ≥ 0.9 → AI 决策
+       ├─ 假阳性（主题不同）→ --force-new 新建
+       ├─ 有增量（主题相同但有新内容）→ AI 合并后 update
+       └─ 真重复（无增量）→ skip 跳过
+  → 上传 flomo
 ```
 
-导入 OPML：在 Miniflux UI → Settings → Subscriptions → Import OPML
-
-## MCP 配置（flomo）
-
-MCP 配置必须放在 `~/.kimi-code/mcp.json`（注意：不是 `~/.config/kimi-code/`）。
-
-```json
-{
-  "mcpServers": {
-    "flomo": {
-      "type": "streamable-http",
-      "url": "https://flomoapp.com/mcp",
-      "headers": {
-        "Authorization": "Bearer <你的 flomo token>"
-      }
-    }
-  }
-}
-```
-
-配置后**重启 session** 生效，用 `/mcp` 查看连接状态。
-
-## 手动处理一条
+## 安装
 
 ```bash
-cd /root/mynews/scripts
+./setup_hooks.sh          # 安装 pre-commit hook（flomo 格式校验）
+```
+
+**环境变量**（二选一）：
+
+1. 设置系统环境变量：`setx FLOMO_TOKEN "你的flomo_token"`（Windows）
+2. 或创建 `.flomo_env` 文件（已加入 `.gitignore`）：
+   ```
+   FLOMO_TOKEN=你的flomo_token
+   ```
+
+## 使用方式
+
+### CLI 全自动（推荐）
+
+```bash
+python3 process_inbox.py --auto --content "文章正文"
+```
+
+### CLI 手动精细控制
+
+```bash
 python3 process_inbox.py \
-  --url "https://example.com/article" \
-  --domain "技术" \
-  --subdomain "AI应用" \
-  --title "文章标题" \
-  --tags "#信号笔记 #技术 #AI应用" \
-  --ai-content '**概念**：<mark>核心概念</mark>——说明
-
-**子概念**：
-
-- <mark>要点1</mark>：说明'
+  --content "正文" \
+  --domain "技术" --subdomain "AI" \
+  --title "知识点名称" \
+  --tags "#知识基座 #技术 #AI" \
+  --ai-content "**概念**：<mark>核心概念</mark>定义...\n**子概念**：\n- <mark>要点</mark>：说明..."
 ```
 
-## 首次安装
+### Web UI
 
 ```bash
-./setup_hooks.sh          # 安装 pre-commit hook
-mkdir -p logs             # 日志目录
+cd webui && python3 server.py
+# 浏览器打开 http://localhost:8080
 ```
+
+支持：粘贴正文 / 输入 URL（自动抓取）、强制新建、三栏结果展示（笔记/对比/日志）。
+
+## 参数说明
+
+| 参数 | 说明 |
+|------|------|
+| `--content TEXT` | 原材料正文 |
+| `--auto` | 全自动模式（AI 自行分析/分类/生成/决策） |
+| `--domain`, `--subdomain` | 手动指定领域（自动模式下可选） |
+| `--title NAME` | 知识点名称（自动模式下可选） |
+| `--tags "T1 T2 T3"` | 标签，首位为信号类型（自动模式下可选） |
+| `--ai-content MD` | 已生成的概念/子概念内容 |
+| `--force-new` | 强制新建（跳过查重） |
+| `--update MEMO_ID` | 增量更新已有笔记 |
+
+## 文档格式（flomo 笔记）
+
+```
+#知识基座 #技术 #AI
+
+**技术_AI_知识点名称**
+
+**来源**：网络
+
+**概念**：<mark>核心概念</mark>精确定义。
+
+**子概念**：
+- <mark>关键发现一</mark>：高亮核心数据
+- <mark>关键发现二</mark>：高亮关键实体
+```
+
+### 允许语法
+`**加粗**` / `<mark>高亮</mark>` / `- 无序列表` / `1. 有序列表`
+
+### 禁止语法
+`# 标题` / `> 引用` / `` ``` `` 代码块 / `[链接](url)` / `![图片]` / `---` 水平线 / `|` 表格
+
+## 信号类型标签
+
+| 标签 | 适用场景 |
+|------|---------|
+| `#知识基座` | 概念/定理/机制（客观知识） |
+| `#趋势信号` | 正在发生的结构性变化 |
+| `#信号笔记` | 单次事件/数据点 |
+| `#分析框架` | 可复用的方法论 |
+| `#知识载体` | 工具/资源/数据集 |
+
+## 标题规则
+
+- 格式：`领域_二级领域_知识点`，**恰好 2 个下划线**
+- title 不能包含下划线、空格、半角斜杠、加号、全角冒号、en-dash
+- hook 强制执行，不符合的字符必须替换
 
 ## 目录结构
 
 ```
 mynews/
-├── answers/                  # 本地草稿（.gitignore，不上传）
-├── _inbox/                   # 待处理条目（抓取自 Miniflux RSS）
-├── _inbox_done/              # 已处理
-├── _inbox_failed/            # 处理失败
-├── data/                     # 处理状态
-├── logs/                     # cron 日志
+├── answers/                  # 本地草稿（.gitignore）
+├── data/                     # 处理状态（reviewed_pass.json 等）
 ├── scripts/
-│   ├── process_miniflux.py   # 从 Miniflux 拉取条目
-│   └── process_inbox.py      # 处理 inbox 并上传 flomo（含工具函数）
+│   └── process_inbox.py      # 核心处理器（全自动+手动）
+├── webui/
+│   ├── server.py             # Web UI 后端
+│   └── index.html            # Web UI 前端（含夜色模式）
 ├── hooks/pre-commit          # flomo 格式验证 hook
-└── struct-doc-answer/SKILL.md
+├── struct-doc-answer/SKILL.md
+├── .flomo_env                # flomo token（.gitignore 保护）
+└── start-webui.bat           # 一键启动 Web UI
 ```
 
-## 格式规则
+## 技术栈
 
-- **文件名**：3段式 `领域_二级领域_知识点`，禁止 `-` 连字符
-- **路径**：4层 `answers/领域/二级领域/文件名.md`
-- **高亮**：`<mark>` 用于概念核心词和子概念关键词
-- **标题禁止连字符**：加粗标题中不可使用 `-`
-- **标签**：第一行，≥3个，含 `#信号笔记`/`#趋势信号`/`#知识基座` 等
-- **必须段落**：`**来源**：`、`**概念**：`、`**子概念**：`
+- **AI 引擎**：本地 `kimi` CLI（`~/.kimi-code/bin/kimi`）
+- **存储**：flomo API（MCP 协议）
+- **前端**：纯 HTML + CSS + JS（无框架）
+- **后端**：Python http.server（`ThreadingHTTPServer`）
