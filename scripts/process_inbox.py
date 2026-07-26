@@ -501,7 +501,7 @@ def _auto_merge(old_note: str, new_content: str) -> str:
     prompt = f"""你是一个知识库编辑。请将以下"已有笔记"和"新内容"合并为单一 flomo 笔记。
 
 要求：
-- 保留已有笔记的标签行、标题行、来源行
+- 保留已有笔记的标签行，但**根据合并后的内容范围更新标题行**——标题应能概括旧笔记和新内容的全部主题
 - 将新内容的 **概念** 和 **子概念** 合并到已有笔记中
 - 如果已有笔记和新内容有相同/重叠的子概念，合并去重
 - 保持 flomo 格式：只允许 **加粗** 和 <mark>高亮</mark>
@@ -796,17 +796,15 @@ def process_content(args):
                             print("  [auto] 正在合并旧笔记和新内容...")
                             merged = _auto_merge(old_content, body_text)
                             if merged and len(merged) > 20:
-                                # 构建完整的 flomo content 用于 update
-                                tag_line = ' '.join(tags)
-                                bold_title = f"**{domain}_{subdomain}_{knowledge}**"
-                                update_content = f"""{tag_line}
-
-{bold_title}
-
-**来源**：{source_title if source_title else "网络"}
-
-{merged}
-"""
+                                # merged 是完整 flomo markdown（含标签行、标题、来源、正文），直接使用
+                                update_content = merged
+                                # 确保 tag_line 和 **来源** 都在（AI 可能遗漏）
+                                if not update_content.startswith('#'):
+                                    tag_line = ' '.join(tags)
+                                    update_content = f"{tag_line}\n\n{update_content}"
+                                if '**来源**' not in update_content:
+                                    src = source_title if source_title else "网络"
+                                    update_content = update_content.replace('**概念**', f'**来源**：{src}\n\n**概念**', 1)
                                 ok = update_flomo(old_id, update_content)
                                 if ok:
                                     print(f"  [auto] 更新成功 id={old_id}")
