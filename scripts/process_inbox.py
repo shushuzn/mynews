@@ -578,6 +578,10 @@ def process_content(args):
                 print(f"  [auto] 标题格式不对（{test_title}，{test_title.count('_')}个_），重试...")
                 text += f"\n\n[系统反馈：生成失败。领域、二级领域、知识点名称自身都不能包含下划线、空格、斜杠。当前产生的三段：领域='{args.domain}' 二级领域='{args.subdomain}' 知识点='{args.title}'。请修正后重试。]"
                 continue
+            # 用清洗后的 domain/subdomain 重建 tags，确保一致
+            if hasattr(args, 'tags') and args.tags:
+                signal_tag = args.tags.split()[0] if args.tags.split() else "#信号笔记"
+                args.tags = f"{signal_tag} #{args.domain} #{args.subdomain}"
             print(f"  [auto] 领域: {args.domain}")
             print(f"  [auto] 二级领域: {args.subdomain}")
             print(f"  [auto] 标题: {args.title}")
