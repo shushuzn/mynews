@@ -4,7 +4,7 @@ mynews Web UI 服务器
 启动: python3 server.py [端口]
 前端: http://localhost:8080
 """
-import os, sys, json, subprocess, urllib.parse, threading, tempfile, cgi
+import os, sys, json, subprocess, urllib.parse, threading, tempfile, re
 from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 
@@ -38,13 +38,31 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/process":
             ctype = self.headers.get("Content-Type", "")
             if "multipart/form-data" in ctype:
-                # 图片上传
-                form = cgi.FieldStorage(fp=self.rfile, headers=self.headers, environ={"REQUEST_METHOD": "POST"})
-                content = form.getvalue("content", "") or ""
-                url = form.getvalue("url", "") or ""
-                force_new = form.getvalue("forceNew", "") == "1"
-                image_file = form["image"] if "image" in form else None
-                self._handle_process({"content": content, "url": url, "forceNew": force_new, "image": image_file})
+                # 手动解析 multipart form data（Python 3.13 已移除 cgi 模块）
+                boundary = ctype.split("boundary=")[1].strip()
+                raw = self.rfile.read(int(self.headers.get("Content-Length", 0)))
+                parts = raw.split(b"--" + boundary.encode())
+                form_data = {}
+                image_file = None
+                for part in parts:
+                    if b"Content-Disposition" not in part: continue
+                    disp_line = part.split(b"\r\n", 2)[1].decode("utf-8", errors="replace")
+                    name_match = re.search(r'name="([^"]+)"', disp_line)
+                    if not name_match: continue
+                    field_name = name_match.group(1)
+                    # 文件字段
+                    if "filename=" in disp_line:
+                        idx = part.find(b"\r\n\r\n") + 4
+                        file_data = part[idx:].rstrip(b"\r\n--")
+                        filename_match = re.search(r'filename="([^"]+)"', disp_line)
+                        fname = filename_match.group(1) if filename_match else "upload.jpg"
+                        image_file = type("FakeFile", (), {"file": type("FakeStream", (), {"read": lambda self, fd=file_data: fd})(), "filename": fname})()
+                    else:
+                        idx = part.find(b"\r\n\r\n") + 4
+                        val = part[idx:].rstrip(b"\r\n--").decode("utf-8", errors="replace")
+                        form_data[field_name] = val
+                force_new = form_data.get("forceNew", "") == "1"
+                self._handle_process({"content": "", "url": "", "forceNew": force_new, "image": image_file})
             else:
                 length = int(self.headers.get("Content-Length", 0))
                 body = self.rfile.read(length).decode("utf-8")
@@ -111,7 +129,7 @@ class Handler(BaseHTTPRequestHandler):
             env["FLOMO_TOKEN"] = FLOMO_TOKEN
 
         try:
-            r = subprocess.run(cmd, capture_output=True, text=True, timeout=180, env=env, cwd=str(SCRIPTS_DIR))
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=600, env=env, cwd=str(SCRIPTS_DIR))
             full_output = r.stdout
             if r.stderr:
                 full_output += "\n--- stderr ---\n" + r.stderr
@@ -119,7 +137,7 @@ class Handler(BaseHTTPRequestHandler):
             success = "上传成功" in r.stdout or "✅ 处理完成" in r.stdout
             self._json_response(success, full_output)
         except subprocess.TimeoutExpired:
-            self._json_response(False, "处理超时（>5分钟）")
+            self._json_response(False, "处理超时（>10分钟）")
         except Exception as e:
             self._json_response(False, f"执行错误: {e}")
 

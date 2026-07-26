@@ -401,7 +401,7 @@ def update_flomo(memo_id, content):
 
 
 
-def _call_kimi(prompt: str, timeout: int = 300) -> str:
+def _call_kimi(prompt: str, timeout: int = 180) -> str:
     """调用本地 kimi CLI 处理提示，返回 stdout。"""
     import subprocess as _sp
     from pathlib import Path as _Path
@@ -428,7 +428,7 @@ def _auto_analyze(text: str) -> dict:
         "title": "知识点名称（10字以内，不含下划线/空格/斜杠，如 WAIC2026新品发布）",
         "tags": ["#信号类型标签", "#领域标签", "#二级领域标签"],
         "ai_content": "**概念**：<mark>核心概念</mark>定义...\\n\\n**子概念**：\\n- <mark>关键点一</mark>：说明..."
-    }, ensure_ascii=False, indent=2) + '\n\n信号类型（五选一贴在第一行）：#知识基座（概念/定理）、#趋势信号（正在发生的结构性变化）、#信号笔记（单次事件）、#分析框架（方法论）、#知识载体（工具/资源）\n\n⚠️ 严格遵守：\n- ai_content 必须包含 **概念**：和 **子概念**：两个段落（用中文冒号：）\n- **子概念** 段必须有 3~4 条，每条用 <mark>高亮</mark>；ai_content **总长度控制在 500 字符以内**\n- 禁止：代码块、链接、图片、表格、>引用\n- JSON 内所有引号必须用 \\" 转义，值内不能出现未转义的双引号\n- 不要用 ```json 包裹\n\n文章：\n' + text[:8000]
+    }, ensure_ascii=False, indent=2) + '\n\n信号类型（五选一贴在第一行）：#知识基座（概念/定理）、#趋势信号（正在发生的结构性变化）、#信号笔记（单次事件）、#分析框架（方法论）、#知识载体（工具/资源）\n\n⚠️ 严格遵守：\n- ai_content 必须包含 **概念**：和 **子概念**：两个段落（用中文冒号：）\n- **子概念** 段必须有 3~4 条，每条用 <mark>高亮</mark>\n- 禁止：代码块、链接、图片、表格、>引用\n- JSON 内所有引号必须用 \\" 转义，值内不能出现未转义的双引号\n- 不要用 ```json 包裹\n\n文章：\n' + text[:8000]
 
     out = _call_kimi(prompt)
     import re as _re
@@ -547,7 +547,7 @@ def process_content(args):
 
     # 全自动模式：用 AI 补全缺少的参数（失败自动重试修正）
     if getattr(args, 'auto', False):
-        for retry in range(3):
+        for retry in range(2):
             if retry > 0:
                 print(f"  [auto] 第 {retry+1} 次尝试（修正上次错误）...")
             result = _auto_analyze(text)
