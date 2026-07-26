@@ -820,23 +820,33 @@ def process_content(args):
                                     update_content = f"{tag_line}\n\n{update_content}"
                                 # 确保标题为 **领域_子领域_知识点** 格式
                                 import re as _re_title
-                                new_title = f"**{domain}_{subdomain}_{knowledge}**"
-                                # 确保标题存在且格式正确：去掉 tag 行后的第一个 **xxx**（标题），替换为正确标题
+                                new_title_line = f"**{domain}_{subdomain}_{knowledge}**"
+                                # 无条件在标签行后注入正确标题：去掉已有标题行，插入新标题
                                 lines = update_content.split('\n')
+                                # 找标签行索引
+                                tag_idx = -1
+                                title_idx = -1
                                 for i, line in enumerate(lines):
-                                    stripped = line.strip()
-                                    if stripped.startswith('**') and stripped.endswith('**') and '**概念**' not in stripped and '**子概念**' not in stripped and '**来源**' not in stripped:
-                                        lines[i] = line.replace(stripped, new_title)
-                                        break
-                                else:
-                                    # 没找到标题行，在 tag 行后插入
-                                    for i, line in enumerate(lines):
-                                        if line.startswith('#'):
-                                            insert_at = i + 1
-                                            while insert_at < len(lines) and not lines[insert_at].strip():
-                                                insert_at += 1
-                                            lines.insert(insert_at, f'\n{new_title}')
-                                            break
+                                    s = line.strip()
+                                    if s.startswith('#') and tag_idx < 0:
+                                        tag_idx = i
+                                    elif s.startswith('**') and s.endswith('**') and '**概念**' not in s and '**子概念**' not in s and '**来源**' not in s:
+                                        title_idx = i
+                                # 去掉旧标题行（如果存在）
+                                if title_idx >= 0:
+                                    lines.pop(title_idx)
+                                    # 如果 tag_idx 在 title_idx 之后（因 pop 导致索引变化），调整
+                                    if tag_idx > title_idx:
+                                        tag_idx -= 1
+                                # 在标签行后插入新标题和空行
+                                insert_pos = tag_idx + 1
+                                # 跳过标签行后的空白行
+                                while insert_pos < len(lines) and not lines[insert_pos].strip():
+                                    insert_pos += 1
+                                # 在 insert_pos 处插入标题行 + 空行
+                                lines.insert(insert_pos, new_title_line)
+                                if insert_pos + 1 < len(lines) and lines[insert_pos + 1].strip():
+                                    lines.insert(insert_pos + 1, '')
                                 update_content = '\n'.join(lines)
                                 # 确保 **概念**： 存在，否则回退到用新内容构造
                                 if '**概念**' not in update_content:
