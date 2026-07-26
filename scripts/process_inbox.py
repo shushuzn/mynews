@@ -552,6 +552,16 @@ def process_content(args):
         print("  [error] 需要提供 --content 参数")
         return False
     text = args.content
+    # 防护：短内容或反爬拦截页直接拒绝
+    min_len = 200
+    if len(text) < min_len:
+        print(f"  [error] content 过短（{len(text)} chars < {min_len}），疑似拦截页或被截断")
+        print(f"  预览：{text[:100]}")
+        return False
+    anti_patterns = ['环境异常', '去验证', '验证码', 'verify you are human', 'access denied']
+    if any(p in text.lower() for p in anti_patterns):
+        print(f"  [error] 检测到反爬/验证拦截，无法处理原文")
+        return False
     source = None  # will default to "网络"
     source_title = None
     wx_title = ""
