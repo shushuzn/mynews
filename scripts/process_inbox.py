@@ -796,12 +796,18 @@ def process_content(args):
                             print("  [auto] 正在合并旧笔记和新内容...")
                             merged = _auto_merge(old_content, body_text)
                             if merged and len(merged) > 20:
-                                # merged 是完整 flomo markdown（含标签行、标题、来源、正文），直接使用
+                                # merged 是完整 flomo markdown（含标签行、标题、来源、正文）
                                 update_content = merged
-                                # 确保 tag_line 和 **来源** 都在（AI 可能遗漏）
+                                # 确保 tag_line 在
                                 if not update_content.startswith('#'):
                                     tag_line = ' '.join(tags)
                                     update_content = f"{tag_line}\n\n{update_content}"
+                                # 确保标题为 **领域_子领域_知识点** 格式
+                                import re as _re_title
+                                old_title_m = _re_title.search(r'\*\*([^*]+)\*\*', update_content)
+                                new_title = f"**{domain}_{subdomain}_{knowledge}**"
+                                if old_title_m and old_title_m.group(1).count('_') != 2:
+                                    update_content = update_content.replace(old_title_m.group(0), new_title, 1)
                                 if '**来源**' not in update_content:
                                     src = source_title if source_title else "网络"
                                     update_content = update_content.replace('**概念**', f'**来源**：{src}\n\n**概念**', 1)
