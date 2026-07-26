@@ -89,6 +89,10 @@ class Handler(BaseHTTPRequestHandler):
         force_new = data.get("forceNew", False)
         image_file = data.get("image", None)
 
+        # URL 抓取：拉取网页正文
+        if url and not content:
+            content = self._fetch_url(url)
+
         # 图片上传处理
         if image_file and hasattr(image_file, "file") and image_file.filename:
             img_data = image_file.file.read()
@@ -134,7 +138,9 @@ class Handler(BaseHTTPRequestHandler):
             if r.stderr:
                 full_output += "\n--- stderr ---\n" + r.stderr
 
-            success = "上传成功" in r.stdout or "✅ 处理完成" in r.stdout
+            success = "上传成功" in r.stdout or "✅ 处理完成" in r.stdout or "⏭️  已跳过" in r.stdout
+            if not success and ("已跳过" in r.stdout or "已跳过（未上传）" in r.stdout):
+                success = True
             self._json_response(success, full_output)
         except subprocess.TimeoutExpired:
             self._json_response(False, "处理超时（>10分钟）")
@@ -147,6 +153,30 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(json.dumps({"success": success, "output": output}, ensure_ascii=False).encode("utf-8"))
+
+    def _fetch_url(self, url: str) -> str:
+        """从 URL 抓取正文，返回提取的文本内容。失败返回空字符串。"""
+        import urllib.request as _ur, re as _re
+        try:
+            req = _ur.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
+            with _ur.urlopen(req, timeout=30) as resp:
+                html = resp.read().decode("utf-8", errors="replace")
+            # 提取 title
+            title_m = _re.search(r'<title[^>]*>([^<]+)</title>', html, _re.IGNORECASE)
+            title = title_m.group(1).strip() if title_m else ""
+            # 提取正文：先去掉 script/style，再取 body 或全文文本
+            clean = _re.sub(r'<script[^>]*>.*?</script>', '', html, flags=_re.DOTALL)
+            clean = _re.sub(r'<style[^>]*>.*?</style>', '', clean, flags=_re.DOTALL)
+            clean = _re.sub(r'<[^>]+>', '\n', clean)
+            clean = _re.sub(r'\n{3,}', '\n\n', clean).strip()
+            # 截断过长的内容（取前 8000 字符）
+            body = clean[:8000]
+            result = (f"标题: {title}\n\n{body}" if title else body).strip()
+            print(f"[server] URL 抓取成功: {url} ({len(result)} chars)")
+            return result
+        except Exception as e:
+            print(f"[server] URL 抓取失败: {e}")
+            return ""
 
     def _analyze_image(self, img_path: Path) -> str:
         """尝试用 kimi 分析图片内容，返回提取的文字。失败返回空字符串。"""
