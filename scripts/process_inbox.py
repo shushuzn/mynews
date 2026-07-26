@@ -500,11 +500,27 @@ def _auto_merge(old_note: str, new_content: str) -> str:
     """全自动模式下，让 AI 将旧笔记和新内容合并为单一 flomo markdown。返回合并后的 markdown。"""
     prompt = f"""你是一个知识库编辑。请将以下"已有笔记"和"新内容"合并为单一 flomo 笔记。
 
+flomo 笔记固定格式如下（原文格式可能不同，必须转为这个标准格式）：
+```
+#信号类型 #领域 #二级领域
+
+**领域_二级领域_知识点**
+
+**来源**：出处
+
+**概念**：定义...
+
+**子概念**：
+- <mark>要点一</mark>：说明
+- <mark>要点二</mark>：说明
+```
+
 要求：
-- 保留已有笔记的标签行，但**根据合并后的内容范围更新标题行**——标题应能概括旧笔记和新内容的全部主题
-- 将新内容的 **概念** 和 **子概念** 合并到已有笔记中
-- 如果已有笔记和新内容有相同/重叠的子概念，合并去重
-- 保持 flomo 格式：只允许 **加粗** 和 <mark>高亮</mark>
+- 保留已有笔记的标签行，但**根据合并后的内容范围更新标题行**
+- 将旧笔记的内容组织到 **概念**：和 **子概念**：段落中
+- 将新内容的 **概念** 和 **子概念** 合并进来
+- 相同/重叠的概念去重
+- 只允许 **加粗** 和 <mark>高亮</mark>
 - 直接输出合并后的完整 flomo markdown，不要额外文字
 
 ## 已有笔记
@@ -808,6 +824,19 @@ def process_content(args):
                                 new_title = f"**{domain}_{subdomain}_{knowledge}**"
                                 if old_title_m and old_title_m.group(1).count('_') != 2:
                                     update_content = update_content.replace(old_title_m.group(0), new_title, 1)
+                                # 确保 **概念**： 存在，否则回退到用新内容构造
+                                if '**概念**' not in update_content:
+                                    print("  [auto] 合并结果缺少 **概念**，改用新内容构造")
+                                    tag_line = ' '.join(tags)
+                                    src = source_title if source_title else "网络"
+                                    update_content = f"""{tag_line}
+
+{new_title}
+
+**来源**：{src}
+
+{body_text}
+"""
                                 if '**来源**' not in update_content:
                                     src = source_title if source_title else "网络"
                                     update_content = update_content.replace('**概念**', f'**来源**：{src}\n\n**概念**', 1)
