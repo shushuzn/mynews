@@ -820,10 +820,24 @@ def process_content(args):
                                     update_content = f"{tag_line}\n\n{update_content}"
                                 # 确保标题为 **领域_子领域_知识点** 格式
                                 import re as _re_title
-                                old_title_m = _re_title.search(r'\*\*([^*]+)\*\*', update_content)
                                 new_title = f"**{domain}_{subdomain}_{knowledge}**"
-                                if old_title_m and old_title_m.group(1).count('_') != 2:
-                                    update_content = update_content.replace(old_title_m.group(0), new_title, 1)
+                                # 确保标题存在且格式正确：去掉 tag 行后的第一个 **xxx**（标题），替换为正确标题
+                                lines = update_content.split('\n')
+                                for i, line in enumerate(lines):
+                                    stripped = line.strip()
+                                    if stripped.startswith('**') and stripped.endswith('**') and '**概念**' not in stripped and '**子概念**' not in stripped and '**来源**' not in stripped:
+                                        lines[i] = line.replace(stripped, new_title)
+                                        break
+                                else:
+                                    # 没找到标题行，在 tag 行后插入
+                                    for i, line in enumerate(lines):
+                                        if line.startswith('#'):
+                                            insert_at = i + 1
+                                            while insert_at < len(lines) and not lines[insert_at].strip():
+                                                insert_at += 1
+                                            lines.insert(insert_at, f'\n{new_title}')
+                                            break
+                                update_content = '\n'.join(lines)
                                 # 确保 **概念**： 存在，否则回退到用新内容构造
                                 if '**概念**' not in update_content:
                                     print("  [auto] 合并结果缺少 **概念**，改用新内容构造")
