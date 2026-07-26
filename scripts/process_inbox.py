@@ -585,6 +585,11 @@ def process_content(args):
             # 用清洗后的 domain/subdomain 重建 tags，确保一致
             if hasattr(args, 'tags') and args.tags:
                 signal_tag = args.tags.split()[0] if args.tags.split() else "#信号笔记"
+                # 清理信号标签中的额外说明（如"#知识载体（工具/资源）"→"#知识载体"）
+                import re as _re_tag
+                clean_signal = _re_tag.match(r'(#[^#(\s]+)', signal_tag)
+                if clean_signal:
+                    signal_tag = clean_signal.group(1)
                 args.tags = f"{signal_tag} #{args.domain} #{args.subdomain}"
             print(f"  [auto] 领域: {args.domain}")
             print(f"  [auto] 二级领域: {args.subdomain}")
