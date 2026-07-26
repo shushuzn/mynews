@@ -566,7 +566,7 @@ def process_content(args):
             if not args.tags and result.get("tags"):
                 args.tags = ' '.join(result["tags"])
             if not args.ai_content and result.get("ai_content"):
-                args.ai_content = result["ai_content"]
+                args.ai_content = result["ai_content"].replace('\\n', '\n')
             # 三段统一清洗：每段自身不能含 _ 和空格，否则三段拼起来会超 2 个 _
             for _field in ['domain', 'subdomain', 'title']:
                 val = getattr(args, _field, '') or ''
