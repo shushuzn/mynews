@@ -4,8 +4,8 @@ mynews Web UI 服务器
 启动: python3 server.py [端口]
 前端: http://localhost:8080
 """
-import os, sys, json, subprocess, urllib.parse
-from http.server import HTTPServer, BaseHTTPRequestHandler
+import os, sys, json, subprocess, urllib.parse, threading, tempfile, cgi
+from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -36,10 +36,20 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         if self.path == "/process":
-            length = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(length).decode("utf-8")
-            data = json.loads(body)
-            self._handle_process(data)
+            ctype = self.headers.get("Content-Type", "")
+            if "multipart/form-data" in ctype:
+                # 图片上传
+                form = cgi.FieldStorage(fp=self.rfile, headers=self.headers, environ={"REQUEST_METHOD": "POST"})
+                content = form.getvalue("content", "") or ""
+                url = form.getvalue("url", "") or ""
+                force_new = form.getvalue("forceNew", "") == "1"
+                image_file = form["image"] if "image" in form else None
+                self._handle_process({"content": content, "url": url, "forceNew": force_new, "image": image_file})
+            else:
+                length = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(length).decode("utf-8")
+                data = json.loads(body)
+                self._handle_process(data)
         else:
             self.send_response(404)
             self.end_headers()
@@ -59,12 +69,32 @@ class Handler(BaseHTTPRequestHandler):
         content = data.get("content", "").strip()
         url = data.get("url", "").strip()
         force_new = data.get("forceNew", False)
+        image_file = data.get("image", None)
+
+        # 图片上传处理
+        if image_file and hasattr(image_file, "file") and image_file.filename:
+            img_data = image_file.file.read()
+            img_ext = Path(image_file.filename).suffix or ".jpg"
+            import tempfile as _tf
+            img_path = Path(_tf.gettempdir()) / f"mynews_upload_{os.urandom(4).hex()}{img_ext}"
+            img_path.write_bytes(img_data)
+            print(f"[server] 图片已保存: {img_path.name} ({len(img_data)} bytes)")
+
+            # 使用 kimi 分析图片
+            analysis = self._analyze_image(img_path)
+            if analysis:
+                content = analysis + "\n\n" + content if content else analysis
+            else:
+                content = f"[已上传图片: {image_file.filename}] {content}"
+            # 清理临时文件
+            try: img_path.unlink()
+            except: pass
 
         if url:
             content = f"[来自 URL: {url}]\n\n{content}" if content else f"[需要先抓取 URL: {url}]"
 
         if not content:
-            self._json_response(False, "请提供正文内容或 URL")
+            self._json_response(False, "请提供正文内容、URL 或图片")
             return
 
         # 构建命令
@@ -81,7 +111,7 @@ class Handler(BaseHTTPRequestHandler):
             env["FLOMO_TOKEN"] = FLOMO_TOKEN
 
         try:
-            r = subprocess.run(cmd, capture_output=True, text=True, timeout=300, env=env, cwd=str(SCRIPTS_DIR))
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=180, env=env, cwd=str(SCRIPTS_DIR))
             full_output = r.stdout
             if r.stderr:
                 full_output += "\n--- stderr ---\n" + r.stderr
@@ -100,12 +130,31 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(json.dumps({"success": success, "output": output}, ensure_ascii=False).encode("utf-8"))
 
+    def _analyze_image(self, img_path: Path) -> str:
+        """尝试用 kimi 分析图片内容，返回提取的文字。失败返回空字符串。"""
+        from pathlib import Path as _P
+        kimi_bin = str(_P.home() / ".kimi-code" / "bin" / "kimi")
+        if not _P(kimi_bin).exists():
+            kimi_bin = "kimi"
+        prompt = f"请分析这张图片，提取其中的文字内容（保持原文的语言）。图片路径: {img_path}"
+        try:
+            r = subprocess.run(
+                [kimi_bin, "-p", prompt, "--output-format", "text"],
+                capture_output=True, text=True, timeout=60
+            )
+            out = (r.stdout or r.stderr or "").strip()
+            if out and "error" not in out[:50]:
+                print(f"[server] 图片分析完成 ({len(out)} chars)")
+                return out
+        except: pass
+        return ""
+
     def log_message(self, format, *args):
         sys.stderr.write(f"[webui] {args[0]} {args[1]} {args[2]}\n")
 
 
 if __name__ == "__main__":
-    server = HTTPServer(("0.0.0.0", PORT), Handler)
+    server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     print(f"🌐 mynews Web UI 启动: http://localhost:{PORT}")
     print(f"   按 Ctrl+C 停止")
     try:
