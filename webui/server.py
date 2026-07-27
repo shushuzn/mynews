@@ -93,15 +93,15 @@ class Handler(BaseHTTPRequestHandler):
         if url and not content:
             content = self._fetch_url(url)
             # URL 防护：短内容或验证拦截页直接拒绝（图片上传豁免）
-        if url and not image_file and len(content) < 300:
+        if url and not image_file and len(content) < 100:
             min_len = 300
             if len(content) < min_len:
                 print(f"[server] 抓取内容过短（{len(content)} chars，阈值 {min_len}），疑似被拦截")
                 self._json_response(False, f"⚠️ URL 抓取失败或返回空/拦截页（仅 {len(content)} 字符）。\n该链接可能触发了反爬保护，请手动复制正文粘贴到'正文'标签页。\n\n抓取内容预览：{content[:200]}")
                 return
-            # 检测常见反爬关键词
-            anti_patterns = ['环境异常', '去验证', '验证码', 'captcha', 'verify you are human', 'access denied']
-            if any(p in content.lower() for p in anti_patterns):
+            # 检测常见反爬关键词（开头 200 字符区域，避免正文误杀）
+            anti_patterns = ['环境异常', 'captcha', 'verify you are human', 'access denied']
+            if any(p in content[:200].lower() for p in anti_patterns):
                 print(f"[server] 检测到反爬拦截")
                 self._json_response(False, f"⚠️ 该链接被反爬保护拦截（检测到：环境异常/验证码）。\n请手动打开链接完成验证后，复制正文粘贴到'正文'标签页。\n\n抓取内容预览：{content[:200]}")
                 return

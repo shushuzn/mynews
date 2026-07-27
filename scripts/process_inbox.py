@@ -552,14 +552,15 @@ def process_content(args):
         print("  [error] 需要提供 --content 参数")
         return False
     text = args.content
-    # 防护：短内容或反爬拦截页直接拒绝
-    min_len = 200
-    if len(text) < min_len:
-        print(f"  [error] content 过短（{len(text)} chars < {min_len}），疑似拦截页或被截断")
+    # 防护：非常短的内容拒绝（仅防截断场景，50 字以上的正文可正常处理）
+    if len(text) < 50:
+        print(f"  [error] content 过短（{len(text)} chars < 50），无法分析")
         print(f"  预览：{text[:100]}")
         return False
-    anti_patterns = ['环境异常', '去验证', '验证码', 'verify you are human', 'access denied']
-    if any(p in text.lower() for p in anti_patterns):
+    anti_patterns = ['环境异常', '去验证', 'verify you are human', 'access denied']
+    # 只在开头 200 字符内检测（避免正文中提到"验证码"等关键词被误杀）
+    head = text[:200].lower()
+    if any(p in head for p in anti_patterns):
         print(f"  [error] 检测到反爬/验证拦截，无法处理原文")
         return False
     source = None  # will default to "网络"
