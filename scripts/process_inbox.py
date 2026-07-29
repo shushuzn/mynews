@@ -678,8 +678,11 @@ def process_content(args):
         return False
 
     # 5.5 自动修正 body_text 格式：确保 **概念**：和 **子概念**：用粗体包裹
-    body_text = re.sub(r'(?<!\*\*)概念：', '**概念**：', body_text)
+    body_text = re.sub(r'(?<!\*\*)(?<!子)概念：', '**概念**：', body_text)
     body_text = re.sub(r'(?<!\*\*)子概念：', '**子概念**：', body_text)
+    # 5.6 清洗标签行：去掉信号类型标签的中文括号（如 "#信号笔记（单次事件）" → "#信号笔记"）
+    if tags:
+        tags[0] = re.sub(r'（[^）]*）', '', tags[0])
 
     # 6. 构建 flomo 内容
     filename = f"{domain}_{subdomain}_{knowledge}.md"
