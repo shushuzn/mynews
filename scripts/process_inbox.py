@@ -677,6 +677,10 @@ def process_content(args):
         print("  [error] 正文内容为空")
         return False
 
+    # 5.5 自动修正 body_text 格式：确保 **概念**：和 **子概念**：用粗体包裹
+    body_text = re.sub(r'(?<!\*\*)概念：', '**概念**：', body_text)
+    body_text = re.sub(r'(?<!\*\*)子概念：', '**子概念**：', body_text)
+
     # 6. 构建 flomo 内容
     filename = f"{domain}_{subdomain}_{knowledge}.md"
     full_path = BASE_DIR / "answers" / domain / subdomain / filename
