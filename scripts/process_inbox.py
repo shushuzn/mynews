@@ -870,38 +870,10 @@ def process_content(args):
                                             knowledge = _parts[2]
                                     print(f"  [auto] 合并后内容校验通过，使用合并后的领域: {domain}/{subdomain}")
                                 except (ValueError, IndexError):
-                                    # 合并内容不合法，回退：用 auto_analyze 的领域/标签强制重建
-                                    print("  [auto] 合并后内容格式不合法，回退到用新内容重建")
-                                    # 确保 tag_line 在
-                                    if not update_content.startswith('#'):
-                                        tag_line = ' '.join(tags)
-                                        update_content = f"{tag_line}\n\n{update_content}"
-                                    # 强制标题为 auto_analyze 的值
-                                    new_title_line = f"**{domain}_{subdomain}_{knowledge}**"
-                                    lines = update_content.split('\n')
-                                    tag_idx = -1
-                                    title_idx = -1
-                                    for i, line in enumerate(lines):
-                                        s = line.strip()
-                                        if s.startswith('#') and tag_idx < 0:
-                                            tag_idx = i
-                                        elif s.startswith('**') and s.endswith('**') and '**概念**' not in s and '**来源**' not in s:
-                                            title_idx = i
-                                    if title_idx >= 0:
-                                        lines.pop(title_idx)
-                                        if tag_idx > title_idx:
-                                            tag_idx -= 1
-                                    insert_pos = tag_idx + 1
-                                    while insert_pos < len(lines) and not lines[insert_pos].strip():
-                                        insert_pos += 1
-                                    lines.insert(insert_pos, new_title_line)
-                                    if insert_pos + 1 < len(lines) and lines[insert_pos + 1].strip():
-                                        lines.insert(insert_pos + 1, '')
-                                    update_content = '\n'.join(lines)
-                                    # 同步替换标签行为新标签
-                                    new_tag_line = ' '.join(tags)
-                                    if update_content.startswith('#'):
-                                        update_content = new_tag_line + '\n' + '\n'.join(update_content.split('\n')[1:])
+                                    print("  [error] 合并后内容格式校验失败，无法更新，请检查 _auto_merge 输出")
+                                    subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR))
+                                    if full_path.exists(): full_path.unlink()
+                                    return False
                                 # 确保 **概念**： 存在，否则回退到用新内容构造
                                 if '**概念**' not in update_content:
                                     print("  [auto] 合并结果缺少 **概念**，改用新内容构造")
