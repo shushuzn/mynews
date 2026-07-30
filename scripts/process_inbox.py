@@ -461,8 +461,8 @@ def _auto_analyze(text: str) -> dict:
         print("  [auto] AI 返回空结果，重试...")
         return {}
     import re as _re
-    # 去掉 markdown 代码块包裹和行首列表符号
-    out = _re.sub(r'^\s*[•\-*]\s*', '', out, flags=_re.MULTILINE)
+    # 去掉 markdown 代码块包裹和行首列表符号（不剥 *，避免破坏 JSON 或粗体）
+    out = _re.sub(r'^\s*[•\-]\s*', '', out, flags=_re.MULTILINE)
     out = _re.sub(r'```(?:json)?\s*', '', out)
     # 检查是否为截断输出（缺少完整的 } 结尾）
     if out.count('{') > out.count('}'):
@@ -555,9 +555,9 @@ flomo 笔记固定格式如下（原文格式可能不同，必须转为这个�
 
     out = _call_kimi(prompt)
     import re as _re
-    # 清理行首项目符号和缩进：去掉每行开头的 • / - / * / 空格
+    # 清理行首项目符号和缩进：只剥 • 和空格，不剥 - /* 等内容符号
     cleaned = '\n'.join(
-        _re.sub(r'^[\s•\-*]+', '', line) for line in out.split('\n')
+        _re.sub(r'^[•\s]+', '', line) for line in out.split('\n')
     )
     # 尝试提取标记围栏内的内容
     for delim in ['```markdown', '```', '---']:
