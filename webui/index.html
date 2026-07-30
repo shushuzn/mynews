@@ -244,14 +244,12 @@ function renderFlomoNote(text) {
   for (const line of text.split('\n')) {
     if (line.startsWith('#')) {
       html += `<div class="tag-line">${escapeHtml(line)}</div>`;
-    } else if (/^\*\*.*\*\*$/.test(line.trim()) && !line.includes('**来源**') && !line.includes('**概念**') && !line.includes('**子概念**')) {
+    } else if (/^\*\*.*\*\*$/.test(line.trim()) && !line.includes('**来源**') && !line.includes('**概念**') ) {
       html += `<div class="bold-title">${escapeHtml(line)}</div>`;
     } else if (line.startsWith('**来源**')) {
       html += `<div class="source">${escapeHtml(line)}</div>`;
     } else if (line.startsWith('**概念**')) {
       html += `<div class="concept">${line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/<mark>(.*?)<\/mark>/g, '<mark>$1</mark>')}</div>`;
-    } else if (line.startsWith('**子概念**')) {
-      html += `<div style="margin-top:2px"><strong>子概念</strong></div>`;
     } else if (line.startsWith('- ')) {
       html += `<div class="subconcept">${line.replace(/<mark>(.*?)<\/mark>/g, '<mark>$1</mark>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')}</div>`;
     } else if (line.trim() === '') {
