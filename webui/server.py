@@ -213,7 +213,7 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
-    print(f"🌐 mynews Web UI 启动: http://localhost:{PORT}")
+    print(f"[mynews] Web UI 启动: http://localhost:{PORT}")
     print(f"   按 Ctrl+C 停止")
     try:
         server.serve_forever()

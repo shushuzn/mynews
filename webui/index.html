@@ -404,7 +404,7 @@ async function process() {
     });
     const data = await resp.json();
     renderResults(data);
-    status.textContent = data.success ? '✅ 处理完成' : '❌ 处理失败';
+    status.textContent = data.success ? (data.output.includes('跳过') ? '⏭️ 已跳过（重复）' : '✅ 处理完成') : '❌ 处理失败';
     status.className = data.success ? 'status-badge done' : 'status-badge error';
   } catch (e) {
     document.getElementById('res-log').innerHTML = `<div class="raw-log">请求失败: ${escapeHtml(e.message)}</div>`;
