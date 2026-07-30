@@ -439,7 +439,12 @@ def _call_kimi(prompt: str, timeout: int = 180) -> str:
             [_kimi_bin, "-p", prompt, "--output-format", "text"],
             capture_output=True, text=True, encoding='utf-8', timeout=timeout
         )
-        return r.stdout or r.stderr
+        # 优先取含 JSON 的输出（stdout 可能为空，stderr 可能含实际结果）
+        if r.stdout and '{' in r.stdout:
+            return r.stdout
+        if r.stderr and '{' in r.stderr:
+            return r.stderr
+        return r.stdout or r.stderr or ""
     except _sp.TimeoutExpired:
         return "[error] kimi 调用超时"
     except Exception as e:
@@ -476,6 +481,11 @@ def _auto_analyze(text: str) -> dict:
         # 优先尝试直接解析（AI 输出有效的 JSON 时走此路径）
         try:
             return json.loads(raw)
+        except json.JSONDecodeError:
+            pass
+        # 修复 AI 输出中结构引号被转义的情况（\"key\" → "key"）
+        try:
+            return json.loads(raw.replace('\\"', '"'))
         except json.JSONDecodeError:
             pass
         # 尝试修复值内未转义的双引号（将 "xxx" 替换为 \"xxx\"）
