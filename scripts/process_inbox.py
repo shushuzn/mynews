@@ -553,7 +553,7 @@ flomo 笔记固定格式如下（原文格式可能不同，必须转为这个�
 ```
 
 要求：
-- 保留已有笔记的标签行，但**根据合并后的内容范围更新标题行**
+- **根据合并后的内容重新确定标签行和标题行**（领域/二级领域/知识点名称），确保标签行与标题行中的领域一致
 - 将旧笔记的内容组织到 **概念**：和 **子概念**：段落中
 - 将新内容的 **概念** 和 **子概念** 合并进来
 - 相同/重叠的概念去重
@@ -568,19 +568,33 @@ flomo 笔记固定格式如下（原文格式可能不同，必须转为这个�
 """
 
     out = _call_kimi(prompt)
-    # 尝试提取标记围栏内的内容
     import re as _re
+    # 清理行首项目符号和缩进：去掉每行开头的 • / - / * / 空格
+    cleaned = '\n'.join(
+        _re.sub(r'^[\s•\-*]+', '', line) for line in out.split('\n')
+    )
+    # 尝试提取标记围栏内的内容
     for delim in ['```markdown', '```', '---']:
-        if delim in out:
-            parts = out.split(delim)
+        if delim in cleaned:
+            parts = cleaned.split(delim)
             for i, p in enumerate(parts):
                 if '**概念**' in p or '#信号' in p or '#知识' in p or '#趋势' in p:
                     return p.strip()
-    # 直接取包含 **概念** 的部分
-    idx = out.find('**概念**')
+    # 找第一个 # 开头的标签行开始截取
+    lines = cleaned.split('\n')
+    start = -1
+    for i, line in enumerate(lines):
+        s = line.strip()
+        if s.startswith('#') and ('#信号' in s or '#知识' in s or '#趋势' in s or '#分析' in s or '#趋势' in s):
+            start = i
+            break
+    if start >= 0:
+        return '\n'.join(lines[start:]).strip()
+    # 最后回退：取包含 **概念** 的部分
+    idx = cleaned.find('**概念**')
     if idx > 0:
-        return out[idx:].strip()
-    return out.strip()
+        return cleaned[idx:].strip()
+    return cleaned.strip()
 
 
 def process_content(args):
@@ -855,42 +869,53 @@ def process_content(args):
                             print("  [auto] 正在合并旧笔记和新内容...")
                             merged = _auto_merge(old_content, body_text)
                             if merged and len(merged) > 20:
-                                # merged 是完整 flomo markdown（含标签行、标题、来源、正文）
                                 update_content = merged
-                                # 确保 tag_line 在
-                                if not update_content.startswith('#'):
-                                    tag_line = ' '.join(tags)
-                                    update_content = f"{tag_line}\n\n{update_content}"
-                                # 确保标题为 **领域_子领域_知识点** 格式
-                                import re as _re_title
-                                new_title_line = f"**{domain}_{subdomain}_{knowledge}**"
-                                # 无条件在标签行后注入正确标题：去掉已有标题行，插入新标题
-                                lines = update_content.split('\n')
-                                # 找标签行索引
-                                tag_idx = -1
-                                title_idx = -1
-                                for i, line in enumerate(lines):
-                                    s = line.strip()
-                                    if s.startswith('#') and tag_idx < 0:
-                                        tag_idx = i
-                                    elif s.startswith('**') and s.endswith('**') and '**概念**' not in s and '**子概念**' not in s and '**来源**' not in s:
-                                        title_idx = i
-                                # 去掉旧标题行（如果存在）
-                                if title_idx >= 0:
-                                    lines.pop(title_idx)
-                                    # 如果 tag_idx 在 title_idx 之后（因 pop 导致索引变化），调整
-                                    if tag_idx > title_idx:
-                                        tag_idx -= 1
-                                # 在标签行后插入新标题和空行
-                                insert_pos = tag_idx + 1
-                                # 跳过标签行后的空白行
-                                while insert_pos < len(lines) and not lines[insert_pos].strip():
-                                    insert_pos += 1
-                                # 在 insert_pos 处插入标题行 + 空行
-                                lines.insert(insert_pos, new_title_line)
-                                if insert_pos + 1 < len(lines) and lines[insert_pos + 1].strip():
-                                    lines.insert(insert_pos + 1, '')
-                                update_content = '\n'.join(lines)
+                                # 尝试用合并后内容自身的标题/标签（AI 已按 prompt 要求重新确定）
+                                try:
+                                    merged_domain, merged_subdomain = _validate_and_extract_domain(update_content)
+                                    # 用合并后内容的领域覆盖原有值，确保后续校验一致
+                                    domain, subdomain = merged_domain, merged_subdomain
+                                    # 从合并内容解析标题，更新 knowledge
+                                    import re as _re_title_parse
+                                    _m = _re_title_parse.search(r'\*\*([^*]+)\*\*', update_content)
+                                    if _m:
+                                        _parts = _m.group(1).split('_', 2)
+                                        if len(_parts) == 3:
+                                            knowledge = _parts[2]
+                                    print(f"  [auto] 合并后内容校验通过，使用合并后的领域: {domain}/{subdomain}")
+                                except (ValueError, IndexError):
+                                    # 合并内容不合法，回退：用 auto_analyze 的领域/标签强制重建
+                                    print("  [auto] 合并后内容格式不合法，回退到用新内容重建")
+                                    # 确保 tag_line 在
+                                    if not update_content.startswith('#'):
+                                        tag_line = ' '.join(tags)
+                                        update_content = f"{tag_line}\n\n{update_content}"
+                                    # 强制标题为 auto_analyze 的值
+                                    new_title_line = f"**{domain}_{subdomain}_{knowledge}**"
+                                    lines = update_content.split('\n')
+                                    tag_idx = -1
+                                    title_idx = -1
+                                    for i, line in enumerate(lines):
+                                        s = line.strip()
+                                        if s.startswith('#') and tag_idx < 0:
+                                            tag_idx = i
+                                        elif s.startswith('**') and s.endswith('**') and '**概念**' not in s and '**子概念**' not in s and '**来源**' not in s:
+                                            title_idx = i
+                                    if title_idx >= 0:
+                                        lines.pop(title_idx)
+                                        if tag_idx > title_idx:
+                                            tag_idx -= 1
+                                    insert_pos = tag_idx + 1
+                                    while insert_pos < len(lines) and not lines[insert_pos].strip():
+                                        insert_pos += 1
+                                    lines.insert(insert_pos, new_title_line)
+                                    if insert_pos + 1 < len(lines) and lines[insert_pos + 1].strip():
+                                        lines.insert(insert_pos + 1, '')
+                                    update_content = '\n'.join(lines)
+                                    # 同步替换标签行为新标签
+                                    new_tag_line = ' '.join(tags)
+                                    if update_content.startswith('#'):
+                                        update_content = new_tag_line + '\n' + '\n'.join(update_content.split('\n')[1:])
                                 # 确保 **概念**： 存在，否则回退到用新内容构造
                                 if '**概念**' not in update_content:
                                     print("  [auto] 合并结果缺少 **概念**，改用新内容构造")
