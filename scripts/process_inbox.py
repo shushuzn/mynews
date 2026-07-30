@@ -178,6 +178,8 @@ def _validate_and_extract_domain(content):
 
 def upload_flomo(content):
     """上传到 flomo"""
+    # 归一化格式：确保符合当前标准
+    content = _normalize_flomo_content(content)
     # 验证 domain/subdomain
     _validate_and_extract_domain(content)
     # 转义 content 中的下划线
@@ -330,6 +332,8 @@ def update_flomo(memo_id, content):
     - 完全重复（同主题无新增）→ 不调用 update，skip 即可
     - 主题不同（假阳性）→ --force-new，不要用 --update
     """
+    # 归一化格式：确保符合当前标准
+    content = _normalize_flomo_content(content)
     # 验证 domain/subdomain
     _validate_and_extract_domain(content)
     def escape_underscore_in_bold(match):
@@ -392,7 +396,40 @@ def update_flomo(memo_id, content):
         return False
 
 
+def _normalize_flomo_content(content: str) -> str:
+    """将任意格式的 flomo 笔记归一化为当前标准格式。
 
+    处理：
+    1. 移除禁止语法（Markdown 标题/引用/代码块/链接/图片/水平线/表格）
+    2. 子概念列表项统一用 `- ` 前缀
+    3. 子概念列表项中 `- 关键词：说明` 自动添加 <mark> 高亮（如果缺失）
+    4. 确保段落间有空行分隔
+    """
+    import re as _re
+    content = _re.sub(r'`{3}[\s\S]*?`{3}', '', content)
+    content = _re.sub(r'!\[.*?\]\(.*?\)', '', content)
+    content = _re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', content)
+    content = _re.sub(r'^#{2,}\s+\S.*$', '', content, flags=_re.MULTILINE)
+    content = _re.sub(r'^>\s+.*$', '', content, flags=_re.MULTILINE)
+    content = _re.sub(r'^---+$', '', content, flags=_re.MULTILINE)
+    content = _re.sub(r'^\|.+\|$', '', content, flags=_re.MULTILINE)
+    content = _re.sub(r'^\s*[•●◦‣❦]\s+', '- ', content, flags=_re.MULTILINE)
+    content = _re.sub(r'^\s*\d+[\.\)]\s+', '- ', content, flags=_re.MULTILINE)
+
+    def _auto_mark(m):
+        prefix = m.group(1)
+        keyword = m.group(2).strip()
+        rest = m.group(3)
+        if '<mark>' in keyword:
+            return f'{prefix}{keyword}{rest}'
+        return f'{prefix}<mark>{keyword}</mark>{rest}'
+
+    content = _re.sub(
+        r'^(- )([^<：:]+?)([：:].*)$',
+        _auto_mark, content, flags=_re.MULTILINE
+    )
+    content = _re.sub(r'\n{3,}', '\n\n', content)
+    return content.strip()
 
 
 def _call_kimi(prompt: str, timeout: int = 180) -> str:
