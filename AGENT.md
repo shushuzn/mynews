@@ -4,29 +4,26 @@
 
 ---
 
-## 1. 核心流程：微信公众号 URL → flomo 笔记
+## 1. 核心流程：正文 → flomo 笔记（`--auto` 模式）
 
-**唯一入口**：`process_inbox.py`（位于 `scripts/process_inbox.py`）。禁止绕开脚本直接调 `upload_flomo` / `memo_create`。
+**唯一入口**：`process_inbox.py --auto --content "正文"`。禁止绕开脚本直接调 `upload_flomo` / `memo_create`。
 
-### 标准四步（顺序不可乱）
+全自动模式一条命令完成全部流程，无需手动分段操作：
 
 ```
-Step 1: fetch_wechat_article(use_cache=False)
-        → 标题 / 来源 / 字符数 / 正文预览（≥600 字符）
-
-Step 2: 构造完整长 ai-content
-        → 必须有 **概念** 段（含 <mark> 高亮）
-
-Step 3: 主题级决策（in-context 单独做）
-        ├─ 完全相同主题 + 有实质增量 → 下一步传 --update MEMO_ID
-        ├─ 完全相同主题 + 无增量 → skip（不重跑脚本）
-        ├─ 假阳性（关键词命中但主题不同）→ 下一步传 --force-new
-
-Step 4: process_inbox.py 一次跑完（带 --update 或 --force-new）
-        → 脚本自动完成：抓取/创建文件/hook 验证/查重/上传
+1. 脚本收到 --content 正文
+2. 脚本调 kimi AI 分析全文
+   → 自动分类 domain/subdomain
+   → 生成 title、tags
+   → 生成 **概念**（一段，含 <mark>高亮</mark>）
+3. hook 格式验证
+4. search_flomo 查重
+   ├─ relevance < 0.9 → 自动新建并上传 ✅
+   └─ relevance ≥ 0.9 → AI 自行决策
+      ├─ 假阳性 → --force-new 新建
+      ├─ 有增量 → --update MEMO_ID（AI 自动合并）
+      └─ 零增量 → skip 跳过
 ```
-
-总流程固定为 **4 步**：relevance ≥ 0.9 与 relevance < 0.9 都是 4 步完成；Step 3 决策在大脑做，Step 4 真正写。
 
 ---
 
@@ -34,12 +31,8 @@ Step 4: process_inbox.py 一次跑完（带 --update 或 --force-new）
 
 | 用户说 | AI 必须做 |
 |---|---|
-| **"重做"** / "再跑一次" / "重新做" / "重新跑" | **整套重跑 Step 1 + Step 2 + Step 3 + Step 4** |
-| **"重写 ai-content"** / "重新构造 ai-content" | 仅重跑 Step 2 + Step 3 + Step 4 |
-| **"重新 update"** / "重新合并" | 仅重跑 Step 3 + Step 4（仍受同 memo_id ≤1 限制） |
-| **"重跑 Step 4"** / "再写一次" | 仅重跑 Step 4（同 memo_id 仍受 ≤1 限制） |
-
-**铁规**：用户说"重做"未指定哪步 → 默认整套重跑 Step 1+2+3+4。
+| **"重做"** / "再跑一次" / "重新做" / "重新跑" | 重新执行 `--auto --content "正文"` 整套流程 |
+| **"重新跑 auto"** | 同上，重新跑 `--auto` 完整流程 |
 
 ---
 

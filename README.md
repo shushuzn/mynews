@@ -1,6 +1,6 @@
 # mynews
 
-AI 内容处理管道：输入文本/URL → 自动分析 → 生成 flomo 格式笔记 → 上传 flomo。
+AI 内容处理管道：输入正文 → 自动分析 → 生成 flomo 格式笔记 → 上传 flomo。
 
 ## 快速开始
 
@@ -13,16 +13,16 @@ cd webui && python3 server.py
 # 打开 http://localhost:8080
 ```
 
-`--auto` 模式自动完成：AI 分析内容 → 分类领域 → 生成概念/子概念 → 查重去重 → 假阳性/增量判断 → 上传/更新/跳过。
+`--auto` 模式自动完成：AI 分析内容 → 分类领域 → 生成标题/标签/概念 → 查重去重 → 假阳性/增量判断 → 上传/更新/跳过。
 
 ## 工作流
 
 ```
-你输入正文/URL
+你输入正文
   → [--auto] 调用 kimi AI 分析
     → 自动分类 domain/subdomain
     → 生成标题、标签
-    → 生成 **概念** + ≥3 条 **子概念**（含 mark 高亮）
+    → 生成 **概念**（含 <mark>高亮</mark>）
   → hook 格式校验
   → search_flomo 查重
     ├─ relevance < 0.9 → 自动新建
@@ -63,7 +63,7 @@ python3 process_inbox.py \
   --domain "技术" --subdomain "AI" \
   --title "知识点名称" \
   --tags "#知识基座 #技术 #AI" \
-  --ai-content "**概念**：<mark>核心概念</mark>定义...\n**子概念**：\n- <mark>要点</mark>：说明..."
+  --ai-content "**概念**：<mark>核心概念</mark>定义..."
 ```
 
 ### Web UI
@@ -73,7 +73,7 @@ cd webui && python3 server.py
 # 浏览器打开 http://localhost:8080
 ```
 
-支持：粘贴正文 / 输入 URL（自动抓取）、强制新建、三栏结果展示（笔记/对比/日志）。
+支持：粘贴正文、强制新建、三栏结果展示（笔记/对比/日志）。
 
 ## 参数说明
 
@@ -84,7 +84,7 @@ cd webui && python3 server.py
 | `--domain`, `--subdomain` | 手动指定领域（自动模式下可选） |
 | `--title NAME` | 知识点名称（自动模式下可选） |
 | `--tags "T1 T2 T3"` | 标签，首位为信号类型（自动模式下可选） |
-| `--ai-content MD` | 已生成的概念/子概念内容 |
+| `--ai-content MD` | 已生成的概念内容 |
 | `--force-new` | 强制新建（跳过查重） |
 | `--update MEMO_ID` | 增量更新已有笔记 |
 
@@ -98,10 +98,6 @@ cd webui && python3 server.py
 **来源**：网络
 
 **概念**：<mark>核心概念</mark>精确定义。
-
-**子概念**：
-- <mark>关键发现一</mark>：高亮核心数据
-- <mark>关键发现二</mark>：高亮关键实体
 ```
 
 ### 允许语法

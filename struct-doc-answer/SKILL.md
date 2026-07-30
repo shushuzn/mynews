@@ -7,10 +7,10 @@ description: Use when creating, generating, or producing structured theoretical/
 
 ## ⚠️ 铁律（违反=失职）
 
-1. **唯一入口 `process_inbox.py`**，禁止直调 `upload_flomo` / `memo_create`
-2. **微信公众号必须 `fetch_wechat_article(use_cache=False)` 抓最新内容**（禁用缓存）
+1. **唯一入口 `process_inbox.py --auto`**，禁止直调 `upload_flomo` / `memo_create`
+2. **正文必须通过 `--content` 传入**，脚本自身不抓取 URL
 3. **`--ai-content` 只写 `**概念**`**（tag 行/标题/来源行由脚本自动拼接，写在 ai-content 里会触发校验失败）
-4. **relevance ≥ 0.9 时**：必须比对脚本打印的旧/新内容做决策——有增量→`--update OLD_ID`、假阳性→`--force-new`、无增量→skip
+4. **relevance ≥ 0.9 时**（`--auto` 模式）：脚本自动调用 AI 决策——有增量→自动 merge 后 `--update`、假阳性→ `--force-new`、无增量→skip
 5. **relevance < 0.9**：脚本自动新建，AI 不插手（禁止 fetch_flomo_memo 复盘）
 6. **提交/推送等用户批准**，禁止擅自 commit / push / rm
 
@@ -30,29 +30,32 @@ description: Use when creating, generating, or producing structured theoretical/
 
 ---
 
-## 操作流程（三步）
+## 操作流程（`--auto` 全自动）
+
+一条命令完成全部流程：
 
 ```
-Step 1 — 获取原文（agent 抓取或接收正文）
-Step 2 — 构造：AI 写出完整 ai-content（**概念** + mark 高亮）
-Step 3 — 上传：process_inbox.py（含查重+relevance 决策）
+1. 传入正文 → process_inbox.py --auto --content "正文"
+2. 脚本调 kimi AI 分析全文
+   → 自动分类 domain/subdomain
+   → 生成 title、tags
+   → 生成 **概念**（含 <mark>高亮</mark>）
+3. hook 格式验证
+4. search_flomo 查重
+5a. relevance < 0.9 → 自动新建上传 ✅
+5b. relevance ≥ 0.9 → AI 自动决策：
+    ├── 假阳性 → --force-new 新建
+    ├── 有增量 → 自动 merge 后 update
+    └── 零增量 → skip 跳过
 ```
-
-**Step 3 内部流程**：脚本自动抓取→创建本地文件→hook 校验格式→search_flomo 查重→
-- relevance < 0.9 → 自动新建
-- relevance ≥ 0.9 → 打印新旧内容，AI 比对后决定 `--update` / `--force-new` / skip
 
 ---
 
 ## 命令速查
 
 ```bash
-cd /root/mynews/scripts && python3 process_inbox.py \
-  --content "正文" \
-  --domain "技术" --subdomain "AI" \
-  --title "知识点名称" \
-  --tags "#信号笔记 #技术 #AI" \
-  --ai-content "**概念**：<mark>核心概念</mark>定义..."
+cd /d/OpenClaw/mynews/scripts && python3 process_inbox.py \
+  --auto --content "正文"
 ```
 
 ---
@@ -112,19 +115,15 @@ cd /root/mynews/scripts && python3 process_inbox.py \
 
 ---
 
-## 查重决策流程
+## 查重决策流程（`--auto` 模式）
 
 ```
-process_inbox.py 自动 call search_flomo
+process_inbox.py --auto 自动 call search_flomo
   │
   ├─ relevance < 0.9 → 自动新建（AI 不插手）
   │
-  └─ relevance ≥ 0.9
-      ├─ 脚本打印旧内容 + 新内容
-      ├─ AI 比对：
-      │   ├─ 同主题 + 有增量 → --update OLD_ID
-      │   ├─ 同主题 + 无增量 → skip
-      │   └─ 假阳性（同关键词不同主题）→ --force-new
-      │
-      └─ 假阳性时必须先 fetch_flomo_memo 读旧笔记确认主题不同，再用 --force-new
+  └─ relevance ≥ 0.9 → AI 自动决策
+      ├─ 同主题 + 有增量 → 自动 merge 后 update
+      ├─ 同主题 + 无增量 → skip
+      └─ 假阳性（同关键词不同主题）→ --force-new 强制新建
 ```
