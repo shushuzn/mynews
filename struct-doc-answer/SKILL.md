@@ -9,7 +9,7 @@ description: Use when creating, generating, or producing structured theoretical/
 
 1. **唯一入口 `process_inbox.py`**，禁止直调 `upload_flomo` / `memo_create`
 2. **微信公众号必须 `fetch_wechat_article(use_cache=False)` 抓最新内容**（禁用缓存）
-3. **`--ai-content` 只写 `**概念**` + `**子概念**`**（tag 行/标题/来源行由脚本自动拼接，写在 ai-content 里会触发校验失败）
+3. **`--ai-content` 只写 `**概念**`**（tag 行/标题/来源行由脚本自动拼接，写在 ai-content 里会触发校验失败）
 4. **relevance ≥ 0.9 时**：必须比对脚本打印的旧/新内容做决策——有增量→`--update OLD_ID`、假阳性→`--force-new`、无增量→skip
 5. **relevance < 0.9**：脚本自动新建，AI 不插手（禁止 fetch_flomo_memo 复盘）
 6. **提交/推送等用户批准**，禁止擅自 commit / push / rm
@@ -24,7 +24,7 @@ description: Use when creating, generating, or producing structured theoretical/
 | `--domain`, `--subdomain` | 一级/二级领域 |
 | `--title NAME` | 知识点名称（文件名一部分，禁用字符见下文） |
 | `--tags "T1 T2 T3"` | ≥3 标签，首位信号类型（下节） |
-| `--ai-content MD` | **仅写 `**概念**` + `**子概念**`** 两段，不含 tag/标题/来源 |
+| `--ai-content MD` | **仅写 `**概念**`** 段落，不含 tag/标题/来源 |
 | `--force-new` | 假阳性时强制新建笔记 |
 | `--update MEMO_ID` | 增量追加到已有笔记 |
 
@@ -34,7 +34,7 @@ description: Use when creating, generating, or producing structured theoretical/
 
 ```
 Step 1 — 获取原文（agent 抓取或接收正文）
-Step 2 — 构造：AI 写出完整 ai-content（**概念** + **子概念** + mark 高亮）
+Step 2 — 构造：AI 写出完整 ai-content（**概念** + mark 高亮）
 Step 3 — 上传：process_inbox.py（含查重+relevance 决策）
 ```
 
@@ -52,7 +52,7 @@ cd /root/mynews/scripts && python3 process_inbox.py \
   --domain "技术" --subdomain "AI" \
   --title "知识点名称" \
   --tags "#信号笔记 #技术 #AI" \
-  --ai-content "**概念**：<mark>核心概念</mark>定义...\n**子概念**：\n- <mark>要点一</mark>：...\n- <mark>要点二</mark>：..."
+  --ai-content "**概念**：<mark>核心概念</mark>定义..."
 ```
 
 ---
@@ -67,10 +67,6 @@ cd /root/mynews/scripts && python3 process_inbox.py \
 **来源**：来源（微信用发布账号，其他默认"网络"）
 
 **概念**：<mark>核心概念</mark>精确定义。
-
-**子概念**：
-- <mark>关键发现一</mark>：高亮核心数据
-- <mark>关键发现二</mark>：高亮关键实体
 ```
 
 ### 允许语法
