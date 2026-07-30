@@ -405,7 +405,7 @@ def _call_kimi(prompt: str, timeout: int = 180) -> str:
     try:
         r = _sp.run(
             [_kimi_bin, "-p", prompt, "--output-format", "text"],
-            capture_output=True, text=True, timeout=timeout
+            capture_output=True, text=True, encoding='utf-8', timeout=timeout
         )
         return r.stdout or r.stderr
     except _sp.TimeoutExpired:
@@ -425,6 +425,9 @@ def _auto_analyze(text: str) -> dict:
     }, ensure_ascii=False, indent=2) + '\n\n信号类型（五选一贴在第一行）：#知识基座（概念/定理）、#趋势信号（正在发生的结构性变化）、#信号笔记（单次事件）、#分析框架（方法论）、#知识载体（工具/资源）\n\n⚠️ 严格遵守：\n- ai_content 必须包含 **概念**：段落（用中文冒号：），不要包含 # 标签行（脚本自动添加）\n- **概念** 段用 <mark>高亮</mark> 标记核心关键词\n- 禁止：代码块、链接、图片、表格、>引用\n- JSON 内所有引号必须用 \\" 转义，值内不能出现未转义的双引号\n- 不要用 ```json 包裹\n\n文章：\n' + text[:8000]
 
     out = _call_kimi(prompt)
+    if not out:
+        print("  [auto] AI 返回空结果，重试...")
+        return {}
     import re as _re
     # 去掉 markdown 代码块包裹和行首列表符号
     out = _re.sub(r'^\s*[•\-*]\s*', '', out, flags=_re.MULTILINE)
