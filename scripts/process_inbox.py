@@ -856,6 +856,9 @@ def process_content(args):
                             merged = _auto_merge(old_content, body_text)
                             if merged and len(merged) > 20:
                                 update_content = merged
+                                # 清除合并内容中残留的子概念段落（旧笔记带进来的）
+                                if '**子概念**' in update_content:
+                                    update_content = update_content.split('**子概念**')[0].rstrip()
                                 # 尝试用合并后内容自身的标题/标签（AI 已按 prompt 要求重新确定）
                                 try:
                                     merged_domain, merged_subdomain = _validate_and_extract_domain(update_content)
