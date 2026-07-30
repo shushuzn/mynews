@@ -40,7 +40,7 @@ ALLOWED_ROOT_FILES = {
 # 非 answers/ 路径不进行 4 层深度和 flomo 格式检查（基础设施文件）
 INFRA_PREFIXES = (".opencode/", "scripts/", "docs/")
 
-FILENAME_PATTERN = re.compile('^[a-zA-Z0-9_\\-\\.\\u4e00-\\u9fff()%]+$')
+FILENAME_PATTERN = re.compile('^.+$')  # 允许所有字符，不设限制
 PATH_TRAVERSAL = re.compile(r'\.\.')
 
 FORBIDDEN_PATTERNS = [
@@ -102,7 +102,7 @@ def validate_filename(filename):
     if ' ' in filename:
         return False, "文件名包含空格"
     if not FILENAME_PATTERN.match(filename):
-        return False, "文件名包含非法字符（允许：中文/字母/数字/_-().%）"
+        return False, "文件名包含非法字符（已放开限制，如果看到此错误请更新 hook）"
     name_part = filename[:-3] if filename.endswith('.md') else filename
     parts = split_segments(name_part)
     if len(parts) != 3:
