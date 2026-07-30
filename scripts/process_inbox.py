@@ -109,8 +109,6 @@ def _validate_and_extract_domain(content):
     colon = '：'
     if f'**概念**{colon}' not in content:
         raise ValueError(f"内容缺少 **概念**{colon}")
-    if f'**子概念**{colon}' not in content:
-        raise ValueError(f"内容缺少 **子概念**{colon}")
     if f'**来源**{colon}' not in content:
         raise ValueError(f"内容缺少 **来源**{colon}")
     # 来源行有且仅有一行
@@ -121,10 +119,6 @@ def _validate_and_extract_domain(content):
     concept_lines = [line for line in content.splitlines() if line.strip().startswith(f'**概念**{colon}')]
     if len(concept_lines) != 1:
         raise ValueError(f"**概念**{colon} 行必须恰好出现一次，当前出现 {len(concept_lines)} 次")
-    # 子概念行有且仅有一行
-    sub_concept_lines = [line for line in content.splitlines() if line.strip().startswith(f'**子概念**{colon}')]
-    if len(sub_concept_lines) != 1:
-        raise ValueError(f"**子概念**{colon} 行必须恰好出现一次，当前出现 {len(sub_concept_lines)} 次")
     # 标签行检查（第一行必须是 #xxx 或 @xxx，且整个内容里只能有这一行标签）
     lines = content.splitlines()
     first_line = lines[0].strip() if lines else ''
@@ -427,8 +421,8 @@ def _auto_analyze(text: str) -> dict:
         "subdomain": "二级领域（根据内容自选，如 AI芯片/大模型/外交/产业）",
         "title": "知识点名称（10字以内，不含下划线/空格/斜杠。用中性客观的知识点短语，不要新闻式标题或主观评价，如 科创板利好信号、纳米金催化MMA工艺、Go监督式后台任务）",
         "tags": ["#信号类型标签", "#领域标签", "#二级领域标签"],
-        "ai_content": "**概念**：<mark>核心概念</mark>定义...\\n\\n**子概念**：\\n- <mark>关键点一</mark>：说明..."
-    }, ensure_ascii=False, indent=2) + '\n\n信号类型（五选一贴在第一行）：#知识基座（概念/定理）、#趋势信号（正在发生的结构性变化）、#信号笔记（单次事件）、#分析框架（方法论）、#知识载体（工具/资源）\n\n⚠️ 严格遵守：\n- ai_content 必须包含 **概念**：和 **子概念**：两个段落（用中文冒号：），不要包含 # 标签行（脚本自动添加）\n- **子概念** 段必须有 3~4 条，每条用 <mark>高亮</mark>\n- 禁止：代码块、链接、图片、表格、>引用\n- JSON 内所有引号必须用 \\" 转义，值内不能出现未转义的双引号\n- 不要用 ```json 包裹\n\n文章：\n' + text[:8000]
+        "ai_content": "**概念**：<mark>核心概念</mark>定义..."
+    }, ensure_ascii=False, indent=2) + '\n\n信号类型（五选一贴在第一行）：#知识基座（概念/定理）、#趋势信号（正在发生的结构性变化）、#信号笔记（单次事件）、#分析框架（方法论）、#知识载体（工具/资源）\n\n⚠️ 严格遵守：\n- ai_content 必须包含 **概念**：段落（用中文冒号：），不要包含 # 标签行（脚本自动添加）\n- **概念** 段用 <mark>高亮</mark> 标记核心关键词\n- 禁止：代码块、链接、图片、表格、>引用\n- JSON 内所有引号必须用 \\" 转义，值内不能出现未转义的双引号\n- 不要用 ```json 包裹\n\n文章：\n' + text[:8000]
 
     out = _call_kimi(prompt)
     import re as _re
@@ -677,9 +671,8 @@ def process_content(args):
         print("  [error] 正文内容为空")
         return False
 
-    # 5.5 自动修正 body_text 格式：确保 **概念**：和 **子概念**：用粗体包裹
+    # 5.5 自动修正 body_text 格式：确保 **概念**：用粗体包裹
     body_text = re.sub(r'(?<!\*\*)(?<!子)概念：', '**概念**：', body_text)
-    body_text = re.sub(r'(?<!\*\*)子概念：', '**子概念**：', body_text)
     # 5.6 清洗标签行：去掉信号类型标签的中文括号（如 "#信号笔记（单次事件）" → "#信号笔记"）
     if tags:
         tags[0] = re.sub(r'（[^）]*）', '', tags[0])
@@ -988,7 +981,7 @@ def main():
     parser.add_argument("--content", type=str,
                         help="原材料正文（必填，传递给 AI 处理的文本）")
     parser.add_argument("--ai-content", type=str,
-                        help="AI 生成的概念和子概念内容（直接传入，跳过交互输入）")
+                        help="AI 生成的概念内容（直接传入，跳过交互输入）")
     parser.add_argument("--title", type=str,
                         help="知识点标题（三段式，如：WAIC2026_中国AI_新产品发布；将作为文件名第三段）")
     parser.add_argument("--force-new", action="store_true",
