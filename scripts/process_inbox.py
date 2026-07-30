@@ -417,7 +417,7 @@ def _call_kimi(prompt: str, timeout: int = 180) -> str:
 def _auto_analyze(text: str) -> dict:
     """全自动模式：调用 AI 分析正文，返回 {{domain, subdomain, title, tags, ai_content}}。"""
     prompt = '你是一个知识文档分析助手。只输出 JSON，不要 markdown 代码块、不要额外文字。\n\n' + json.dumps({
-        "domain": "一级领域（如 技术/经济/自然科学/政治/社会科学/医学/游戏/管理/教育科学/安全/法律）",
+        "domain": "一级领域（根据内容自选）",
         "subdomain": "二级领域（根据内容自选，如 AI芯片/大模型/外交/产业）",
         "title": "知识点名称（10字以内，不含下划线/空格/斜杠。用中性客观的知识点短语，不要新闻式标题或主观评价，如 科创板利好信号、纳米金催化MMA工艺、Go监督式后台任务）",
         "tags": ["#信号类型标签", "#领域标签", "#二级领域标签"],
