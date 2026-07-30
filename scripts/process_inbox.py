@@ -869,8 +869,12 @@ def process_content(args):
                                         if len(_parts) == 3:
                                             knowledge = _parts[2]
                                     print(f"  [auto] 合并后内容校验通过，使用合并后的领域: {domain}/{subdomain}")
-                                except (ValueError, IndexError):
-                                    print("  [error] 合并后内容格式校验失败，无法更新，请检查 _auto_merge 输出")
+                                except (ValueError, IndexError) as _merge_err:
+                                    print(f"  [error] 合并后内容格式校验失败: {_merge_err}")
+                                    print(f"  [error] 合并后的完整内容（{len(update_content)} 字符）：")
+                                    for _line in update_content.split('\n'):
+                                        print(f"  | {_line}")
+                                    print(f"  [error] 无法自动更新，旧笔记 id={old_id} 保持不变")
                                     subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR))
                                     if full_path.exists(): full_path.unlink()
                                     return False
