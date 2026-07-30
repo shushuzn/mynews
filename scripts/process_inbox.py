@@ -315,21 +315,15 @@ def fetch_flomo_memo(memo_id, keyword=None):
 def update_flomo(memo_id, content):
     """合并更新 flomo 已有笔记——AI 必须把旧内容与新内容合并成单一 markdown 后传入 content。
 
-    ⚠️ 此函数将传入的 content 整体覆盖到 flomo 笔记——如不合并旧内容，旧笔记的所有原有子概念将永久丢失。
+    ⚠️ 此函数将传入的 content 整体覆盖到 flomo 笔记。
     ⚠️ flomo MCP 不保留历史版本——更新是不可逆操作。
 
     调用方强制流程：
     ① fetch_flomo_memo(memo_id, keyword=args.title_slug) 拉取旧内容
     ② AI 比对旧内容 vs 新内容
-    ③ AI 构造完整合并 markdown（保留旧子概念 + 追加新子概念 + 写入概念/子概念/来源）
+    ③ AI 构造完整合并 markdown
     ④ 把合并后的完整 markdown 通过 process_inbox.py 的 --ai-content 传入
     ⑤ update_flomo 把这个完整合并 markdown 整体覆盖写入 flomo 笔记
-
-    增量合并典型构造示例：
-        旧：子概念 A、B、C
-        新：子概念 D（新增）
-        合并后概念：综合 AB C 加上 D
-        合并后子概念：A、B、C、D（保留 A/B/C 原文，追加 D 原文）
 
     边界情况：
     - 完全重复（同主题无新增）→ 不调用 update，skip 即可
@@ -348,10 +342,8 @@ def update_flomo(memo_id, content):
     # === update_flomo 安全约束 ===
     # 此函数用 memo_update 把传入 content 整体覆盖写入 flomo。
     # 调用方必须把"旧内容 + 新内容合并"的完整 markdown 传给 content（不是只传新的 ai-content）。
-    # 严禁在未拉旧内容、未构造合并 markdown 情况下调用本函数，否则旧子概念全部丢失不可恢复。
     print(f"  [warning] update_flomo 是覆盖操作（flomo MCP 无版本控制、不可逆）")
     print(f"  调用方必须已 fetch_flomo_memo({memo_id}) 拉旧内容 + 构造合并 markdown 传入 content")
-    print(f"  如不合并旧内容，旧笔记所有子概念将被永久覆盖丢失")
 
     payload = json.dumps({
         "jsonrpc": "2.0",
@@ -404,8 +396,8 @@ def _normalize_flomo_content(content: str) -> str:
 
     处理：
     1. 移除禁止语法（Markdown 标题/引用/代码块/链接/图片/水平线/表格）
-    2. 子概念列表项统一用 `- ` 前缀
-    3. 子概念列表项中 `- 关键词：说明` 自动添加 <mark> 高亮（如果缺失）
+    2. 列表项统一用 `- ` 前缀
+    3. `- 关键词：说明` 自动添加 <mark> 高亮（如果缺失）
     4. 确保段落间有空行分隔
     """
     import re as _re
@@ -695,18 +687,18 @@ def process_content(args):
         body_text = args.ai_content
         print(f"  [ai] 使用 --ai-content 内容（{len(body_text)} 字符）")
     else:
-        # 非交互模式：打印 --content 原文，供 AI 读取后生成概念和子概念
+        # 非交互模式：打印 --content 原文，供 AI 读取后生成笔记内容
         if hasattr(args, 'content') and args.content:
             # 硬规则：不分页、不截断，完整打印全文——否则 AI 容易基于片段漏掉信息。
             print(f"\n{'='*60}")
-            print("【AI 生成阶段】请理解下方原材料，自己生成概念和子概念：")
+            print("【AI 生成阶段】请理解下方原材料，自己生成概念：")
             print(f"{'='*60}")
             print(f"【原文共 {len(args.content)} 字符，已完整打印，禁止跳读】")
             print(f"{'='*60}")
             print(args.content)
             print(f"{'='*60}")
-            print("请粘贴你生成的 **概念** 和 **子概念**（直接粘贴，不要加额外说明）：")
-            print("格式：\n**概念**：<mark>核心关键词</mark>...（核心词用<mark>高亮）\n\n**子概念**：\n- <mark>关键概念1</mark>：说明...\n- <mark>关键概念2</mark>：说明...\n（每个要点至少一个<mark>关键词</mark>高亮）")
+            print("请粘贴你生成的 **概念**（直接粘贴，不要加额外说明）：")
+            print("格式：\n**概念**：<mark>核心关键词</mark>定义说明...（核心词用<mark>高亮）")
             content_lines = []
             while True:
                 try:
@@ -893,7 +885,7 @@ def process_content(args):
                                         s = line.strip()
                                         if s.startswith('#') and tag_idx < 0:
                                             tag_idx = i
-                                        elif s.startswith('**') and s.endswith('**') and '**概念**' not in s and '**子概念**' not in s and '**来源**' not in s:
+                                        elif s.startswith('**') and s.endswith('**') and '**概念**' not in s and '**来源**' not in s:
                                             title_idx = i
                                     if title_idx >= 0:
                                         lines.pop(title_idx)
@@ -981,7 +973,7 @@ def process_content(args):
                             print("\n  强制规则：", file=_sys_for_stderr.stderr)
                             print("  - 有增量必须 --update MEMO_ID 或 --force-new，禁止跳过", file=_sys_for_stderr.stderr)
                             print("  - 零增量才能跳过（不重跑脚本）", file=_sys_for_stderr.stderr)
-                            print("  - ai-content 必须详细，禁止压缩——子概念要展开论点+引用原文关键数据", file=_sys_for_stderr.stderr)
+                            print("  - ai-content 必须详细，禁止压缩——要展开论点+引用原文关键数据", file=_sys_for_stderr.stderr)
                             print("\n  可选操作：", file=_sys_for_stderr.stderr)
                             print("  --force-new 新建（独立新笔记，假阳性或主题不同）", file=_sys_for_stderr.stderr)
                             print("  --update MEMO_ID 更新（合并增量到已有笔记）", file=_sys_for_stderr.stderr)
