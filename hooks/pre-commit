@@ -377,7 +377,7 @@ def main():
             for f in data["files"]:
                 print(f"  - {f}")
             if data["fix"]:
-                print(f"  💡 修复: {data['fix']}")
+                print(f"  [fix] {data['fix']}")
             print()
 
         print()
@@ -395,11 +395,11 @@ def main():
     if warnings:
         print("=" * 60)
         mode_word = "staged" if args.staged else "commit"
-        print(f"⚠ 标题相似度警告（仅警告，不阻断{mode_word}）")
+        print(f"[warn] 标题相似度警告（仅警告，不阻断{mode_word}）")
         print("=" * 60)
         for file, reason in warnings:
-            print(f"  📄 新文件: {file}")
-            print(f"  📋 提示: {reason}")
+            print(f"  [new] {file}")
+            print(f"  [hint] {reason}")
             print()
         print("如确认是新角度，可继续；如重复，建议：")
         print("  1. 合并到已有 flomo 笔记（追加而非新建）")
