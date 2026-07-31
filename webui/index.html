@@ -1905,7 +1905,7 @@ async function autoTick() {
     _autoBusy = false;
   }
 }
-function markAutoProcessed(item) {
+async function markAutoProcessed(item) {
   try {
     const p = JSON.parse(localStorage.getItem('hn-processed') || '[]');
     const idKey = 'id:' + (item.id || '');
@@ -1913,13 +1913,14 @@ function markAutoProcessed(item) {
     if (item.id && !p.includes(idKey)) p.push(idKey);
     if (!p.includes(urlKey)) p.push(urlKey);
     localStorage.setItem('hn-processed', JSON.stringify(p.slice(-600)));
-    // 同步到服务端，与后台自动处理共用记录
+    // 同步到服务端，与后台自动处理共用记录；失败重试一次，避免后台重复处理
     if (item.url) {
-      fetch('/api/mark-processed', {
+      const sync = () => fetch('/api/mark-processed', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: item.url })
-      }).catch(() => {});
+      });
+      try { await sync(); } catch (e) { await sync().catch(() => {}); }
     }
   } catch (err) {}
 }

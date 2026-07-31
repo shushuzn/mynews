@@ -188,20 +188,33 @@ def _set_auto_bg(enabled: bool):
         print(f"[auto] 持久化开关状态失败: {e}")
     print(f"[auto] 后台自动处理: {'开启' if enabled else '关闭'}")
 
+_AP_MODULE = None
+
+def _ap():
+    """懒加载 auto_process 模块（供后台线程与 mark-processed 接口共用）。"""
+    global _AP_MODULE
+    if _AP_MODULE is None:
+        sys.path.insert(0, str(SCRIPTS_DIR))
+        # auto_process.py 顶层会检查 FLOMO_TOKEN，缺失时 sys.exit(1)——先注入避免杀死 server
+        if FLOMO_TOKEN and not os.environ.get("FLOMO_TOKEN"):
+            os.environ["FLOMO_TOKEN"] = FLOMO_TOKEN
+        try:
+            import auto_process
+            _AP_MODULE = auto_process
+        except SystemExit as e:
+            print(f"[auto] auto_process.py 初始化退出（code={e}），后台自动处理不可用")
+        except Exception as e:
+            print(f"[auto] 无法加载 auto_process.py: {e}")
+    return _AP_MODULE
+
+def _ap_available() -> bool:
+    return _ap() is not None
+
 def _auto_background_process():
-    """后台守护线程：每 10 分钟拉取 RSS，自动处理未处理过的条目（复用 auto_process.py）。
+    """后台守护线程：每 RSS_INTERVAL 秒拉取 RSS，自动处理未处理过的条目（复用 auto_process.py）。
     已处理记录存 scripts/.auto_processed.json，成功/失败/抓取失败都会标记，避免重复。"""
-    sys.path.insert(0, str(SCRIPTS_DIR))
-    # auto_process.py 顶层会检查 FLOMO_TOKEN，缺失时 sys.exit(1)——先注入避免杀死 server
-    if FLOMO_TOKEN and not os.environ.get("FLOMO_TOKEN"):
-        os.environ["FLOMO_TOKEN"] = FLOMO_TOKEN
-    try:
-        import auto_process as ap
-    except SystemExit as e:
-        print(f"[auto] auto_process.py 初始化退出（code={e}），后台自动处理不可用")
-        return
-    except Exception as e:
-        print(f"[auto] 无法加载 auto_process.py: {e}")
+    ap = _ap()
+    if ap is None:
         return
     while True:
         if not _auto_bg_status():
@@ -209,18 +222,18 @@ def _auto_background_process():
             continue
         try:
             items = ap.fetch_all_rss_items(limit_per_feed=3)
-            processed = ap.load_processed()
             done = 0
             for it in items:
-                if it["url"] in processed:
+                # 每条处理前实时复查记录（处理期间前端可能已标记同一条，避免重复）
+                if it["url"] in ap.load_processed():
                     continue
                 content, err = ap.fetch_article(it["url"])
                 if err or not content:
-                    ap.mark_processed(it["url"], processed)
+                    ap.mark_processed(it["url"])
                     print(f"  [auto] 抓取失败，标记跳过: {err or '空内容'} | {it['title'][:40]}")
                     continue
                 ok, out = ap.process_article(content, it["url"])
-                ap.mark_processed(it["url"], processed)
+                ap.mark_processed(it["url"])
                 done += 1
                 print(f"  [auto] {'成功' if ok else '失败'}: {it['title'][:40]}")
             print(f"[auto] 后台处理完成: {done} 条新条目")
@@ -318,19 +331,23 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 self._json_response(False, f"切换失败: {e}")
         elif self.path.startswith("/api/mark-processed"):
-            # 前端处理成功后通知服务端记录，与后台线程共用一份记录
+            # 前端处理成功后通知服务端记录，复用 auto_process 的原子标记（带锁，不覆盖并发标记）
             try:
                 body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8"))
                 url = (body.get("url") or "").strip()
-                if url:
+                if not url:
+                    self._json_response(False, "缺少 url")
+                    return
+                if _ap_available():
+                    _ap().mark_processed(url)
+                else:
+                    # 退化路径：直接写文件（尽力而为）
                     rec_file = SCRIPTS_DIR / ".auto_processed.json"
                     urls = json.loads(rec_file.read_text(encoding="utf-8")) if rec_file.exists() else []
                     if url not in urls:
                         urls.append(url)
                     rec_file.write_text(json.dumps(urls, ensure_ascii=False), encoding="utf-8")
-                    self._json_response(True, "已记录")
-                else:
-                    self._json_response(False, "缺少 url")
+                self._json_response(True, "已记录")
             except Exception as e:
                 self._json_response(False, f"记录失败: {e}")
         else:

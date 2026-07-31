@@ -4,7 +4,7 @@
 从 OPML RSS 源循环抓取最新条目，自动处理直到全部完成。
 用法: python auto_process.py [--limit N] [--skip-existing]
 """
-import os, sys, json, subprocess, time, re, tempfile, argparse
+import os, sys, json, subprocess, time, re, tempfile, argparse, threading
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
@@ -29,8 +29,13 @@ if not FLOMO_TOKEN:
 
 # ---- 已处理记录 ----
 RECORD_FILE = SCRIPTS_DIR / ".auto_processed.json"
+RECORD_LOCK = threading.Lock()
 
 def load_processed():
+    with RECORD_LOCK:
+        return _load_processed()
+
+def _load_processed():
     if RECORD_FILE.exists():
         try:
             return set(json.loads(RECORD_FILE.read_text(encoding="utf-8")))
@@ -39,11 +44,20 @@ def load_processed():
     return set()
 
 def save_processed(processed):
+    with RECORD_LOCK:
+        _save_processed(processed)
+
+def _save_processed(processed):
     RECORD_FILE.write_text(json.dumps(list(processed), ensure_ascii=False), encoding="utf-8")
 
-def mark_processed(url, processed):
-    processed.add(url)
-    save_processed(processed)
+def mark_processed(url, processed=None):
+    """原子标记已处理：读文件 → add → 写回，避免并发覆盖丢失其他线程/进程的标记。"""
+    with RECORD_LOCK:
+        current = _load_processed()
+        current.add(url)
+        _save_processed(current)
+    if processed is not None:
+        processed.add(url)
 
 # ---- RSS 抓取 ----
 def _local(tag):
