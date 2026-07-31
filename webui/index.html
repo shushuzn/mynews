@@ -1844,9 +1844,9 @@ async function autoTick() {
       const recCount = processed.length;
       setStatus(recCount > 50
         ? '自动模式：已处理记录较多（' + recCount + '条）且当前无新条目。如想重跑，请先清空已处理记录'
-        : '自动模式：所有源最新条目均已处理过，10 分钟后自动重新检查', 'done');
-      // 缓存 10 分钟过期后自动重查，有新条目继续处理
-      _autoTimer = setTimeout(autoTick, 600000 + Math.floor(Math.random() * 30000));
+        : '自动模式：所有源最新条目均已处理过，3 分钟后自动重新检查', 'done');
+      // 与服务端后台刷新间隔（默认 3 分钟）同步，自动重查
+      _autoTimer = setTimeout(autoTick, 180000 + Math.floor(Math.random() * 30000));
       return;
     }
     // 预检抓取：内容为空/被拦截/超时 → 直接标记跳过，不提交 AI

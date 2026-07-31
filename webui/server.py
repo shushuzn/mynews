@@ -28,7 +28,10 @@ if not FLOMO_TOKEN:
 # RSS 源列表（OPML 文件路径，可用环境变量 OPML_PATH 覆盖）
 OPML_PATH = Path(os.environ.get("OPML_PATH", str(BASE_DIR / "rss_sources.opml")))
 
-# RSS 聚合缓存（首次全量抓取，之后 10 分钟内复用）
+# 后台刷新间隔（秒），可用环境变量 MYNEWS_RSS_INTERVAL 覆盖
+RSS_INTERVAL = max(30, int(os.environ.get("MYNEWS_RSS_INTERVAL", "180")))
+
+# RSS 聚合缓存（首次全量抓取，之后 RSS_INTERVAL*2 内复用）
 RSS_CACHE = {"ts": 0.0, "items": []}
 RSS_LOCK = threading.Lock()
 
@@ -110,10 +113,10 @@ def _fetch_feed_items(feed: dict, limit: int = 2) -> list:
         return []
 
 def _fetch_rss_items(force: bool = False) -> list:
-    """并发抓取所有源最新条目，合并去重并打乱，带 10 分钟缓存。每次刷新重读 OPML（新增源即时生效）。"""
+    """并发抓取所有源最新条目，合并去重并打乱，带缓存（RSS_INTERVAL*2 秒）。每次刷新重读 OPML（新增源即时生效）。"""
     global RSS_CACHE, FEEDS
     with RSS_LOCK:
-        if not force and RSS_CACHE["items"] and (time.time() - RSS_CACHE["ts"] < 600):
+        if not force and RSS_CACHE["items"] and (time.time() - RSS_CACHE["ts"] < RSS_INTERVAL * 2):
             return RSS_CACHE["items"]
     FEEDS = _load_feeds()  # 缓存过期时重新加载 OPML
     if not FEEDS:
@@ -140,14 +143,14 @@ def _fetch_rss_items(force: bool = False) -> list:
 
 
 def _rss_background_refresh():
-    """后台守护线程：启动后立即拉取一次，之后每 10 分钟强制刷新 RSS 缓存。"""
+    """后台守护线程：启动后立即拉取一次，之后每 RSS_INTERVAL 秒强制刷新 RSS 缓存。"""
     while True:
         try:
             _fetch_rss_items(force=True)
-            print("[server] 后台 RSS 自动刷新完成")
+            print(f"[server] 后台 RSS 自动刷新完成（间隔 {RSS_INTERVAL}s）")
         except Exception as e:
             print(f"[server] 后台 RSS 自动刷新失败: {e}")
-        time.sleep(600)
+        time.sleep(RSS_INTERVAL)
 
 
 # 后台自动处理开关：MYNEWS_AUTO_BG=0 关闭（默认开启）
@@ -188,7 +191,7 @@ def _auto_background_process():
             print(f"[auto] 后台处理完成: {done} 条新条目")
         except Exception as e:
             print(f"[auto] 后台处理异常: {e}")
-        time.sleep(600)
+        time.sleep(RSS_INTERVAL)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -456,7 +459,7 @@ if __name__ == "__main__":
         threading.Thread(target=_auto_background_process, daemon=True).start()
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     print(f"[mynews] Web UI 启动: http://localhost:{PORT}")
-    print(f"   后台 RSS 自动刷新已启动（每 10 分钟）")
+    print(f"   后台 RSS 自动刷新已启动（每 {RSS_INTERVAL} 秒）")
     print(f"   后台自动处理: {'已启动' if AUTO_BG_ENABLED else '已关闭（MYNEWS_AUTO_BG=0）'}")
     print(f"   按 Ctrl+C 停止")
     try:
