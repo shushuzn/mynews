@@ -432,21 +432,15 @@ def _normalize_flomo_content(content: str) -> str:
 def _call_kimi(prompt: str, timeout: int = 180) -> str:
     """调用本地 kimi CLI 处理提示，返回 stdout。"""
     import subprocess as _sp
-    from pathlib import Path as _Path
-    _kimi_bin = str(_Path.home() / ".kimi-code" / "bin" / "kimi")
-    if not _Path(_kimi_bin).exists():
-        _kimi_bin = "kimi"
     try:
         r = _sp.run(
-            [_kimi_bin, "-p", prompt, "--output-format", "text"],
+            ["kimi", "-p", prompt, "--quiet"],
             capture_output=True, text=True, encoding='utf-8', timeout=timeout
         )
-        # 优先取含 JSON 的输出（stdout 可能为空，stderr 可能含实际结果）
-        if r.stdout and '{' in r.stdout:
-            return r.stdout
-        if r.stderr and '{' in r.stderr:
-            return r.stderr
-        return r.stdout or r.stderr or ""
+        raw = r.stdout.strip() or r.stderr.strip() or ""
+        # 过滤掉 "To resume this session: ..." 行
+        lines = [l for l in raw.split("\n") if not l.startswith("To resume this session:")]
+        return "\n".join(lines).strip() or raw
     except _sp.TimeoutExpired:
         return "[error] kimi 调用超时"
     except Exception as e:
