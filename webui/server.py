@@ -15,6 +15,16 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = BASE_DIR / "scripts"
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
 
+# 优先环境变量，其次 .env 文件
+FLOMO_TOKEN = os.environ.get("FLOMO_TOKEN")
+if not FLOMO_TOKEN:
+    env_file = BASE_DIR / ".flomo_env"
+    if env_file.exists():
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            if line.startswith("FLOMO_TOKEN="):
+                FLOMO_TOKEN = line.split("=", 1)[1].strip().strip("\"'")
+                break
+
 # RSS 源列表（OPML 文件路径，可用环境变量 OPML_PATH 覆盖）
 OPML_PATH = Path(os.environ.get("OPML_PATH", r"C:/Users/35234/OneDrive/Desktop/_rss_sources.opml"))
 
