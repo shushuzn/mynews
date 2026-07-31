@@ -234,7 +234,11 @@ class Handler(BaseHTTPRequestHandler):
                 url = (hit.get("url") or "").strip()
                 title = (hit.get("title") or "").strip()
                 if url and title:
-                    items.append({"title": title, "url": url})
+                    items.append({
+                        "title": title,
+                        "url": url,
+                        "id": str(hit.get("objectID") or "")
+                    })
             print(f"[server] HN newest 抓取成功: {len(items)} 条")
             return items[:30]
         except Exception as e:

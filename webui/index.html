@@ -1749,6 +1749,7 @@ document.addEventListener('drop', e => {
 /* ============ 自动处理（Hacker News）============ */
 let _autoMode = false;
 let _autoCurrentUrl = '';
+let _autoCurrentId = '';
 function toggleAuto() {
   _autoMode = !_autoMode;
   const btn = document.getElementById('autoBtn');
@@ -1780,7 +1781,9 @@ async function autoTick() {
       return;
     }
     const processed = JSON.parse(localStorage.getItem('hn-processed') || '[]');
-    const next = data.output.find(i => i.url && !processed.includes(i.url));
+    // 双键判断：HN story id 或 URL 任一命中即视为已处理
+    const next = data.output.find(i => i.url &&
+      !processed.includes('id:' + i.id) && !processed.includes('url:' + i.url));
     if (!next) {
       setStatus('自动模式：HN 最新均已处理过', 'done');
       btn.classList.remove('busy');
@@ -1788,6 +1791,7 @@ async function autoTick() {
     }
     setStatus('🔁 处理：' + (next.title || next.url).slice(0, 40) + '…', 'running');
     _autoCurrentUrl = next.url;
+    _autoCurrentId = next.id || '';
     document.getElementById('url').value = next.url;
     await process();
   } catch (e) {
@@ -1874,10 +1878,10 @@ async function process() {
       if (_autoCurrentUrl) {
         try {
           const p = JSON.parse(localStorage.getItem('hn-processed') || '[]');
-          if (!p.includes(_autoCurrentUrl)) {
-            p.push(_autoCurrentUrl);
-            localStorage.setItem('hn-processed', JSON.stringify(p.slice(-300)));
-          }
+          const idKey = 'id:' + _autoCurrentId, urlKey = 'url:' + _autoCurrentUrl;
+          if (_autoCurrentId && !p.includes(idKey)) p.push(idKey);
+          if (!p.includes(urlKey)) p.push(urlKey);
+          localStorage.setItem('hn-processed', JSON.stringify(p.slice(-600)));
         } catch (err) {}
       }
       setTimeout(autoTick, 900);
