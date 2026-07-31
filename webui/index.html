@@ -1827,8 +1827,15 @@ async function autoTick() {
       toggleAuto(); // _autoMode 此刻仍为 true，翻转后即关闭并复位 UI
       return;
     }
-    const processed = JSON.parse(localStorage.getItem('hn-processed') || '[]');
+    let processed = JSON.parse(localStorage.getItem('hn-processed') || '[]');
     const tempSkipped = JSON.parse(sessionStorage.getItem('hn-temp-skip') || '[]');
+    // 合并服务端已处理记录（后台自动处理共用），避免重复
+    try {
+      const pr = await fetch('/api/processed').then(r => r.json());
+      if (pr.success && Array.isArray(pr.output.urls)) {
+        for (const u of pr.output.urls) if (!processed.includes('url:' + u)) processed.push('url:' + u);
+      }
+    } catch (e) {}
     // 判断已处理：URL（含旧 HN id 键）任一命中即跳过；本次会话临时跳过的（网络错误/超时）也不重复尝试
     const next = data.output.find(i => i.url &&
       !processed.includes('url:' + i.url) && !processed.includes('id:' + (i.id || '')) &&
@@ -1905,6 +1912,14 @@ function markAutoProcessed(item) {
     if (item.id && !p.includes(idKey)) p.push(idKey);
     if (!p.includes(urlKey)) p.push(urlKey);
     localStorage.setItem('hn-processed', JSON.stringify(p.slice(-600)));
+    // 同步到服务端，与后台自动处理共用记录
+    if (item.url) {
+      fetch('/api/mark-processed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: item.url })
+      }).catch(() => {});
+    }
   } catch (err) {}
 }
 function clearAutoHistory() {

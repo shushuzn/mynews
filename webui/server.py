@@ -150,6 +150,47 @@ def _rss_background_refresh():
             print(f"[server] 后台 RSS 自动刷新失败: {e}")
 
 
+# 后台自动处理开关：MYNEWS_AUTO_BG=0 关闭（默认开启）
+AUTO_BG_ENABLED = os.environ.get("MYNEWS_AUTO_BG", "1") != "0"
+
+def _auto_background_process():
+    """后台守护线程：每 10 分钟拉取 RSS，自动处理未处理过的条目（复用 auto_process.py）。
+    已处理记录存 scripts/.auto_processed.json，成功/失败/抓取失败都会标记，避免重复。"""
+    sys.path.insert(0, str(SCRIPTS_DIR))
+    # auto_process.py 顶层会检查 FLOMO_TOKEN，缺失时 sys.exit(1)——先注入避免杀死 server
+    if FLOMO_TOKEN and not os.environ.get("FLOMO_TOKEN"):
+        os.environ["FLOMO_TOKEN"] = FLOMO_TOKEN
+    try:
+        import auto_process as ap
+    except SystemExit as e:
+        print(f"[auto] auto_process.py 初始化退出（code={e}），后台自动处理不可用")
+        return
+    except Exception as e:
+        print(f"[auto] 无法加载 auto_process.py: {e}")
+        return
+    while True:
+        time.sleep(600)
+        try:
+            items = ap.fetch_all_rss_items(limit_per_feed=3)
+            processed = ap.load_processed()
+            done = 0
+            for it in items:
+                if it["url"] in processed:
+                    continue
+                content, err = ap.fetch_article(it["url"])
+                if err or not content:
+                    ap.mark_processed(it["url"], processed)
+                    print(f"  [auto] 抓取失败，标记跳过: {err or '空内容'} | {it['title'][:40]}")
+                    continue
+                ok, out = ap.process_article(content, it["url"])
+                ap.mark_processed(it["url"], processed)
+                done += 1
+                print(f"  [auto] {'成功' if ok else '失败'}: {it['title'][:40]}")
+            print(f"[auto] 后台处理完成: {done} 条新条目")
+        except Exception as e:
+            print(f"[auto] 后台处理异常: {e}")
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/" or self.path.startswith("/index"):
@@ -160,6 +201,14 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path.startswith("/api/hn/newest"):
             # HN 最新文章列表：/api/hn/newest
             self._json_response(True, self._fetch_hn_newest())
+        elif self.path.startswith("/api/processed"):
+            # 服务端已处理记录（与前端 localStorage 合并，避免重复处理）
+            try:
+                rec_file = SCRIPTS_DIR / ".auto_processed.json"
+                urls = json.loads(rec_file.read_text(encoding="utf-8")) if rec_file.exists() else []
+                self._json_response(True, {"urls": urls})
+            except Exception:
+                self._json_response(True, {"urls": []})
         elif self.path.startswith("/api/rss/items"):
             # RSS 聚合：全部源最新条目（含缓存）；?refresh=1 强制刷新缓存
             global RSS_CACHE
@@ -219,6 +268,22 @@ class Handler(BaseHTTPRequestHandler):
                 body = self.rfile.read(length).decode("utf-8")
                 data = json.loads(body)
                 self._handle_process(data)
+        elif self.path.startswith("/api/mark-processed"):
+            # 前端处理成功后通知服务端记录，与后台线程共用一份记录
+            try:
+                body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8"))
+                url = (body.get("url") or "").strip()
+                if url:
+                    rec_file = SCRIPTS_DIR / ".auto_processed.json"
+                    urls = json.loads(rec_file.read_text(encoding="utf-8")) if rec_file.exists() else []
+                    if url not in urls:
+                        urls.append(url)
+                    rec_file.write_text(json.dumps(urls, ensure_ascii=False), encoding="utf-8")
+                    self._json_response(True, "已记录")
+                else:
+                    self._json_response(False, "缺少 url")
+            except Exception as e:
+                self._json_response(False, f"记录失败: {e}")
         else:
             self.send_response(404)
             self.end_headers()
@@ -387,9 +452,12 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     # 后台线程：每 10 分钟自动刷新 RSS 缓存
     threading.Thread(target=_rss_background_refresh, daemon=True).start()
+    if AUTO_BG_ENABLED:
+        threading.Thread(target=_auto_background_process, daemon=True).start()
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     print(f"[mynews] Web UI 启动: http://localhost:{PORT}")
     print(f"   后台 RSS 自动刷新已启动（每 10 分钟）")
+    print(f"   后台自动处理: {'已启动' if AUTO_BG_ENABLED else '已关闭（MYNEWS_AUTO_BG=0）'}")
     print(f"   按 Ctrl+C 停止")
     try:
         server.serve_forever()
