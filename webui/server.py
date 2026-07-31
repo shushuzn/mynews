@@ -4,7 +4,8 @@ mynews Web UI 服务器
 启动: python3 server.py [端口]
 前端: http://localhost:8080
 """
-import os, sys, json, subprocess, urllib.parse, threading, tempfile, re, random, time
+import os, sys, json, subprocess, urllib.parse, threading, tempfile, re, random, time, datetime
+from email.utils import parsedate_to_datetime
 from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 import xml.etree.ElementTree as ET
@@ -46,8 +47,22 @@ def _local(tag: str) -> str:
     """去掉 XML 命名空间前缀。"""
     return tag.split("}")[-1]
 
+def _parse_ts(text: str) -> float:
+    """解析 RSS pubDate（RFC822）或 Atom published/updated（ISO8601）为时间戳，失败返回 0。"""
+    if not text:
+        return 0
+    try:
+        return parsedate_to_datetime(text.strip()).timestamp()
+    except Exception:
+        pass
+    try:
+        s = text.strip().replace("Z", "+00:00")
+        return datetime.datetime.fromisoformat(s).timestamp()
+    except Exception:
+        return 0
+
 def _fetch_feed_items(feed: dict, limit: int = 2) -> list:
-    """抓取单个源的最新条目，返回 [{title, url, source}]。"""
+    """抓取单个源的最新条目，返回 [{title, url, source, ts}]。"""
     import urllib.request as _ur
     try:
         req = _ur.Request(feed["url"], headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
@@ -58,7 +73,7 @@ def _fetch_feed_items(feed: dict, limit: int = 2) -> list:
         for child in root.iter():
             if _local(child.tag) not in ("item", "entry"):
                 continue
-            title = link = ""
+            title = link = ts_text = ""
             for sub in child:
                 ln = _local(sub.tag)
                 if ln == "title":
@@ -69,8 +84,15 @@ def _fetch_feed_items(feed: dict, limit: int = 2) -> list:
                         link = href.strip()
                     elif sub.text:
                         link = sub.text.strip()
+                elif ln in ("pubDate", "published", "updated", "date"):
+                    ts_text = (sub.text or "").strip()
             if title and link:
-                items.append({"title": title, "url": link, "source": feed["name"]})
+                items.append({
+                    "title": title,
+                    "url": link,
+                    "source": feed["name"],
+                    "ts": _parse_ts(ts_text)
+                })
             if len(items) >= limit:
                 break
         return items
@@ -94,16 +116,16 @@ def _fetch_rss_items() -> list:
                 results.extend(fut.result())
             except Exception:
                 pass
-    # 按 URL 去重（保留首个），打乱顺序均匀分布
+    # 按 URL 去重（保留首个），按发布时间倒序：最新条目优先
     seen, merged = set(), []
     for it in results:
         if it["url"] not in seen:
             seen.add(it["url"])
             merged.append(it)
-    random.shuffle(merged)
+    merged.sort(key=lambda x: x.get("ts", 0), reverse=True)
     with RSS_LOCK:
         RSS_CACHE = {"ts": time.time(), "items": merged}
-    print(f"[server] RSS 聚合: {len(merged)} 条（{len(FEEDS)} 源）")
+    print(f"[server] RSS 聚合: {len(merged)} 条（{len(FEEDS)} 源），按发布时间倒序")
     return merged
 
 
