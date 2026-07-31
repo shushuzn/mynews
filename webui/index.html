@@ -5,51 +5,46 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>mynews — 知识笔记处理器</title>
 <style>
-/* ============ Apple Design Language ============ */
+/* ============ Apple Design Language · Rich ============ */
 :root {
   --bg: #f2f2f7;
-  --bg-grad: radial-gradient(1200px 500px at 80% -10%, rgba(10, 132, 255, .08), transparent 60%),
-             radial-gradient(900px 420px at 0% 110%, rgba(175, 82, 222, .06), transparent 55%);
   --surface: #ffffff;
-  --surface-2: #f2f2f7;
-  --surface-3: #e5e5ea;
+  --surface-2: #f5f5f7;
+  --surface-3: #e9e9ee;
   --text: #1c1c1e;
   --text-2: #48484a;
   --text-3: #8e8e93;
   --separator: #d1d1d6;
-  --separator-light: #e5e5ea;
+  --separator-light: #e8e8ed;
   --blue: #007aff;
-  --blue-dark: #0a84ff;
   --purple: #af52de;
   --pink: #ff2d55;
   --orange: #ff9500;
   --green: #34c759;
-  --red: #ff3b30;
   --yellow: #ffcc00;
   --teal: #30b0c7;
   --indigo: #5856d6;
+  --grad-hero: linear-gradient(130deg, #0a84ff 0%, #5e5ce6 55%, #af52de 100%);
   --grad-btn: linear-gradient(135deg, #0a84ff 0%, #5e5ce6 100%);
-  --grad-title: linear-gradient(120deg, #007aff 0%, #5856d6 60%, #af52de 100%);
   --mark-bg: #ffe8a3;
   --mark-text: #6b4a00;
   --code-bg: #1c1c1e;
   --code-text: #d1d1d6;
-  --radius-lg: 20px;
-  --radius-md: 14px;
+  --radius-xl: 24px;
+  --radius-lg: 18px;
+  --radius-md: 13px;
   --radius-sm: 10px;
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, .06), 0 1px 2px rgba(0, 0, 0, .04);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, .08), 0 2px 4px rgba(0, 0, 0, .05);
-  --shadow-lg: 0 18px 40px rgba(0, 0, 0, .12), 0 6px 16px rgba(0, 0, 0, .08);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, .05), 0 1px 2px rgba(0, 0, 0, .04);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, .08), 0 2px 5px rgba(0, 0, 0, .05);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, .12), 0 4px 12px rgba(0, 0, 0, .07);
+  --shadow-hero: 0 16px 44px rgba(94, 92, 230, .35);
   --ease: cubic-bezier(.25, .1, .25, 1);
-  --tag-colors: var(--blue), var(--purple), var(--pink), var(--orange), var(--teal), var(--green), var(--indigo);
 }
 body.dark {
-  --bg: #0d0d12;
-  --bg-grad: radial-gradient(1200px 500px at 80% -10%, rgba(10, 132, 255, .12), transparent 60%),
-             radial-gradient(900px 420px at 0% 110%, rgba(175, 82, 222, .10), transparent 55%);
+  --bg: #0b0b10;
   --surface: #1c1c1e;
-  --surface-2: #2c2c2e;
-  --surface-3: #3a3a3c;
+  --surface-2: #2a2a2d;
+  --surface-3: #36363a;
   --text: #ffffff;
   --text-2: #d1d1d6;
   --text-3: #8e8e93;
@@ -60,19 +55,19 @@ body.dark {
   --pink: #ff375f;
   --orange: #ff9f0a;
   --green: #30d158;
-  --red: #ff453a;
   --yellow: #ffd60a;
   --teal: #40c8e0;
   --indigo: #5e5ce6;
+  --grad-hero: linear-gradient(130deg, #0a84ff 0%, #5e5ce6 55%, #bf5af2 100%);
   --grad-btn: linear-gradient(135deg, #0a84ff 0%, #5e5ce6 100%);
-  --grad-title: linear-gradient(120deg, #0a84ff 0%, #5e5ce6 60%, #bf5af2 100%);
   --mark-bg: #5a4700;
   --mark-text: #ffd60a;
   --code-bg: #0a0a0c;
   --code-text: #a1a1a6;
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, .4);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, .5), 0 2px 4px rgba(0, 0, 0, .4);
-  --shadow-lg: 0 18px 40px rgba(0, 0, 0, .6), 0 6px 16px rgba(0, 0, 0, .45);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, .5), 0 2px 5px rgba(0, 0, 0, .4);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, .6), 0 4px 12px rgba(0, 0, 0, .45);
+  --shadow-hero: 0 16px 44px rgba(94, 92, 230, .4);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -80,88 +75,117 @@ html { scroll-behavior: smooth; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "PingFang SC", "Segoe UI", Roboto, sans-serif;
   font-size: 14px; line-height: 1.6; color: var(--text);
-  background: var(--bg-grad), var(--bg);
+  background:
+    radial-gradient(1000px 460px at 85% -8%, rgba(94, 92, 230, .09), transparent 60%),
+    radial-gradient(800px 420px at 0% 100%, rgba(255, 45, 85, .05), transparent 55%),
+    var(--bg);
   background-attachment: fixed;
-  transition: background .35s, color .35s; -webkit-font-smoothing: antialiased;
+  transition: background .35s, color .35s;
+  -webkit-font-smoothing: antialiased;
   letter-spacing: -.01em;
 }
 
-/* ============ Header（毛玻璃）============ */
+/* ============ Header ============ */
 .header {
   position: sticky; top: 0; z-index: 100;
   background: color-mix(in srgb, var(--bg) 72%, transparent);
   backdrop-filter: blur(24px) saturate(180%);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
   border-bottom: 1px solid var(--separator-light);
-  padding: 0 28px; height: 56px; display: flex; align-items: center; gap: 14px;
+  padding: 0 26px; height: 56px; display: flex; align-items: center; gap: 12px;
 }
-.brand { display: flex; align-items: center; gap: 12px; flex: 1; }
+.brand { display: flex; align-items: center; gap: 11px; flex: 1; }
 .brand-logo {
   width: 30px; height: 30px; border-radius: 9px; background: var(--grad-btn);
   display: flex; align-items: center; justify-content: center; color: #fff;
-  box-shadow: 0 2px 10px rgba(10, 132, 255, .35); flex-shrink: 0;
+  box-shadow: 0 3px 10px rgba(10, 132, 255, .4); flex-shrink: 0;
 }
 .brand-logo svg { width: 15px; height: 15px; }
-.brand-text { display: flex; flex-direction: column; line-height: 1.2; }
+.brand-text { line-height: 1.2; }
 .brand-text h1 { font-size: 15px; font-weight: 700; letter-spacing: -.02em; }
-.brand-text small { font-size: 11px; color: var(--text-3); font-weight: 500; }
-.header-actions { display: flex; gap: 8px; align-items: center; }
+.brand-text small { font-size: 11px; color: var(--text-3); }
 .icon-btn {
   width: 32px; height: 32px; border-radius: 50%; border: none;
   background: color-mix(in srgb, var(--surface-2) 85%, transparent);
   color: var(--text-2); cursor: pointer; display: flex; align-items: center; justify-content: center;
   transition: all .2s var(--ease);
 }
-.icon-btn:hover { background: var(--surface-3); color: var(--text); transform: scale(1.06); }
-.icon-btn:active { transform: scale(.94); }
+.icon-btn:hover { background: var(--surface-3); color: var(--text); transform: scale(1.08); }
+.icon-btn:active { transform: scale(.92); }
 .icon-btn svg { width: 16px; height: 16px; }
 
-/* ============ Page title ============ */
-.page-head { padding: 28px 4px 20px; }
-.page-head h2 { font-size: 28px; font-weight: 800; letter-spacing: -.03em; background: var(--grad-title); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
-.page-head p { font-size: 13px; color: var(--text-3); margin-top: 4px; }
+/* ============ Hero banner ============ */
+.container { max-width: 760px; margin: 0 auto; padding: 24px 20px 80px; }
+.hero {
+  position: relative; overflow: hidden; border-radius: var(--radius-xl);
+  background: var(--grad-hero); color: #fff; padding: 28px 28px 22px;
+  box-shadow: var(--shadow-hero); margin-bottom: 22px;
+}
+.hero::before {
+  content: ""; position: absolute; width: 300px; height: 300px; border-radius: 50%;
+  background: rgba(255, 255, 255, .12); top: -140px; right: -80px; filter: blur(6px);
+}
+.hero::after {
+  content: ""; position: absolute; width: 160px; height: 160px; border-radius: 50%;
+  border: 2px dashed rgba(255, 255, 255, .25); bottom: -70px; right: 90px;
+}
+.hero .h-ico {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; border-radius: 14px; background: rgba(255, 255, 255, .2);
+  backdrop-filter: blur(8px); font-size: 22px; margin-bottom: 14px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .25);
+}
+.hero h2 { font-size: 26px; font-weight: 800; letter-spacing: -.03em; line-height: 1.2; }
+.hero p { font-size: 13.5px; opacity: .88; margin-top: 5px; max-width: 420px; }
+.hero-stats { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+.hero-stats .st {
+  display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600;
+  padding: 6px 14px; border-radius: 999px; background: rgba(255, 255, 255, .18);
+  backdrop-filter: blur(8px); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22);
+}
+.hero-stats .st b { font-weight: 800; }
 
-/* ============ Layout ============ */
-.container { max-width: 760px; margin: 0 auto; padding: 0 20px 80px; }
+/* ============ Card ============ */
 .card {
   background: var(--surface); border-radius: var(--radius-lg);
-  border: 1px solid var(--separator-light); padding: 22px; margin-bottom: 20px;
+  border: 1px solid var(--separator-light); padding: 20px; margin-bottom: 18px;
   box-shadow: var(--shadow-md); position: relative;
   transition: background .35s, border-color .35s, box-shadow .25s var(--ease);
 }
-.card::before {
-  content: ""; position: absolute; inset: 0 0 auto 0; height: 1px; border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,.7), transparent);
-  pointer-events: none;
-}
-body.dark .card::before { background: linear-gradient(90deg, transparent, rgba(255,255,255,.08), transparent); }
 .card-title {
-  font-size: 13px; font-weight: 600; color: var(--text-2); letter-spacing: .02em;
-  margin-bottom: 14px; display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 700; color: var(--text-2); letter-spacing: .02em;
+  margin-bottom: 14px; display: flex; align-items: center; gap: 10px;
 }
-.card-title .t-dot { width: 8px; height: 8px; border-radius: 3px; background: var(--grad-btn); }
+.card-title .t-ico {
+  width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center;
+  justify-content: center; font-size: 14px; flex-shrink: 0;
+}
+.card-title .t-ico.blue { background: rgba(0,122,255,.12); }
+.card-title .t-ico.purple { background: rgba(175,82,222,.12); }
+.card-title .t-ico.orange { background: rgba(255,149,0,.14); }
+.card-title .t-ico.green { background: rgba(52,199,89,.14); }
 
-/* ============ Segmented control（iOS）============ */
+/* ============ Segmented ============ */
 .segmented {
-  display: flex; background: var(--surface-2); border-radius: var(--radius-sm);
+  display: flex; background: var(--surface-2); border-radius: 12px;
   padding: 3px; margin-bottom: 16px; border: 1px solid var(--separator-light);
 }
 .seg-btn {
-  flex: 1; padding: 7px 10px; border: none; border-radius: 8px; cursor: pointer;
+  flex: 1; padding: 8px 10px; border: none; border-radius: 9px; cursor: pointer;
   font-size: 13px; font-weight: 600; color: var(--text-2); font-family: inherit;
   transition: all .22s var(--ease); background: transparent;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
 }
+.seg-btn .seg-ico { font-size: 14px; }
 .seg-btn:hover { color: var(--text); }
-.seg-btn.active {
-  background: var(--surface); color: var(--blue); box-shadow: var(--shadow-sm);
-}
-body.dark .seg-btn.active { box-shadow: 0 1px 4px rgba(0,0,0,.5); }
+.seg-btn.active { background: var(--surface); color: var(--blue); box-shadow: var(--shadow-sm), 0 0 0 1px var(--separator-light); }
+body.dark .seg-btn.active { box-shadow: 0 1px 5px rgba(0,0,0,.5), 0 0 0 1px var(--separator); }
 
 /* ============ Inputs ============ */
 .tab-pane { display: none; }
 .tab-pane.active { display: block; animation: fadeIn .25s var(--ease); }
 textarea, input[type="text"] {
-  width: 100%; padding: 12px 14px; border: 1px solid var(--separator);
+  width: 100%; padding: 13px 15px; border: 1px solid var(--separator);
   border-radius: var(--radius-md); font-size: 14px; font-family: inherit;
   background: var(--surface); color: var(--text); line-height: 1.7;
   transition: border-color .2s var(--ease), box-shadow .2s var(--ease); outline: none; resize: vertical;
@@ -173,7 +197,7 @@ textarea:focus, input[type="text"]:focus {
 }
 .hint-line { margin-top: 10px; font-size: 11.5px; color: var(--text-3); display: flex; flex-wrap: wrap; gap: 4px 8px; }
 .hint-line code {
-  font-family: var(--font-mono, "SF Mono", Consolas, monospace); font-size: 10.5px;
+  font-family: "SF Mono", Consolas, monospace; font-size: 10.5px;
   padding: 1px 6px; border-radius: 5px; background: var(--surface-2); color: var(--text-2);
 }
 
@@ -188,32 +212,30 @@ textarea:focus, input[type="text"]:focus {
 .drop-zone .dz-main { font-size: 13.5px; color: var(--text-2); font-weight: 600; }
 .drop-zone .dz-sub { font-size: 12px; color: var(--text-3); margin-top: 4px; }
 
-/* ============ Buttons ============ */
-.btn-row { display: flex; gap: 14px; align-items: center; margin-top: 18px; flex-wrap: wrap; }
+/* ============ Submit ============ */
+.submit-row { display: flex; gap: 14px; align-items: center; margin-top: 18px; flex-wrap: wrap; }
 .btn {
-  padding: 10px 22px; border: none; border-radius: var(--radius-md); font-size: 14px; font-weight: 600;
-  cursor: pointer; transition: all .2s var(--ease); display: inline-flex; align-items: center; gap: 8px;
+  padding: 11px 24px; border: none; border-radius: var(--radius-md); font-size: 14px; font-weight: 700;
+  cursor: pointer; transition: all .22s var(--ease); display: inline-flex; align-items: center; gap: 8px;
   font-family: inherit; letter-spacing: -.01em;
 }
 .btn-primary {
   background: var(--grad-btn); color: #fff;
-  box-shadow: 0 4px 14px rgba(10, 132, 255, .35);
+  box-shadow: 0 5px 16px rgba(10, 132, 255, .38);
 }
-.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(10, 132, 255, .45); }
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(10, 132, 255, .5); }
 .btn-primary:active { transform: translateY(0) scale(.97); }
 .btn-primary:disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; }
 .btn svg { width: 14px; height: 14px; }
-
-/* ============ Status ============ */
-.status-wrap { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 180px; }
+.status-wrap { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 170px; }
 .status-badge {
-  font-size: 12.5px; font-weight: 600; padding: 5px 12px; border-radius: 999px;
+  font-size: 12.5px; font-weight: 600; padding: 5px 13px; border-radius: 999px;
   display: inline-flex; align-items: center; gap: 7px; width: fit-content;
-  transition: all .3s var(--ease); letter-spacing: 0;
+  transition: all .3s var(--ease);
 }
 .status-badge.idle { color: var(--text-3); background: var(--surface-2); }
 .status-badge.running { color: var(--blue); background: rgba(0, 122, 255, .1); }
-.status-badge.done { color: var(--green); background: rgba(52, 199, 89, .12); }
+.status-badge.done { color: var(--green); background: rgba(52, 199, 89, .13); }
 .status-badge.error { color: var(--red); background: rgba(255, 59, 48, .1); }
 .spinner {
   width: 12px; height: 12px; border-radius: 50%; border: 2px solid currentColor;
@@ -229,7 +251,7 @@ textarea:focus, input[type="text"]:focus {
 /* ============ Result tabs ============ */
 .res-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--separator-light); margin-bottom: 18px; }
 .res-tab {
-  padding: 8px 14px; cursor: pointer; font-size: 13.5px; font-weight: 600;
+  padding: 9px 15px; cursor: pointer; font-size: 13.5px; font-weight: 600;
   color: var(--text-3); transition: color .2s var(--ease); background: none;
   border: none; border-bottom: 2.5px solid transparent; margin-bottom: -1px;
   display: flex; align-items: center; gap: 7px; font-family: inherit;
@@ -239,7 +261,7 @@ textarea:focus, input[type="text"]:focus {
 .res-pane { display: none; }
 .res-pane.active { display: block; animation: fadeIn .3s var(--ease); }
 
-/* ============ Flomo note（Apple Notes 风）============ */
+/* ============ Flomo note ============ */
 .flomo-note { font-size: 13.5px; line-height: 1.85; }
 .flomo-note .tag-line { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
 .flomo-note .tag-line span {
@@ -253,19 +275,22 @@ textarea:focus, input[type="text"]:focus {
 .flomo-note .tag-line span:nth-child(5) { background: rgba(255,45,85,.1); color: var(--pink); border-color: rgba(255,45,85,.22); }
 .flomo-note .tag-line span:nth-child(6) { background: rgba(48,176,199,.1); color: var(--teal); border-color: rgba(48,176,199,.22); }
 .flomo-note .tag-line span:nth-child(n+7) { background: rgba(88,86,214,.1); color: var(--indigo); border-color: rgba(88,86,214,.22); }
-.flomo-note .tag-line span:hover { transform: scale(1.05); }
+.flomo-note .tag-line span:hover { transform: scale(1.06); }
 .flomo-note .bold-title {
-  font-size: 16px; font-weight: 700; letter-spacing: -.02em; margin-bottom: 4px;
+  font-size: 16.5px; font-weight: 700; letter-spacing: -.02em; margin-bottom: 5px;
 }
-.flomo-note .source { color: var(--text-3); font-size: 12px; margin-bottom: 14px; }
-.flomo-note .concept { margin-bottom: 8px; }
-.flomo-note .subconcept { margin-bottom: 5px; padding-left: 16px; position: relative; color: var(--text-2); }
+.flomo-note .source { color: var(--text-3); font-size: 12px; margin-bottom: 13px; display: flex; align-items: center; gap: 5px; }
+.flomo-note .concept {
+  margin-bottom: 10px; padding: 13px 16px; background: var(--surface-2);
+  border-radius: var(--radius-md); border-left: 3px solid var(--blue); position: relative;
+}
+.flomo-note .subconcept { margin-bottom: 6px; padding-left: 17px; position: relative; color: var(--text-2); }
 .flomo-note .subconcept::before {
   content: ""; position: absolute; left: 3px; top: 10px; width: 6px; height: 6px;
   border-radius: 50%; background: var(--blue); opacity: .55;
 }
 .flomo-note mark {
-  background: linear-gradient(180deg, transparent 12%, var(--mark-bg) 12%, var(--mark-bg) 88%, transparent 88%);
+  background: linear-gradient(180deg, transparent 10%, var(--mark-bg) 10%, var(--mark-bg) 90%, transparent 90%);
   color: var(--mark-text); padding: 0 2px; font-weight: 500; border-radius: 2px;
 }
 .flomo-note strong { font-weight: 700; }
@@ -280,33 +305,38 @@ textarea:focus, input[type="text"]:focus {
 .compare-col { min-width: 0; }
 .compare-label {
   font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
-  margin-bottom: 8px; display: flex; align-items: center; gap: 6px;
+  margin-bottom: 8px; display: flex; align-items: center; gap: 7px;
 }
+.compare-label .lb-pill { font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 6px; }
 .compare-label.new { color: var(--blue); }
+.compare-label.new .lb-pill { background: rgba(0,122,255,.12); }
 .compare-label.old { color: var(--orange); }
-.compare-label::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.compare-label.old .lb-pill { background: rgba(255,149,0,.14); }
 .compare-panel {
   background: var(--surface-2); border: 1px solid var(--separator-light); border-radius: var(--radius-md);
   padding: 14px 16px; max-height: 440px; overflow-y: auto; font-size: 12.5px; line-height: 1.8;
 }
 .compare-panel mark { background: var(--mark-bg); color: var(--mark-text); padding: 0 2px; border-radius: 3px; }
 .decision-bar {
-  padding: 11px 14px; border-radius: var(--radius-md); margin-bottom: 14px;
-  display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600;
+  padding: 12px 15px; border-radius: var(--radius-md); margin-bottom: 14px;
+  display: flex; align-items: center; gap: 11px; font-size: 13px; font-weight: 600;
   animation: fadeIn .3s var(--ease);
 }
 .decision-bar.force-new { background: rgba(0,122,255,.08); border: 1px solid rgba(0,122,255,.2); color: var(--blue); }
 .decision-bar.update { background: rgba(255,149,0,.08); border: 1px solid rgba(255,149,0,.2); color: var(--orange); }
 .decision-bar.skip { background: var(--surface-2); border: 1px solid var(--separator-light); color: var(--text-2); }
-.decision-icon { font-size: 15px; }
+.decision-icon {
+  width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center;
+  justify-content: center; font-size: 15px; background: var(--surface); box-shadow: var(--shadow-sm); flex-shrink: 0;
+}
 .relevance-line { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 12.5px; color: var(--text-2); }
 .relevance-badge { font-size: 12px; font-weight: 700; padding: 3px 11px; border-radius: 999px; }
 .relevance-high { background: rgba(255,59,48,.1); color: var(--red); }
-.relevance-low { background: rgba(52,199,89,.12); color: var(--green); }
+.relevance-low { background: rgba(52,199,89,.13); color: var(--green); }
 
 /* ============ Log ============ */
 .raw-log {
-  background: var(--code-bg); color: var(--code-text); padding: 14px 16px;
+  background: var(--code-bg); color: var(--code-text); padding: 15px 17px;
   border-radius: var(--radius-md); font-family: "SF Mono", "Cascadia Code", Consolas, monospace;
   font-size: 11.5px; line-height: 1.7; white-space: pre-wrap; word-break: break-all;
   overflow-x: auto; max-height: 520px; overflow-y: auto;
@@ -316,13 +346,15 @@ textarea:focus, input[type="text"]:focus {
 
 /* ============ Misc ============ */
 .empty-state { color: var(--text-3); font-size: 13px; text-align: center; padding: 30px 0; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-.fade-in { animation: fadeIn .35s var(--ease); }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+.fade-in { animation: fadeIn .4s var(--ease); }
+.footer { text-align: center; color: var(--text-3); font-size: 11.5px; padding: 18px 0 6px; letter-spacing: .02em; }
 
 @media (max-width: 680px) {
-  .container { padding: 0 12px 60px; }
-  .card { padding: 18px; }
-  .page-head h2 { font-size: 24px; }
+  .container { padding: 14px 12px 60px; }
+  .card { padding: 17px; }
+  .hero { padding: 22px 20px 18px; }
+  .hero h2 { font-size: 22px; }
   .compare-grid { grid-template-columns: 1fr; }
   .btn-row { flex-wrap: wrap; }
 }
@@ -355,17 +387,25 @@ textarea:focus, input[type="text"]:focus {
 
 <div class="container">
 
-<div class="page-head fade-in">
-  <h2>新建笔记</h2>
-  <p>输入内容，AI 自动分析、查重并同步至 flomo</p>
+<!-- Hero banner -->
+<div class="hero fade-in">
+  <div class="h-ico">✦</div>
+  <h2>我的知识库</h2>
+  <p>粘贴文章、URL 或图片，AI 自动分析内容、查重去重，并以 flomo 格式沉淀为结构化笔记。</p>
+  <div class="hero-stats">
+    <span class="st">🤖 AI 自动分析</span>
+    <span class="st">🔍 智能查重</span>
+    <span class="st">📚 flomo 同步</span>
+  </div>
 </div>
 
+<!-- Input card -->
 <div class="card fade-in">
-  <div class="card-title"><span class="t-dot"></span> 输入内容</div>
+  <div class="card-title"><span class="t-ico blue">📥</span> 输入内容</div>
   <div class="segmented">
-    <button class="seg-btn active" onclick="switchTab('text')">📝 正文</button>
-    <button class="seg-btn" onclick="switchTab('url')">🔗 URL</button>
-    <button class="seg-btn" onclick="switchTab('image')">🖼️ 图片</button>
+    <button class="seg-btn active" onclick="switchTab('text')"><span class="seg-ico">📝</span> 正文</button>
+    <button class="seg-btn" onclick="switchTab('url')"><span class="seg-ico">🔗</span> URL</button>
+    <button class="seg-btn" onclick="switchTab('image')"><span class="seg-ico">🖼️</span> 图片</button>
   </div>
   <div id="tab-text" class="tab-pane active">
     <textarea id="content" placeholder="粘贴文章正文或笔记内容…"></textarea>
@@ -390,7 +430,7 @@ textarea:focus, input[type="text"]:focus {
       <button class="btn" style="position:absolute;top:8px;right:8px;padding:5px 11px;background:rgba(0,0,0,.65);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600" onclick="clearImage()">✕ 移除</button>
     </div>
   </div>
-  <div class="btn-row">
+  <div class="submit-row">
     <button class="btn btn-primary" id="submitBtn" onclick="process()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg>
       处理并上传
@@ -402,6 +442,7 @@ textarea:focus, input[type="text"]:focus {
   </div>
 </div>
 
+<!-- Result -->
 <div id="result-section" style="display:none">
   <div class="card fade-in">
     <div class="res-tabs">
@@ -414,6 +455,8 @@ textarea:focus, input[type="text"]:focus {
     <div id="res-log" class="res-pane"></div>
   </div>
 </div>
+
+<div class="footer">mynews · AI 内容处理管道 · flomo 知识沉淀</div>
 
 </div>
 
@@ -528,8 +571,8 @@ function renderResults(data) {
       html += `<div class="decision-bar ${cls}"><span class="decision-icon">${icon}</span> ${escapeHtml(sections.aiDecision)}</div>`;
     }
     html += '<div class="compare-grid">' +
-      '<div class="compare-col"><div class="compare-label new">新内容</div><div class="compare-panel">' + renderFlomoNote(sections.newNote || '(无)') + '</div></div>' +
-      '<div class="compare-col"><div class="compare-label old">已有笔记</div><div class="compare-panel">' + renderFlomoNote(sections.oldNote) + '</div></div>' +
+      '<div class="compare-col"><div class="compare-label new"><span class="lb-pill">NEW</span>新内容</div><div class="compare-panel">' + renderFlomoNote(sections.newNote || '(无)') + '</div></div>' +
+      '<div class="compare-col"><div class="compare-label old"><span class="lb-pill">OLD</span>已有笔记</div><div class="compare-panel">' + renderFlomoNote(sections.oldNote) + '</div></div>' +
       '</div>';
     compDiv.innerHTML = html;
   } else {
