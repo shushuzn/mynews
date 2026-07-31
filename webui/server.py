@@ -109,11 +109,11 @@ def _fetch_feed_items(feed: dict, limit: int = 2) -> list:
     except Exception:
         return []
 
-def _fetch_rss_items() -> list:
+def _fetch_rss_items(force: bool = False) -> list:
     """并发抓取所有源最新条目，合并去重并打乱，带 10 分钟缓存。每次刷新重读 OPML（新增源即时生效）。"""
     global RSS_CACHE, FEEDS
     with RSS_LOCK:
-        if RSS_CACHE["items"] and (time.time() - RSS_CACHE["ts"] < 600):
+        if not force and RSS_CACHE["items"] and (time.time() - RSS_CACHE["ts"] < 600):
             return RSS_CACHE["items"]
     FEEDS = _load_feeds()  # 缓存过期时重新加载 OPML
     if not FEEDS:
@@ -137,6 +137,17 @@ def _fetch_rss_items() -> list:
         RSS_CACHE = {"ts": time.time(), "items": merged}
     print(f"[server] RSS 聚合: {len(merged)} 条（{len(FEEDS)} 源），按发布时间倒序")
     return merged
+
+
+def _rss_background_refresh():
+    """后台守护线程：每 10 分钟强制刷新一次 RSS 缓存，不依赖浏览器打开。"""
+    while True:
+        time.sleep(600)
+        try:
+            _fetch_rss_items(force=True)
+            print("[server] 后台 RSS 自动刷新完成")
+        except Exception as e:
+            print(f"[server] 后台 RSS 自动刷新失败: {e}")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -374,8 +385,11 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    # 后台线程：每 10 分钟自动刷新 RSS 缓存
+    threading.Thread(target=_rss_background_refresh, daemon=True).start()
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     print(f"[mynews] Web UI 启动: http://localhost:{PORT}")
+    print(f"   后台 RSS 自动刷新已启动（每 10 分钟）")
     print(f"   按 Ctrl+C 停止")
     try:
         server.serve_forever()
