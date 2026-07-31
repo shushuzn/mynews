@@ -162,6 +162,8 @@ def _validate_and_extract_domain(content):
     if not match:
         raise ValueError("无法从内容中找到粗体标题行（格式：**领域_二级领域_知识点**）")
     full_title = match.group(0)[2:-2]  # 去掉首尾 **
+    # 兼容旧笔记：标题里的 \_ 转义下划线还原为普通下划线，否则解析出的领域会带反斜杠
+    full_title = full_title.replace('\\_', '_')
     if '-' in full_title:
         raise ValueError(f"标题禁止使用连字符（-）：'{full_title}'")
     if full_title.count('_') != 2:
