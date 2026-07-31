@@ -49,7 +49,7 @@ def _check_kimi():
     # 版本检查：本地 kimi --version ↔ 远端 latest，仅提示不阻断
     local_ver = ""
     try:
-        r = subprocess.run([kimi_bin, "--version"], capture_output=True, text=True, timeout=10)
+        r = subprocess.run([kimi_bin, "--version"], capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=10)
         raw_ver = (r.stdout or r.stderr or "").strip()
         m = re.search(r"(\d+\.\d+\.\d+)", raw_ver)
         if m:

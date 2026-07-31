@@ -133,12 +133,13 @@ class Handler(BaseHTTPRequestHandler):
             env["FLOMO_TOKEN"] = FLOMO_TOKEN
 
         try:
-            r = subprocess.run(cmd, capture_output=True, text=True, timeout=600, env=env, cwd=str(SCRIPTS_DIR))
-            full_output = r.stdout
+            r = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace',
+                               timeout=600, env=env, cwd=str(SCRIPTS_DIR))
+            full_output = r.stdout or ""
             if r.stderr:
                 full_output += "\n--- stderr ---\n" + r.stderr
 
-            success = "上传成功" in r.stdout or "更新成功" in r.stdout or "处理完成" in r.stdout or "无增量 → 跳过" in r.stdout
+            success = "上传成功" in full_output or "更新成功" in full_output or "处理完成" in full_output or "无增量 → 跳过" in full_output
             self._json_response(success, full_output)
         except subprocess.TimeoutExpired:
             self._json_response(False, "处理超时（>10分钟）")
@@ -186,7 +187,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             r = subprocess.run(
                 [kimi_bin, "-p", prompt, "--output-format", "text"],
-                capture_output=True, text=True, timeout=60
+                capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=60
             )
             out = (r.stdout or r.stderr or "").strip()
             if out and "error" not in out[:50]:
