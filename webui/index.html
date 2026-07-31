@@ -243,6 +243,12 @@ textarea, input[type="text"] {
 }
 textarea::placeholder, input::placeholder { color: var(--text-3); }
 textarea { min-height: 150px; }
+.field { position: relative; }
+.char-count {
+  position: absolute; right: 12px; bottom: 10px; font-size: 11px; color: var(--text-3);
+  font-weight: 500; pointer-events: none; font-variant-numeric: tabular-nums;
+  background: color-mix(in srgb, var(--surface) 85%, transparent); padding: 1px 7px; border-radius: 999px;
+}
 textarea:focus, input[type="text"]:focus {
   border-color: var(--blue); box-shadow: 0 0 0 4px rgba(0, 122, 255, .14);
 }
@@ -402,7 +408,11 @@ textarea:focus, input[type="text"]:focus {
   width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center;
   justify-content: center; font-size: 15px; background: var(--surface); box-shadow: var(--shadow-sm); flex-shrink: 0;
 }
-.relevance-line { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 12.5px; color: var(--text-2); }
+.relevance-line { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 12.5px; color: var(--text-2); }
+.relevance-bar { flex: 1; height: 6px; border-radius: 3px; background: var(--surface-3); overflow: hidden; max-width: 180px; }
+.relevance-bar i { display: block; height: 100%; border-radius: 3px; transition: width .8s var(--ease); }
+.relevance-bar.high i { background: linear-gradient(90deg, #ff9500, #ff3b30); }
+.relevance-bar.low i { background: linear-gradient(90deg, #34c759, #30b0c7); }
 .relevance-badge { font-size: 12px; font-weight: 700; padding: 3px 11px; border-radius: 999px; }
 .relevance-high { background: rgba(255,59,48,.1); color: var(--red); }
 .relevance-low { background: rgba(52,199,89,.13); color: var(--green); }
@@ -491,6 +501,7 @@ textarea:focus, input[type="text"]:focus {
 
     <div class="hero fade-in">
       <div class="h-ico">✦</div>
+      <span style="position:absolute;top:18px;right:22px;font-size:12px;font-weight:700;color:rgba(255,255,255,.9);background:rgba(255,255,255,.18);padding:5px 14px;border-radius:999px;backdrop-filter:blur(8px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.22);font-variant-numeric:tabular-nums" id="heroDate"></span>
       <h2>我的知识库</h2>
       <p>粘贴文章、URL 或图片，AI 自动分析内容、查重去重，沉淀为 flomo 结构化笔记。</p>
       <div class="hero-stats">
@@ -513,14 +524,21 @@ textarea:focus, input[type="text"]:focus {
           <span style="font-size:12px;color:var(--text-3)">文章正文 / 笔记原文</span>
           <button class="sample-btn" onclick="fillSample()">填入示例</button>
         </div>
-        <textarea id="content" placeholder="粘贴文章正文或笔记内容…"></textarea>
+        <div class="field">
+          <textarea id="content" placeholder="粘贴文章正文或笔记内容…"></textarea>
+          <span class="char-count" id="charCount">0 字</span>
+        </div>
         <div class="hint-line">
           允许 <code>**加粗**</code> <code>&lt;mark&gt;高亮&lt;/mark&gt;</code> <code>- 列表</code>
           · 禁止 <code># 标题</code> <code>链接</code> <code>表格</code> <code>引用</code>
+          · 提示 <kbd style="font-family:inherit;font-size:10.5px;padding:1px 5px;border-radius:4px;background:var(--surface-2);border:1px solid var(--separator)">Ctrl</kbd>+<kbd style="font-family:inherit;font-size:10.5px;padding:1px 5px;border-radius:4px;background:var(--surface-2);border:1px solid var(--separator)">Enter</kbd> 快速提交
         </div>
       </div>
       <div id="tab-url" class="tab-pane">
-        <div class="field-head"><span style="font-size:12px;color:var(--text-3)">网页链接</span></div>
+        <div class="field-head">
+          <span style="font-size:12px;color:var(--text-3)">网页链接</span>
+          <button class="sample-btn" onclick="fillSampleUrl()">填入示例</button>
+        </div>
         <input type="text" id="url" placeholder="https://example.com/article">
         <div class="hint-line">自动抓取网页正文后交给 AI 分析，支持微信公众号、arXiv、维基百科等</div>
       </div>
@@ -573,7 +591,7 @@ textarea:focus, input[type="text"]:focus {
       </div>
     </div>
 
-    <div class="footer">mynews · AI 内容处理管道 · flomo 知识沉淀</div>
+    <div class="footer">mynews v2.1 · AI 内容处理管道 · flomo 知识沉淀</div>
 
   </div>
 </main>
@@ -613,13 +631,32 @@ function switchRes(tab) {
 
 /* ============ 示例填充 ============ */
 function fillSample() {
-  document.getElementById('content').value =
+  const el = document.getElementById('content');
+  el.value =
     '量子纠缠是量子力学中两个或多个粒子形成关联态的现象：对其中一个粒子的测量会瞬时影响另一个粒子的状态，无论它们相距多远。' +
     '\n\n- 贝尔不等式实验验证了纠缠的非定域性' +
     '\n- 纠缠是量子通信与量子计算的核心资源' +
     '\n- 2022年诺贝尔物理学奖授予纠缠实验先驱';
-  document.getElementById('content').focus();
+  updateCharCount();
+  el.focus();
 }
+function fillSampleUrl() {
+  document.getElementById('url').value = 'https://en.wikipedia.org/wiki/Besov_space';
+}
+
+/* ============ 字数统计 & 快捷键 ============ */
+function updateCharCount() {
+  const el = document.getElementById('content');
+  const n = el.value.length;
+  document.getElementById('charCount').textContent = n + ' 字';
+}
+document.getElementById('content').addEventListener('input', updateCharCount);
+document.addEventListener('keydown', function(e) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    const btn = document.getElementById('submitBtn');
+    if (!btn.disabled) process();
+  }
+});
 
 /* ============ 渲染 ============ */
 function escapeHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -692,7 +729,11 @@ function renderResults(data) {
     if (sections.relevance !== undefined) {
       const pct = Math.round(sections.relevance * 100);
       const cls = sections.relevance >= 0.9 ? 'relevance-high' : 'relevance-low';
-      html += `<div class="relevance-line">与已有笔记相似度 <span class="relevance-badge ${cls}">${pct}%</span></div>`;
+      html += `<div class="relevance-line">与已有笔记相似度
+        <span class="relevance-bar ${cls}"><i style="width:0%"></i></span>
+        <span class="relevance-badge ${cls}">${pct}%</span>
+      </div>`;
+      setTimeout(() => { const bar = compDiv.querySelector('.relevance-bar i'); if (bar) bar.style.width = pct + '%'; }, 60);
     }
     if (sections.aiDecision) {
       const isForceNew = sections.aiDecision.includes('强制新建');
@@ -873,6 +914,11 @@ function setStatus(text, cls) {
 /* ============ 初始化 ============ */
 renderRecent();
 renderStats();
+(function() {
+  const now = new Date();
+  const week = ['日','一','二','三','四','五','六'][now.getDay()];
+  document.getElementById('heroDate').textContent = (now.getMonth()+1) + '月' + now.getDate() + '日 · 周' + week;
+})();
 </script>
 </body>
 </html>
