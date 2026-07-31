@@ -431,10 +431,21 @@ def _normalize_flomo_content(content: str) -> str:
 
 def _call_kimi(prompt: str, timeout: int = 180) -> str:
     """调用本地 kimi CLI 处理提示，返回 stdout。"""
+    import os as _os
+    import shutil as _shutil
     import subprocess as _sp
+    # 优先用绝对路径，避免子进程 PATH 缺失时找不到命令
+    kimi_bin = _shutil.which("kimi")
+    if not kimi_bin:
+        for cand in (_os.path.expanduser("~/.local/bin/kimi"), "/usr/local/bin/kimi"):
+            if _os.path.isfile(cand) and _os.access(cand, _os.X_OK):
+                kimi_bin = cand
+                break
+    if not kimi_bin:
+        return "[error] kimi 调用失败: 未找到 kimi 命令"
     try:
         r = _sp.run(
-            ["kimi", "-p", prompt, "--quiet"],
+            [kimi_bin, "-p", prompt, "--quiet"],
             capture_output=True, text=True, encoding='utf-8', timeout=timeout
         )
         raw = r.stdout.strip() or r.stderr.strip() or ""
