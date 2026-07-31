@@ -604,7 +604,7 @@ textarea:focus, input[type="text"]:focus {
     <div class="card fade-in">
       <div class="card-title">
         <span class="t-ico purple">🕘</span> 最近处理
-        <span class="t-side">仅保存在本浏览器</span>
+        <span class="t-side"><button class="sample-btn" onclick="clearRecords()">清空记录</button></span>
       </div>
       <div class="recent-list" id="recentList">
         <div class="recent-empty">还没有处理记录，处理第一条笔记后会显示在这里</div>
@@ -614,6 +614,9 @@ textarea:focus, input[type="text"]:focus {
     <!-- Result -->
     <div id="result-section" style="display:none">
       <div class="card fade-in">
+        <div class="card-title"><span class="t-ico green">📄</span> 处理结果
+          <span class="t-side"><button class="sample-btn" onclick="document.getElementById('result-section').style.display='none'">收起 ✕</button></span>
+        </div>
         <div class="res-tabs">
           <button class="res-tab active" onclick="switchRes('note')">📄 笔记</button>
           <button class="res-tab" onclick="switchRes('compare')">🔍 对比</button>
@@ -766,6 +769,8 @@ function parseMarkers(text) {
 function renderResults(data) {
   const sections = parseMarkers(data.output || '');
   const log = data.output || '';
+  window._lastNote = sections.flomoNote || '';
+  window._lastLog = log;
 
   // 摘要条
   const sumEl = document.getElementById('res-summary');
@@ -790,7 +795,8 @@ function renderResults(data) {
   if (sections.flomoNote) {
     noteDiv.innerHTML = renderFlomoNote(sections.flomoNote);
     if (sections.newId) noteDiv.innerHTML += `<div class="note-meta">✓ 已上传 · flomo ID: ${escapeHtml(sections.newId)}
-      <button class="copy-btn" onclick="copyText('${escapeHtml(sections.newId)}', this)">复制 ID</button></div>`;
+      <button class="copy-btn" onclick="copyText('${escapeHtml(sections.newId)}', this)">复制 ID</button>
+      <button class="copy-btn" onclick="copyNote(this)">复制全文</button></div>`;
   } else if (data.success) {
     noteDiv.innerHTML = skipped
       ? '<div class="empty-state">⏭️ 已跳过（与已有笔记重复，无增量）</div>'
@@ -831,21 +837,31 @@ function renderResults(data) {
   }
 
   // Log tab
-  document.getElementById('res-log').innerHTML = `<div class="raw-log">${escapeHtml(log)}</div>`;
+  document.getElementById('res-log').innerHTML = `<div class="raw-log">${escapeHtml(log)}</div>
+    <div style="margin-top:10px;text-align:right"><button class="copy-btn" onclick="copyLog(this)">复制日志</button></div>`;
   document.getElementById('result-section').style.display = 'block';
   document.getElementById('result-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  // 失败时自动切到日志 tab
+  if (!data.success) switchRes('log');
 
   // 记录到本地
   if (data.success) recordRecent(sections, data.output);
 }
 
 /* ============ 复制 ============ */
-function copyText(text, btn) {
+function copyNote(btn) {
+  copyText(window._lastNote || '', btn, '复制全文');
+}
+function copyLog(btn) {
+  copyText(window._lastLog || '', btn, '复制日志');
+}
+function copyText(text, btn, label) {
   const done = function() {
     if (!btn) return;
     btn.textContent = '已复制 ✓';
     btn.classList.add('copied');
-    setTimeout(() => { btn.textContent = '复制 ID'; btn.classList.remove('copied'); }, 1800);
+    setTimeout(() => { btn.textContent = label || '复制 ID'; btn.classList.remove('copied'); }, 1800);
   };
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
@@ -882,6 +898,14 @@ function recordRecent(sections, output) {
   localStorage.setItem('mynews-records', JSON.stringify(list));
   renderRecent();
   renderStats();
+}
+function clearRecords() {
+  if (!getRecords().length) return;
+  if (!confirm('确定清空本浏览器的所有处理记录吗？')) return;
+  localStorage.removeItem('mynews-records');
+  renderRecent();
+  renderStats();
+  setStatus('记录已清空', 'done');
 }
 function renderRecent() {
   const list = getRecords();
