@@ -1752,6 +1752,8 @@ document.addEventListener('drop', e => {
 let _autoMode = false;
 let _autoCurrentUrl = '';
 let _autoCurrentId = '';
+let _autoTimer = null;      // 全部处理完后的轮询定时器
+let _autoBusy = false;      // 防止并发 tick
 let _abortCtrl = null;
 function submitClick() {
   if (_processing) cancelProcess();
@@ -1778,7 +1780,8 @@ function toggleAuto() {
     setStatus('🔁 自动模式已开启，获取 HN 最新…', 'running');
     autoTick();
   } else {
-    // 关闭自动模式时，若正在处理/预检则立即中断
+    // 关闭自动模式：清除轮询定时器、中断正在处理/预检
+    if (_autoTimer) { clearTimeout(_autoTimer); _autoTimer = null; }
     if (_processing && _abortCtrl) _abortCtrl.abort();
     document.getElementById('content').disabled = false;
     document.getElementById('url').disabled = false;
@@ -1788,15 +1791,17 @@ function toggleAuto() {
   }
 }
 async function autoTick() {
-  if (!_autoMode) return;
+  if (!_autoMode || _autoBusy) return;
+  _autoBusy = true;
   const btn = document.getElementById('autoBtn');
   btn.classList.add('busy');
   try {
     const resp = await fetch('/api/rss/items');
+    if (!_autoMode) return; // 抓取期间用户关闭
     const data = await resp.json();
     if (!data.success || !Array.isArray(data.output) || !data.output.length) {
-      setStatus('自动模式：获取 RSS 列表失败', 'error');
-      _autoMode = false; toggleAuto();
+      setStatus('自动模式：获取 RSS 列表失败，已自动关闭', 'error');
+      toggleAuto(); // _autoMode 此刻仍为 true，翻转后即关闭并复位 UI
       return;
     }
     const processed = JSON.parse(localStorage.getItem('hn-processed') || '[]');
@@ -1807,9 +1812,8 @@ async function autoTick() {
       !tempSkipped.includes('url:' + i.url));
     if (!next) {
       setStatus('自动模式：所有源最新条目均已处理过，10 分钟后自动重新检查', 'done');
-      btn.classList.remove('busy');
       // 缓存 10 分钟过期后自动重查，有新条目继续处理
-      setTimeout(autoTick, 600000 + Math.floor(Math.random() * 30000));
+      _autoTimer = setTimeout(autoTick, 600000 + Math.floor(Math.random() * 30000));
       return;
     }
     // 预检抓取：内容为空/被拦截/超时 → 直接标记跳过，不提交 AI
@@ -1842,7 +1846,6 @@ async function autoTick() {
         // 用户取消预检
         _abortCtrl = null;
         setStatus('已取消', 'done');
-        btn.classList.remove('busy');
         return;
       }
       // 网络错误：本次会话跳过，不标记已处理
@@ -1862,7 +1865,10 @@ async function autoTick() {
     } else {
       setStatus('自动模式：请求失败 ' + e.message, 'error');
     }
+  } finally {
+    // 复位 busy 状态；process() 结束或失败后由其自身的定时器驱动下一轮
     btn.classList.remove('busy');
+    _autoBusy = false;
   }
 }
 function markAutoProcessed(item) {
