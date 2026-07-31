@@ -183,6 +183,14 @@ body {
   content: ""; position: absolute; width: 150px; height: 150px; border-radius: 50%;
   border: 2px dashed rgba(255, 255, 255, .25); bottom: -65px; right: 85px;
 }
+.hero .h-spark {
+  position: absolute; border-radius: 50%; background: rgba(255, 255, 255, .55);
+  pointer-events: none; animation: floaty 5s ease-in-out infinite;
+}
+.hero .h-spark.s1 { width: 7px; height: 7px; top: 38%; right: 26%; }
+.hero .h-spark.s2 { width: 4px; height: 4px; top: 62%; right: 40%; animation-delay: 1.6s; animation-duration: 7s; }
+.hero .h-spark.s3 { width: 5px; height: 5px; top: 30%; right: 12%; animation-delay: 3s; animation-duration: 6s; }
+@keyframes floaty { 0%, 100% { transform: translateY(0); opacity: .5; } 50% { transform: translateY(-10px); opacity: 1; } }
 .hero .h-ico {
   display: inline-flex; align-items: center; justify-content: center;
   width: 42px; height: 42px; border-radius: 13px; background: rgba(255, 255, 255, .2);
@@ -593,6 +601,9 @@ textarea:focus, input[type="text"]:focus {
 
     <div class="hero fade-in">
       <div class="h-ico">✦</div>
+      <span class="h-spark s1"></span>
+      <span class="h-spark s2"></span>
+      <span class="h-spark s3"></span>
       <span style="position:absolute;top:18px;right:22px;font-size:12px;font-weight:700;color:rgba(255,255,255,.9);background:rgba(255,255,255,.18);padding:5px 14px;border-radius:999px;backdrop-filter:blur(8px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.22);font-variant-numeric:tabular-nums" id="heroDate"></span>
       <h2>我的知识库</h2>
       <p id="heroSub">粘贴文章、URL 或图片，AI 自动分析内容、查重去重，沉淀为 flomo 结构化笔记。</p>
@@ -675,7 +686,10 @@ textarea:focus, input[type="text"]:focus {
     <div class="card fade-in">
       <div class="card-title">
         <span class="t-ico purple">🕘</span> 最近处理
-        <span class="t-side"><button class="sample-btn" onclick="clearRecords()">清空记录</button></span>
+        <span class="t-side">
+          <button class="sample-btn" onclick="exportRecords()">导出</button>
+          <button class="sample-btn" onclick="clearRecords()">清空记录</button>
+        </span>
       </div>
       <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
         <button class="rf-btn active" data-f="all" onclick="setRecentFilter('all')">全部</button>
@@ -948,7 +962,16 @@ function clearDraft() {
   updateCharCount();
 }
 document.getElementById('content').addEventListener('input', updateCharCount);
-document.getElementById('url').addEventListener('input', function() { updateSubmitState(); saveDraft(); });
+// URL 输入：自动保存 + 停顿 700ms 自动预览
+let urlPreviewTimer = null;
+document.getElementById('url').addEventListener('input', function() {
+  updateSubmitState(); saveDraft();
+  clearTimeout(urlPreviewTimer);
+  const v = this.value.trim();
+  if (/^https?:\/\/.+/i.test(v)) {
+    urlPreviewTimer = setTimeout(previewUrl, 700);
+  }
+});
 document.getElementById('url').addEventListener('keydown', function(e) {
   if (e.key === 'Enter') {
     e.preventDefault();
@@ -1239,6 +1262,23 @@ function clearRecords() {
   renderRecent();
   renderStats();
   setStatus('记录已清空', 'done');
+}
+function exportRecords() {
+  const list = getRecords();
+  if (!list.length) {
+    setStatus('暂无记录可导出', 'error');
+    return;
+  }
+  const data = { app: 'mynews', exportedAt: new Date().toISOString(), records: list };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'mynews-records-' + new Date().toISOString().slice(0, 10) + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+  setStatus('已导出 ' + list.length + ' 条记录', 'done');
 }
 let _recentFilter = 'all';
 function setRecentFilter(f) {
