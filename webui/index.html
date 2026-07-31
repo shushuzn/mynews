@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>mynews — 知识笔记处理器</title>
 <style>
-/* ============ Apple Design Language · Rich ============ */
+/* ============ Design Tokens（Apple 质感 · 丰富层次）============ */
 :root {
   --bg: #f2f2f7;
   --surface: #ffffff;
@@ -39,6 +39,7 @@
   --shadow-lg: 0 16px 40px rgba(0, 0, 0, .12), 0 4px 12px rgba(0, 0, 0, .07);
   --shadow-hero: 0 16px 44px rgba(94, 92, 230, .35);
   --ease: cubic-bezier(.25, .1, .25, 1);
+  --sidebar-w: 216px;
 }
 body.dark {
   --bg: #0b0b10;
@@ -114,38 +115,87 @@ body {
 .icon-btn:active { transform: scale(.92); }
 .icon-btn svg { width: 16px; height: 16px; }
 
-/* ============ Hero banner ============ */
-.container { max-width: 760px; margin: 0 auto; padding: 24px 20px 80px; }
+/* ============ App shell（侧边栏 + 主区）============ */
+.app { display: flex; max-width: 1100px; margin: 0 auto; padding: 20px 20px 0; gap: 20px; align-items: flex-start; }
+.sidebar {
+  width: var(--sidebar-w); position: sticky; top: 76px; flex-shrink: 0;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.sidebar .nav {
+  background: var(--surface); border: 1px solid var(--separator-light);
+  border-radius: var(--radius-lg); padding: 8px; box-shadow: var(--shadow-sm);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.nav-item {
+  display: flex; align-items: center; gap: 11px; padding: 10px 12px;
+  border-radius: var(--radius-sm); font-size: 13.5px; font-weight: 600; color: var(--text-2);
+  cursor: pointer; transition: all .18s var(--ease); position: relative; border: none; background: none; width: 100%; font-family: inherit; text-align: left;
+}
+.nav-item:hover { background: var(--surface-2); color: var(--text); }
+.nav-item.active { background: var(--accent-soft, rgba(0,122,255,.1)); color: var(--blue); }
+.nav-item .n-ico {
+  width: 26px; height: 26px; border-radius: 8px; display: flex; align-items: center;
+  justify-content: center; font-size: 13px; flex-shrink: 0; background: var(--surface-2);
+}
+.nav-item.active .n-ico { background: rgba(0,122,255,.14); }
+.nav-item .n-badge {
+  margin-left: auto; font-size: 10px; font-weight: 700; color: var(--text-3);
+  background: var(--surface-2); padding: 2px 7px; border-radius: 999px;
+}
+.nav-item.disabled { opacity: .45; cursor: not-allowed; }
+.nav-item.disabled:hover { background: none; color: var(--text-2); }
+.sidebar .stat-card {
+  background: var(--grad-hero); color: #fff; border-radius: var(--radius-lg);
+  padding: 16px; box-shadow: var(--shadow-hero); position: relative; overflow: hidden;
+}
+.sidebar .stat-card::after {
+  content: ""; position: absolute; width: 110px; height: 110px; border-radius: 50%;
+  background: rgba(255,255,255,.14); top: -50px; right: -40px;
+}
+.stat-card .sc-label { font-size: 11px; font-weight: 600; opacity: .85; letter-spacing: .04em; }
+.stat-card .sc-num { font-size: 26px; font-weight: 800; letter-spacing: -.03em; margin: 2px 0; font-variant-numeric: tabular-nums; }
+.stat-card .sc-sub { font-size: 11px; opacity: .8; }
+.stat-card .sc-row { display: flex; gap: 14px; margin-top: 10px; }
+.stat-card .sc-row .sc-mini { flex: 1; }
+.stat-card .sc-mini .m-num { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.stat-card .sc-mini .m-label { font-size: 10px; opacity: .8; }
+.sidebar .tip-card {
+  background: var(--surface); border: 1px solid var(--separator-light); border-radius: var(--radius-lg);
+  padding: 14px; box-shadow: var(--shadow-sm); font-size: 12px; color: var(--text-2); line-height: 1.7;
+}
+.tip-card .t-title { font-weight: 700; color: var(--text); font-size: 12.5px; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+
+/* ============ Main ============ */
+.main { flex: 1; min-width: 0; }
+.container { max-width: 760px; margin: 0 auto; }
 .hero {
   position: relative; overflow: hidden; border-radius: var(--radius-xl);
-  background: var(--grad-hero); color: #fff; padding: 28px 28px 22px;
-  box-shadow: var(--shadow-hero); margin-bottom: 22px;
+  background: var(--grad-hero); color: #fff; padding: 26px 28px 20px;
+  box-shadow: var(--shadow-hero); margin-bottom: 18px;
 }
 .hero::before {
   content: ""; position: absolute; width: 300px; height: 300px; border-radius: 50%;
   background: rgba(255, 255, 255, .12); top: -140px; right: -80px; filter: blur(6px);
 }
 .hero::after {
-  content: ""; position: absolute; width: 160px; height: 160px; border-radius: 50%;
-  border: 2px dashed rgba(255, 255, 255, .25); bottom: -70px; right: 90px;
+  content: ""; position: absolute; width: 150px; height: 150px; border-radius: 50%;
+  border: 2px dashed rgba(255, 255, 255, .25); bottom: -65px; right: 85px;
 }
 .hero .h-ico {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 44px; height: 44px; border-radius: 14px; background: rgba(255, 255, 255, .2);
-  backdrop-filter: blur(8px); font-size: 22px; margin-bottom: 14px;
+  width: 42px; height: 42px; border-radius: 13px; background: rgba(255, 255, 255, .2);
+  backdrop-filter: blur(8px); font-size: 20px; margin-bottom: 12px;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .25);
 }
-.hero h2 { font-size: 26px; font-weight: 800; letter-spacing: -.03em; line-height: 1.2; }
-.hero p { font-size: 13.5px; opacity: .88; margin-top: 5px; max-width: 420px; }
-.hero-stats { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+.hero h2 { font-size: 24px; font-weight: 800; letter-spacing: -.03em; line-height: 1.2; }
+.hero p { font-size: 13px; opacity: .9; margin-top: 4px; max-width: 420px; }
+.hero-stats { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
 .hero-stats .st {
-  display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600;
-  padding: 6px 14px; border-radius: 999px; background: rgba(255, 255, 255, .18);
+  display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600;
+  padding: 5px 12px; border-radius: 999px; background: rgba(255, 255, 255, .18);
   backdrop-filter: blur(8px); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22);
 }
-.hero-stats .st b { font-weight: 800; }
 
-/* ============ Card ============ */
 .card {
   background: var(--surface); border-radius: var(--radius-lg);
   border: 1px solid var(--separator-light); padding: 20px; margin-bottom: 18px;
@@ -164,6 +214,7 @@ body {
 .card-title .t-ico.purple { background: rgba(175,82,222,.12); }
 .card-title .t-ico.orange { background: rgba(255,149,0,.14); }
 .card-title .t-ico.green { background: rgba(52,199,89,.14); }
+.card-title .t-side { margin-left: auto; font-size: 12px; color: var(--text-3); font-weight: 500; }
 
 /* ============ Segmented ============ */
 .segmented {
@@ -195,6 +246,12 @@ textarea { min-height: 150px; }
 textarea:focus, input[type="text"]:focus {
   border-color: var(--blue); box-shadow: 0 0 0 4px rgba(0, 122, 255, .14);
 }
+.field-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.field-head .sample-btn {
+  font-size: 11.5px; color: var(--blue); background: none; border: none; cursor: pointer;
+  font-weight: 600; padding: 2px 8px; border-radius: 6px; transition: all .15s; font-family: inherit;
+}
+.field-head .sample-btn:hover { background: rgba(0,122,255,.1); }
 .hint-line { margin-top: 10px; font-size: 11.5px; color: var(--text-3); display: flex; flex-wrap: wrap; gap: 4px 8px; }
 .hint-line code {
   font-family: "SF Mono", Consolas, monospace; font-size: 10.5px;
@@ -204,11 +261,11 @@ textarea:focus, input[type="text"]:focus {
 /* ============ Drop zone ============ */
 .drop-zone {
   border: 2px dashed var(--separator); border-radius: var(--radius-md);
-  padding: 34px 20px; text-align: center; cursor: pointer; transition: all .2s var(--ease);
+  padding: 30px 20px; text-align: center; cursor: pointer; transition: all .2s var(--ease);
   background: var(--surface-2);
 }
 .drop-zone:hover, .drop-zone.dragover { border-color: var(--blue); background: rgba(0, 122, 255, .05); }
-.drop-zone .dz-ico { font-size: 30px; display: block; margin-bottom: 8px; }
+.drop-zone .dz-ico { font-size: 28px; display: block; margin-bottom: 8px; }
 .drop-zone .dz-main { font-size: 13.5px; color: var(--text-2); font-weight: 600; }
 .drop-zone .dz-sub { font-size: 12px; color: var(--text-3); margin-top: 4px; }
 
@@ -248,6 +305,24 @@ textarea:focus, input[type="text"]:focus {
 .progress-bar i { display: block; height: 100%; width: 35%; border-radius: 3px; background: var(--grad-btn); animation: slide 1.1s ease-in-out infinite; }
 @keyframes slide { 0% { margin-left: -35%; } 100% { margin-left: 100%; } }
 
+/* ============ Recent list ============ */
+.recent-list { display: flex; flex-direction: column; gap: 8px; }
+.recent-item {
+  display: flex; align-items: center; gap: 12px; padding: 11px 14px;
+  border: 1px solid var(--separator-light); border-radius: var(--radius-md);
+  background: var(--surface-2); transition: all .18s var(--ease);
+}
+.recent-item:hover { border-color: var(--blue); transform: translateX(2px); }
+.recent-item .r-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.r-dot.create { background: var(--green); }
+.r-dot.update { background: var(--orange); }
+.r-dot.skip { background: var(--text-3); }
+.recent-item .r-body { flex: 1; min-width: 0; }
+.recent-item .r-title { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.recent-item .r-sub { font-size: 11px; color: var(--text-3); margin-top: 1px; }
+.recent-item .r-time { font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.recent-empty { color: var(--text-3); font-size: 12.5px; text-align: center; padding: 22px 0; }
+
 /* ============ Result tabs ============ */
 .res-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--separator-light); margin-bottom: 18px; }
 .res-tab {
@@ -276,13 +351,11 @@ textarea:focus, input[type="text"]:focus {
 .flomo-note .tag-line span:nth-child(6) { background: rgba(48,176,199,.1); color: var(--teal); border-color: rgba(48,176,199,.22); }
 .flomo-note .tag-line span:nth-child(n+7) { background: rgba(88,86,214,.1); color: var(--indigo); border-color: rgba(88,86,214,.22); }
 .flomo-note .tag-line span:hover { transform: scale(1.06); }
-.flomo-note .bold-title {
-  font-size: 16.5px; font-weight: 700; letter-spacing: -.02em; margin-bottom: 5px;
-}
-.flomo-note .source { color: var(--text-3); font-size: 12px; margin-bottom: 13px; display: flex; align-items: center; gap: 5px; }
+.flomo-note .bold-title { font-size: 16.5px; font-weight: 700; letter-spacing: -.02em; margin-bottom: 5px; }
+.flomo-note .source { color: var(--text-3); font-size: 12px; margin-bottom: 13px; }
 .flomo-note .concept {
   margin-bottom: 10px; padding: 13px 16px; background: var(--surface-2);
-  border-radius: var(--radius-md); border-left: 3px solid var(--blue); position: relative;
+  border-radius: var(--radius-md); border-left: 3px solid var(--blue);
 }
 .flomo-note .subconcept { margin-bottom: 6px; padding-left: 17px; position: relative; color: var(--text-2); }
 .flomo-note .subconcept::before {
@@ -334,7 +407,7 @@ textarea:focus, input[type="text"]:focus {
 .relevance-high { background: rgba(255,59,48,.1); color: var(--red); }
 .relevance-low { background: rgba(52,199,89,.13); color: var(--green); }
 
-/* ============ Log ============ */
+/* ============ Log & footer ============ */
 .raw-log {
   background: var(--code-bg); color: var(--code-text); padding: 15px 17px;
   border-radius: var(--radius-md); font-family: "SF Mono", "Cascadia Code", Consolas, monospace;
@@ -343,20 +416,22 @@ textarea:focus, input[type="text"]:focus {
 }
 .raw-log::-webkit-scrollbar { width: 8px; }
 .raw-log::-webkit-scrollbar-thumb { background: rgba(255,255,255,.16); border-radius: 4px; }
-
-/* ============ Misc ============ */
 .empty-state { color: var(--text-3); font-size: 13px; text-align: center; padding: 30px 0; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 .fade-in { animation: fadeIn .4s var(--ease); }
-.footer { text-align: center; color: var(--text-3); font-size: 11.5px; padding: 18px 0 6px; letter-spacing: .02em; }
+.footer { text-align: center; color: var(--text-3); font-size: 11.5px; padding: 20px 0 8px; }
 
+/* ============ Responsive ============ */
+@media (max-width: 960px) {
+  .sidebar { display: none; }
+}
 @media (max-width: 680px) {
-  .container { padding: 14px 12px 60px; }
+  .container { padding: 0 12px; }
   .card { padding: 17px; }
-  .hero { padding: 22px 20px 18px; }
-  .hero h2 { font-size: 22px; }
+  .hero { padding: 20px 20px 16px; }
+  .hero h2 { font-size: 21px; }
   .compare-grid { grid-template-columns: 1fr; }
-  .btn-row { flex-wrap: wrap; }
+  .submit-row { flex-wrap: wrap; }
 }
 </style>
 </head>
@@ -385,82 +460,128 @@ textarea:focus, input[type="text"]:focus {
   </button>
 </div>
 
-<div class="container">
+<div class="app">
 
-<!-- Hero banner -->
-<div class="hero fade-in">
-  <div class="h-ico">✦</div>
-  <h2>我的知识库</h2>
-  <p>粘贴文章、URL 或图片，AI 自动分析内容、查重去重，并以 flomo 格式沉淀为结构化笔记。</p>
-  <div class="hero-stats">
-    <span class="st">🤖 AI 自动分析</span>
-    <span class="st">🔍 智能查重</span>
-    <span class="st">📚 flomo 同步</span>
+<!-- ============ Sidebar ============ -->
+<aside class="sidebar">
+  <div class="nav">
+    <button class="nav-item active"><span class="n-ico">📝</span> 新建笔记</button>
+    <button class="nav-item disabled"><span class="n-ico">📚</span> 笔记库 <span class="n-badge">即将推出</span></button>
+    <button class="nav-item disabled"><span class="n-ico">🏷️</span> 标签管理 <span class="n-badge">即将推出</span></button>
+    <button class="nav-item disabled"><span class="n-ico">📊</span> 统计分析 <span class="n-badge">即将推出</span></button>
   </div>
-</div>
+  <div class="stat-card">
+    <div class="sc-label">今日处理</div>
+    <div class="sc-num" id="statToday">0</div>
+    <div class="sc-sub" id="statTodaySub">还没有处理记录</div>
+    <div class="sc-row">
+      <div class="sc-mini"><div class="m-num" id="statWeek">0</div><div class="m-label">本周</div></div>
+      <div class="sc-mini"><div class="m-num" id="statTotal">0</div><div class="m-label">累计</div></div>
+    </div>
+  </div>
+  <div class="tip-card">
+    <div class="t-title">💡 使用提示</div>
+    支持正文、URL、图片三种输入；AI 自动分类并查重，相同主题会合并或跳过。
+  </div>
+</aside>
 
-<!-- Input card -->
-<div class="card fade-in">
-  <div class="card-title"><span class="t-ico blue">📥</span> 输入内容</div>
-  <div class="segmented">
-    <button class="seg-btn active" onclick="switchTab('text')"><span class="seg-ico">📝</span> 正文</button>
-    <button class="seg-btn" onclick="switchTab('url')"><span class="seg-ico">🔗</span> URL</button>
-    <button class="seg-btn" onclick="switchTab('image')"><span class="seg-ico">🖼️</span> 图片</button>
-  </div>
-  <div id="tab-text" class="tab-pane active">
-    <textarea id="content" placeholder="粘贴文章正文或笔记内容…"></textarea>
-    <div class="hint-line">
-      允许 <code>**加粗**</code> <code>&lt;mark&gt;高亮&lt;/mark&gt;</code> <code>- 列表</code>
-      · 禁止 <code># 标题</code> <code>链接</code> <code>表格</code> <code>引用</code>
-    </div>
-  </div>
-  <div id="tab-url" class="tab-pane">
-    <input type="text" id="url" placeholder="https://example.com/article">
-    <div class="hint-line">自动抓取网页正文后交给 AI 分析</div>
-  </div>
-  <div id="tab-image" class="tab-pane">
-    <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
-      <span class="dz-ico">🖼️</span>
-      <div class="dz-main">点击上传或拖拽图片</div>
-      <div class="dz-sub">JPG / PNG / WebP · AI 自动提取文字</div>
-      <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="previewImage(event)">
-    </div>
-    <div id="imagePreview" style="display:none;margin-top:14px;position:relative">
-      <img id="previewImg" style="max-width:100%;max-height:280px;border-radius:12px;border:1px solid var(--separator);box-shadow:var(--shadow-md)">
-      <button class="btn" style="position:absolute;top:8px;right:8px;padding:5px 11px;background:rgba(0,0,0,.65);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600" onclick="clearImage()">✕ 移除</button>
-    </div>
-  </div>
-  <div class="submit-row">
-    <button class="btn btn-primary" id="submitBtn" onclick="process()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg>
-      处理并上传
-    </button>
-    <div class="status-wrap">
-      <span class="status-badge idle" id="status"><span class="spinner"></span> 就绪</span>
-      <div class="progress-bar" id="progressBar"><i></i></div>
-    </div>
-  </div>
-</div>
+<!-- ============ Main ============ -->
+<main class="main">
+  <div class="container">
 
-<!-- Result -->
-<div id="result-section" style="display:none">
-  <div class="card fade-in">
-    <div class="res-tabs">
-      <button class="res-tab active" onclick="switchRes('note')">📄 笔记</button>
-      <button class="res-tab" onclick="switchRes('compare')">🔍 对比</button>
-      <button class="res-tab" onclick="switchRes('log')">📋 日志</button>
+    <div class="hero fade-in">
+      <div class="h-ico">✦</div>
+      <h2>我的知识库</h2>
+      <p>粘贴文章、URL 或图片，AI 自动分析内容、查重去重，沉淀为 flomo 结构化笔记。</p>
+      <div class="hero-stats">
+        <span class="st">🤖 AI 自动分析</span>
+        <span class="st">🔍 智能查重</span>
+        <span class="st">📚 flomo 同步</span>
+      </div>
     </div>
-    <div id="res-note" class="res-pane active"></div>
-    <div id="res-compare" class="res-pane"></div>
-    <div id="res-log" class="res-pane"></div>
-  </div>
-</div>
 
-<div class="footer">mynews · AI 内容处理管道 · flomo 知识沉淀</div>
+    <!-- Input card -->
+    <div class="card fade-in">
+      <div class="card-title"><span class="t-ico blue">📥</span> 输入内容</div>
+      <div class="segmented">
+        <button class="seg-btn active" onclick="switchTab('text')"><span class="seg-ico">📝</span> 正文</button>
+        <button class="seg-btn" onclick="switchTab('url')"><span class="seg-ico">🔗</span> URL</button>
+        <button class="seg-btn" onclick="switchTab('image')"><span class="seg-ico">🖼️</span> 图片</button>
+      </div>
+      <div id="tab-text" class="tab-pane active">
+        <div class="field-head">
+          <span style="font-size:12px;color:var(--text-3)">文章正文 / 笔记原文</span>
+          <button class="sample-btn" onclick="fillSample()">填入示例</button>
+        </div>
+        <textarea id="content" placeholder="粘贴文章正文或笔记内容…"></textarea>
+        <div class="hint-line">
+          允许 <code>**加粗**</code> <code>&lt;mark&gt;高亮&lt;/mark&gt;</code> <code>- 列表</code>
+          · 禁止 <code># 标题</code> <code>链接</code> <code>表格</code> <code>引用</code>
+        </div>
+      </div>
+      <div id="tab-url" class="tab-pane">
+        <div class="field-head"><span style="font-size:12px;color:var(--text-3)">网页链接</span></div>
+        <input type="text" id="url" placeholder="https://example.com/article">
+        <div class="hint-line">自动抓取网页正文后交给 AI 分析，支持微信公众号、arXiv、维基百科等</div>
+      </div>
+      <div id="tab-image" class="tab-pane">
+        <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+          <span class="dz-ico">🖼️</span>
+          <div class="dz-main">点击上传或拖拽图片</div>
+          <div class="dz-sub">JPG / PNG / WebP · AI 自动提取文字</div>
+          <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="previewImage(event)">
+        </div>
+        <div id="imagePreview" style="display:none;margin-top:14px;position:relative">
+          <img id="previewImg" style="max-width:100%;max-height:280px;border-radius:12px;border:1px solid var(--separator);box-shadow:var(--shadow-md)">
+          <button class="btn" style="position:absolute;top:8px;right:8px;padding:5px 11px;background:rgba(0,0,0,.65);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600" onclick="clearImage()">✕ 移除</button>
+        </div>
+      </div>
+      <div class="submit-row">
+        <button class="btn btn-primary" id="submitBtn" onclick="process()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg>
+          处理并上传
+        </button>
+        <div class="status-wrap">
+          <span class="status-badge idle" id="status"><span class="spinner"></span> 就绪</span>
+          <div class="progress-bar" id="progressBar"><i></i></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent -->
+    <div class="card fade-in">
+      <div class="card-title">
+        <span class="t-ico purple">🕘</span> 最近处理
+        <span class="t-side">仅保存在本浏览器</span>
+      </div>
+      <div class="recent-list" id="recentList">
+        <div class="recent-empty">还没有处理记录，处理第一条笔记后会显示在这里</div>
+      </div>
+    </div>
+
+    <!-- Result -->
+    <div id="result-section" style="display:none">
+      <div class="card fade-in">
+        <div class="res-tabs">
+          <button class="res-tab active" onclick="switchRes('note')">📄 笔记</button>
+          <button class="res-tab" onclick="switchRes('compare')">🔍 对比</button>
+          <button class="res-tab" onclick="switchRes('log')">📋 日志</button>
+        </div>
+        <div id="res-note" class="res-pane active"></div>
+        <div id="res-compare" class="res-pane"></div>
+        <div id="res-log" class="res-pane"></div>
+      </div>
+    </div>
+
+    <div class="footer">mynews · AI 内容处理管道 · flomo 知识沉淀</div>
+
+  </div>
+</main>
 
 </div>
 
 <script>
+/* ============ 主题 ============ */
 function toggleTheme() {
   document.body.classList.toggle('dark');
   const isDark = document.body.classList.contains('dark');
@@ -476,6 +597,7 @@ function toggleTheme() {
   }
 })();
 
+/* ============ 标签切换 ============ */
 function switchTab(tab) {
   document.querySelectorAll('.seg-btn').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab-pane').forEach(t => t.classList.remove('active'));
@@ -489,6 +611,17 @@ function switchRes(tab) {
   document.getElementById(`res-${tab}`).classList.add('active');
 }
 
+/* ============ 示例填充 ============ */
+function fillSample() {
+  document.getElementById('content').value =
+    '量子纠缠是量子力学中两个或多个粒子形成关联态的现象：对其中一个粒子的测量会瞬时影响另一个粒子的状态，无论它们相距多远。' +
+    '\n\n- 贝尔不等式实验验证了纠缠的非定域性' +
+    '\n- 纠缠是量子通信与量子计算的核心资源' +
+    '\n- 2022年诺贝尔物理学奖授予纠缠实验先驱';
+  document.getElementById('content').focus();
+}
+
+/* ============ 渲染 ============ */
 function escapeHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 function renderFlomoNote(text) {
@@ -582,8 +715,71 @@ function renderResults(data) {
   // Log tab
   document.getElementById('res-log').innerHTML = `<div class="raw-log">${escapeHtml(log)}</div>`;
   document.getElementById('result-section').style.display = 'block';
+
+  // 记录到本地
+  if (data.success) recordRecent(sections, data.output);
 }
 
+/* ============ 本地记录与统计 ============ */
+function getRecords() {
+  try { return JSON.parse(localStorage.getItem('mynews-records') || '[]'); } catch (e) { return []; }
+}
+function recordRecent(sections, output) {
+  let action = 'create', label = '新建笔记';
+  if ((output || '').includes('无增量 → 跳过') || (output || '').includes('已跳过')) { action = 'skip'; label = '跳过'; }
+  else if ((output || '').includes('更新成功')) { action = 'update'; label = '更新'; }
+
+  // 提取标题
+  let title = '未命名笔记';
+  const tm = (output || '').match(/\*\*([^*]+)\*\*/);
+  if (tm) title = tm[1].replace(/\\_/g, '_');
+  const id = sections.newId || sections.oldId || '';
+
+  const rec = { title, id, action, label, time: Date.now() };
+  const list = [rec, ...getRecords()].slice(0, 8);
+  localStorage.setItem('mynews-records', JSON.stringify(list));
+  renderRecent();
+  renderStats();
+}
+function renderRecent() {
+  const list = getRecords();
+  const el = document.getElementById('recentList');
+  if (!list.length) {
+    el.innerHTML = '<div class="recent-empty">还没有处理记录，处理第一条笔记后会显示在这里</div>';
+    return;
+  }
+  el.innerHTML = list.map(r => {
+    const t = new Date(r.time);
+    const hm = String(t.getHours()).padStart(2,'0') + ':' + String(t.getMinutes()).padStart(2,'0');
+    const d = t.getMonth()+1 + '/' + t.getDate();
+    return `<div class="recent-item">
+      <span class="r-dot ${r.action}"></span>
+      <div class="r-body">
+        <div class="r-title">${escapeHtml(r.title)}</div>
+        <div class="r-sub">${r.label}${r.id ? ' · ' + escapeHtml(r.id) : ''}</div>
+      </div>
+      <span class="r-time">${d} ${hm}</span>
+    </div>`;
+  }).join('');
+}
+function renderStats() {
+  const list = getRecords();
+  const now = new Date();
+  const today = now.toDateString();
+  let todayN = 0, weekN = 0;
+  const weekStart = now.getTime() - (now.getDay() || 7) * 86400000;
+  for (const r of list) {
+    const d = new Date(r.time);
+    if (d.toDateString() === today) todayN++;
+    if (d.getTime() >= weekStart) weekN++;
+  }
+  document.getElementById('statToday').textContent = todayN;
+  document.getElementById('statTodaySub').textContent = todayN ? '今天辛苦了，继续加油' : '还没有处理记录';
+  document.getElementById('statWeek').textContent = weekN;
+  document.getElementById('statTotal').textContent = list.length;
+}
+
+/* ============ 图片 ============ */
 let uploadedFile = null;
 
 function previewImage(e) {
@@ -606,7 +802,6 @@ function clearImage() {
   document.getElementById('dropZone').style.display = 'block';
 }
 
-// Drag & drop support
 const dropZone = document.getElementById('dropZone');
 if (dropZone) {
   dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
@@ -621,6 +816,7 @@ if (dropZone) {
   });
 }
 
+/* ============ 处理 ============ */
 async function process() {
   const content = document.getElementById('content').value.trim();
   const url = document.getElementById('url').value.trim();
@@ -673,6 +869,10 @@ function setStatus(text, cls) {
   el.innerHTML = `<span class="spinner"></span> ${text}`;
   el.className = `status-badge ${cls}`;
 }
+
+/* ============ 初始化 ============ */
+renderRecent();
+renderStats();
 </script>
 </body>
 </html>
