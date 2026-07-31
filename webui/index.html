@@ -669,6 +669,12 @@ textarea:focus, input[type="text"]:focus {
       <path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" fill-opacity=".18"/>
     </svg>
   </button>
+  <button class="icon-btn" onclick="showRecent()" title="最近处理">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9"/>
+      <path d="M12 7v5l3.5 2"/>
+    </svg>
+  </button>
   <button class="icon-btn" onclick="showSettings()" title="设置">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="3"/>
@@ -793,28 +799,6 @@ textarea:focus, input[type="text"]:focus {
       </div>
     </div>
 
-    <!-- Recent -->
-    <div class="card fade-in">
-      <div class="card-title">
-        <span class="t-ico purple">🕘</span> 最近处理
-        <span class="t-side">
-          <button class="sample-btn" onclick="exportRecords()">导出</button>
-          <button class="sample-btn" onclick="document.getElementById('importFile').click()">导入</button>
-          <button class="sample-btn" onclick="clearRecords()">清空记录</button>
-          <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importRecords(event)">
-        </span>
-      </div>
-      <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
-        <button class="rf-btn active" data-f="all" onclick="setRecentFilter('all')">全部</button>
-        <button class="rf-btn" data-f="create" onclick="setRecentFilter('create')">🆕 新建</button>
-        <button class="rf-btn" data-f="update" onclick="setRecentFilter('update')">📝 更新</button>
-        <button class="rf-btn" data-f="skip" onclick="setRecentFilter('skip')">⏭️ 跳过</button>
-      </div>
-      <div class="recent-list" id="recentList">
-        <div class="recent-empty">还没有处理记录，处理第一条笔记后会显示在这里</div>
-      </div>
-    </div>
-
     <!-- Result -->
     <div id="result-section" style="display:none">
       <div class="card fade-in">
@@ -880,6 +864,29 @@ textarea:focus, input[type="text"]:focus {
   </div>
 </div>
 
+<!-- 最近处理弹层 -->
+<div class="shortcut-overlay" id="recentOverlay" onclick="if(event.target===this)hideRecent()">
+  <div class="shortcut-panel" style="width:min(520px,92vw)">
+    <h3>🕘 最近处理</h3>
+    <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
+      <button class="rf-btn active" data-f="all" onclick="setRecentFilter('all')">全部</button>
+      <button class="rf-btn" data-f="create" onclick="setRecentFilter('create')">🆕 新建</button>
+      <button class="rf-btn" data-f="update" onclick="setRecentFilter('update')">📝 更新</button>
+      <button class="rf-btn" data-f="skip" onclick="setRecentFilter('skip')">⏭️ 跳过</button>
+      <span style="margin-left:auto;display:flex;gap:6px">
+        <button class="sample-btn" onclick="exportRecords()">导出</button>
+        <button class="sample-btn" onclick="document.getElementById('importFile').click()">导入</button>
+        <button class="sample-btn" onclick="clearRecords()">清空</button>
+        <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importRecords(event)">
+      </span>
+    </div>
+    <div class="recent-list" id="recentList" style="max-height:52vh;overflow-y:auto;padding-right:4px">
+      <div class="recent-empty">还没有处理记录，处理第一条笔记后会显示在这里</div>
+    </div>
+    <button class="sc-close" onclick="hideRecent()">关闭</button>
+  </div>
+</div>
+
 <script>
 function hideShortcuts() { document.getElementById('shortcutOverlay').classList.remove('show'); }
 function showShortcuts() { document.getElementById('shortcutOverlay').classList.add('show'); }
@@ -888,6 +895,11 @@ function showSettings() {
   document.getElementById('settingsOverlay').classList.add('show');
   syncThemeBtns();
   document.getElementById('soundToggle2').textContent = soundOn ? '开' : '关';
+}
+function hideRecent() { document.getElementById('recentOverlay').classList.remove('show'); }
+function showRecent() {
+  renderRecent();
+  document.getElementById('recentOverlay').classList.add('show');
 }
 function syncThemeBtns() {
   const t = localStorage.getItem('mynews-theme') || 'light';
@@ -1186,6 +1198,8 @@ document.addEventListener('keydown', function(e) {
     const rs = document.getElementById('result-section');
     if (rs && rs.style.display !== 'none') rs.style.display = 'none';
     hideShortcuts();
+    hideSettings();
+    hideRecent();
   } else if (e.key === '?') {
     const tag = (e.target && e.target.tagName) || '';
     if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
