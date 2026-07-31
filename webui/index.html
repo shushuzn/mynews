@@ -1820,8 +1820,9 @@ async function autoTick() {
       _abortCtrl = null;
       const info = pv.success && typeof pv.output === 'object' ? pv.output : null;
       if (info && (info.blocked || info.length === 0)) {
-        markAutoProcessed(next);
-        setStatus('⏭️ 跳过（抓取为空/被拦截）：' + (next.title || '').slice(0, 30) + '…', 'done');
+        // 抓取为空/被拦截：本次会话跳过，不永久标记（刷新后可重试）
+        addTempSkip(next.url);
+        setStatus('⏭️ 跳过（抓取为空/被拦截，未标记已处理）：' + (next.title || '').slice(0, 30) + '…', 'done');
         setTimeout(autoTick, 600);
         return;
       }
@@ -1924,6 +1925,7 @@ async function process() {
   document.getElementById('result-section').style.display = 'none';
 
   let body;
+  let processOk = false;
   const headers = {};
   if (hasImage) {
     const fd = new FormData();
@@ -1942,6 +1944,7 @@ async function process() {
       signal: _abortCtrl.signal
     });
     const data = await resp.json();
+    processOk = !!data.success;
     const secs = ((Date.now() - startTime) / 1000).toFixed(1);
     renderResults(data, { duration: parseFloat(secs) });
     playSound(data.success);
@@ -1969,12 +1972,16 @@ async function process() {
     _processing = false;
     _abortCtrl = null;
     if (_autoMode) {
-      // 自动模式：保持输入锁定，标记已处理，继续下一条
+      // 自动模式：保持输入锁定，仅成功才标记已处理；失败临时跳过（刷新后可重试）
       document.getElementById('content').disabled = true;
       document.getElementById('url').disabled = true;
       document.querySelectorAll('.seg-btn').forEach(b => b.disabled = true);
       if (_autoCurrentUrl) {
-        markAutoProcessed({ id: _autoCurrentId, url: _autoCurrentUrl });
+        if (processOk) {
+          markAutoProcessed({ id: _autoCurrentId, url: _autoCurrentUrl });
+        } else {
+          addTempSkip(_autoCurrentUrl);
+        }
       }
       setTimeout(autoTick, 900);
     } else {
