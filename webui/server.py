@@ -78,11 +78,12 @@ def _fetch_feed_items(feed: dict, limit: int = 2) -> list:
         return []
 
 def _fetch_rss_items() -> list:
-    """并发抓取所有源最新条目，合并去重并打乱，带 10 分钟缓存。"""
-    global RSS_CACHE
+    """并发抓取所有源最新条目，合并去重并打乱，带 10 分钟缓存。每次刷新重读 OPML（新增源即时生效）。"""
+    global RSS_CACHE, FEEDS
     with RSS_LOCK:
         if RSS_CACHE["items"] and (time.time() - RSS_CACHE["ts"] < 600):
             return RSS_CACHE["items"]
+    FEEDS = _load_feeds()  # 缓存过期时重新加载 OPML
     if not FEEDS:
         return []
     results = []
