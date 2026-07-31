@@ -458,6 +458,9 @@ textarea:focus, input[type="text"]:focus {
 }
 .raw-log::-webkit-scrollbar { width: 8px; }
 .raw-log::-webkit-scrollbar-thumb { background: rgba(255,255,255,.16); border-radius: 4px; }
+.raw-log .log-line { display: block; }
+.raw-log .log-line.err { color: #fb7185; font-weight: 600; }
+.raw-log .log-line.ok { color: #4ade80; }
 .empty-state { color: var(--text-3); font-size: 13px; text-align: center; padding: 30px 0; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 .fade-in { animation: fadeIn .4s var(--ease); }
@@ -730,7 +733,7 @@ function renderFlomoNote(text) {
       const tags = line.split(/\s+/).filter(Boolean).map(t => `<span>${escapeHtml(t)}</span>`).join('');
       html += `<div class="tag-line">${tags}</div>`;
     } else if (/^\*\*.*\*\*$/.test(line.trim()) && !line.includes('**来源**') && !line.includes('**概念**') ) {
-      html += `<div class="bold-title">${escapeHtml(line).replace(/\*\*/g, '')}</div>`;
+      html += `<div class="bold-title">${escapeHtml(line).replace(/\*\*/g, '').replace(/\\_/g, '_')}</div>`;
     } else if (line.startsWith('**来源**')) {
       html += `<div class="source">${escapeHtml(line)}</div>`;
     } else if (line.startsWith('**概念**')) {
@@ -836,8 +839,14 @@ function renderResults(data) {
     compDiv.innerHTML = '<div class="empty-state">未检测到相似笔记，已直接上传</div>';
   }
 
-  // Log tab
-  document.getElementById('res-log').innerHTML = `<div class="raw-log">${escapeHtml(log)}</div>
+  // Log tab（错误行高亮）
+  const logLines = log.split('\n').map(l => {
+    let cls = '';
+    if (/\[error\]|Error|Traceback|失败|拒绝/.test(l)) cls = 'err';
+    else if (/上传成功|更新成功|处理完成|校验通过/.test(l)) cls = 'ok';
+    return `<span class="log-line ${cls}">${escapeHtml(l)}</span>`;
+  }).join('\n');
+  document.getElementById('res-log').innerHTML = `<div class="raw-log">${logLines}</div>
     <div style="margin-top:10px;text-align:right"><button class="copy-btn" onclick="copyLog(this)">复制日志</button></div>`;
   document.getElementById('result-section').style.display = 'block';
   document.getElementById('result-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -911,7 +920,15 @@ function renderRecent() {
   const list = getRecords();
   const el = document.getElementById('recentList');
   if (!list.length) {
-    el.innerHTML = '<div class="recent-empty">还没有处理记录，处理第一条笔记后会显示在这里</div>';
+    el.innerHTML = `<div class="recent-empty">
+      <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="opacity:.35;margin-bottom:10px">
+        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+        <path d="M9 7h7M9 11h7"/>
+      </svg>
+      <div>还没有处理记录</div>
+      <div style="font-size:11.5px;margin-top:4px">处理第一条笔记后会显示在这里</div>
+    </div>`;
     return;
   }
   const now = new Date();
@@ -948,10 +965,22 @@ function renderStats() {
     if (d.toDateString() === today) todayN++;
     if (d.getTime() >= weekStart) weekN++;
   }
-  document.getElementById('statToday').textContent = todayN;
+  animateNum(document.getElementById('statToday'), todayN);
   document.getElementById('statTodaySub').textContent = todayN ? '今天辛苦了，继续加油' : '还没有处理记录';
-  document.getElementById('statWeek').textContent = weekN;
-  document.getElementById('statTotal').textContent = list.length;
+  animateNum(document.getElementById('statWeek'), weekN);
+  animateNum(document.getElementById('statTotal'), list.length);
+}
+function animateNum(el, target) {
+  const start = parseInt(el.textContent, 10) || 0;
+  if (start === target) return;
+  const dur = 500, t0 = performance.now();
+  function step(t) {
+    const p = Math.min((t - t0) / dur, 1);
+    const eased = 1 - Math.pow(1 - p, 3);
+    el.textContent = Math.round(start + (target - start) * eased);
+    if (p < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
 }
 
 /* ============ 图片 ============ */
@@ -999,6 +1028,10 @@ async function process() {
 
   if (!content && !url && !hasImage) {
     setStatus('请填写内容或上传图片', 'error');
+    return;
+  }
+  if (url && !/^https?:\/\/.+/i.test(url)) {
+    setStatus('URL 需以 http:// 或 https:// 开头', 'error');
     return;
   }
   const btn = document.getElementById('submitBtn');
