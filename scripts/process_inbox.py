@@ -437,7 +437,7 @@ def _call_kimi(prompt: str, timeout: int = 180) -> str:
     # 优先用绝对路径，避免子进程 PATH 缺失时找不到命令
     kimi_bin = _shutil.which("kimi")
     if not kimi_bin:
-        for cand in (_os.path.expanduser("~/.local/bin/kimi"), "/usr/local/bin/kimi"):
+        for cand in (_os.path.expanduser("~/.kimi-code/bin/kimi"), _os.path.expanduser("~/.local/bin/kimi"), "/usr/local/bin/kimi"):
             if _os.path.isfile(cand) and _os.access(cand, _os.X_OK):
                 kimi_bin = cand
                 break
@@ -445,12 +445,17 @@ def _call_kimi(prompt: str, timeout: int = 180) -> str:
         return "[error] kimi 调用失败: 未找到 kimi 命令"
     try:
         r = _sp.run(
-            [kimi_bin, "-p", prompt, "--quiet"],
+            [kimi_bin, "-p", prompt],
             capture_output=True, text=True, encoding='utf-8', timeout=timeout
         )
         raw = r.stdout.strip() or r.stderr.strip() or ""
-        # 过滤掉 "To resume this session: ..." 行
-        lines = [l for l in raw.split("\n") if not l.startswith("To resume this session:")]
+        # 过滤掉 "To resume this session: ..." 行和 v0.31 的 "• " 项目符号前缀
+        lines = []
+        for l in raw.split("\n"):
+            if l.startswith("To resume this session:"):
+                continue
+            l = l.lstrip("•\u00a0 \t")
+            lines.append(l)
         return "\n".join(lines).strip() or raw
     except _sp.TimeoutExpired:
         return "[error] kimi 调用超时"
