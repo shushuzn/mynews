@@ -153,9 +153,24 @@ def _rss_background_refresh():
         time.sleep(RSS_INTERVAL)
 
 
-# 后台自动处理开关：默认关闭，MYNEWS_AUTO_BG=1 开启；运行时可用 API 切换
-AUTO_BG_ENABLED = os.environ.get("MYNEWS_AUTO_BG", "0") == "1"
+# 后台自动处理开关：默认关闭；MYNEWS_AUTO_BG=1 强制开启 / =0 强制关闭（覆盖持久化状态）
+# 持久化状态存 scripts/.auto_bg.json，前端切换或 curl API 修改后重启服务依然保持
+AUTO_BG_STATE_FILE = SCRIPTS_DIR / ".auto_bg.json"
 AUTO_BG_LOCK = threading.Lock()
+
+def _load_auto_bg_state() -> bool:
+    """启动时读取开关状态：环境变量显式设置优先，其次持久化文件，默认关。"""
+    env = os.environ.get("MYNEWS_AUTO_BG")
+    if env is not None:
+        return env == "1"
+    try:
+        if AUTO_BG_STATE_FILE.exists():
+            return json.loads(AUTO_BG_STATE_FILE.read_text(encoding="utf-8")).get("enabled", False)
+    except Exception:
+        pass
+    return False
+
+AUTO_BG_ENABLED = _load_auto_bg_state()
 
 def _auto_bg_status() -> bool:
     """读取当前后台自动处理开关状态（运行时可变）。"""
@@ -163,10 +178,14 @@ def _auto_bg_status() -> bool:
         return AUTO_BG_ENABLED
 
 def _set_auto_bg(enabled: bool):
-    """运行时切换后台自动处理开关。"""
+    """运行时切换后台自动处理开关，并持久化到文件（重启后保持）。"""
     global AUTO_BG_ENABLED
     with AUTO_BG_LOCK:
         AUTO_BG_ENABLED = enabled
+    try:
+        AUTO_BG_STATE_FILE.write_text(json.dumps({"enabled": enabled}), encoding="utf-8")
+    except Exception as e:
+        print(f"[auto] 持久化开关状态失败: {e}")
     print(f"[auto] 后台自动处理: {'开启' if enabled else '关闭'}")
 
 def _auto_background_process():
