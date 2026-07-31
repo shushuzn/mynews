@@ -153,8 +153,8 @@ def _rss_background_refresh():
         time.sleep(RSS_INTERVAL)
 
 
-# 后台自动处理开关：MYNEWS_AUTO_BG=0 初始关闭（默认开启）；运行时可用 API 切换
-AUTO_BG_ENABLED = os.environ.get("MYNEWS_AUTO_BG", "1") != "0"
+# 后台自动处理开关：默认关闭，MYNEWS_AUTO_BG=1 开启；运行时可用 API 切换
+AUTO_BG_ENABLED = os.environ.get("MYNEWS_AUTO_BG", "0") == "1"
 AUTO_BG_LOCK = threading.Lock()
 
 def _auto_bg_status() -> bool:
