@@ -140,14 +140,14 @@ def _fetch_rss_items(force: bool = False) -> list:
 
 
 def _rss_background_refresh():
-    """后台守护线程：每 10 分钟强制刷新一次 RSS 缓存，不依赖浏览器打开。"""
+    """后台守护线程：启动后立即拉取一次，之后每 10 分钟强制刷新 RSS 缓存。"""
     while True:
-        time.sleep(600)
         try:
             _fetch_rss_items(force=True)
             print("[server] 后台 RSS 自动刷新完成")
         except Exception as e:
             print(f"[server] 后台 RSS 自动刷新失败: {e}")
+        time.sleep(600)
 
 
 # 后台自动处理开关：MYNEWS_AUTO_BG=0 关闭（默认开启）
@@ -169,7 +169,6 @@ def _auto_background_process():
         print(f"[auto] 无法加载 auto_process.py: {e}")
         return
     while True:
-        time.sleep(600)
         try:
             items = ap.fetch_all_rss_items(limit_per_feed=3)
             processed = ap.load_processed()
@@ -189,6 +188,7 @@ def _auto_background_process():
             print(f"[auto] 后台处理完成: {done} 条新条目")
         except Exception as e:
             print(f"[auto] 后台处理异常: {e}")
+        time.sleep(600)
 
 
 class Handler(BaseHTTPRequestHandler):
