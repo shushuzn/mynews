@@ -150,7 +150,7 @@ class Handler(BaseHTTPRequestHandler):
             if not url:
                 self._json_response(False, "缺少 url 参数")
                 return
-            content = self._fetch_url(url)
+            content = self._fetch_url(url, timeout=10)
             anti_patterns = ['环境异常', 'captcha', 'verify you are human', 'access denied']
             blocked = any(p in content[:200].lower() for p in anti_patterns)
             title = ""
@@ -285,12 +285,12 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(json.dumps({"success": success, "output": output}, ensure_ascii=False).encode("utf-8"))
 
-    def _fetch_url(self, url: str) -> str:
+    def _fetch_url(self, url: str, timeout: int = 30) -> str:
         """从 URL 抓取正文，返回提取的文本内容。失败返回空字符串。"""
         import urllib.request as _ur, re as _re
         try:
             req = _ur.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
-            with _ur.urlopen(req, timeout=30) as resp:
+            with _ur.urlopen(req, timeout=timeout) as resp:
                 html = resp.read().decode("utf-8", errors="replace")
             # 提取 title
             title_m = _re.search(r'<title[^>]*>([^<]+)</title>', html, _re.IGNORECASE)

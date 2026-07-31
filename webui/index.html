@@ -1808,11 +1808,13 @@ async function autoTick() {
       btn.classList.remove('busy');
       return;
     }
-    // 预检抓取：内容为空或被反爬拦截 → 直接标记跳过，不提交 AI
+    // 预检抓取：内容为空/被拦截/超时 → 直接标记跳过，不提交 AI
     setStatus('🔁 预检 [' + (next.source || '未知源') + ']：' + (next.title || next.url).slice(0, 40) + '…', 'running');
     _abortCtrl = new AbortController();
+    let preTimer = setTimeout(() => _abortCtrl.abort(), 8000); // 前端 8s 兜底
     try {
       const pv = await fetch('/api/fetch?url=' + encodeURIComponent(next.url), { signal: _abortCtrl.signal }).then(r => r.json());
+      clearTimeout(preTimer);
       _abortCtrl = null;
       const info = pv.success && typeof pv.output === 'object' ? pv.output : null;
       if (info && (info.blocked || info.length === 0)) {
@@ -1822,7 +1824,16 @@ async function autoTick() {
         return;
       }
     } catch (pvErr) {
+      clearTimeout(preTimer);
       if (pvErr && pvErr.name === 'AbortError') {
+        if (_autoMode) {
+          // 预检超时：站点不可达，标记跳过
+          _abortCtrl = null;
+          markAutoProcessed(next);
+          setStatus('⏭️ 跳过（预检超时）：' + (next.title || '').slice(0, 30) + '…', 'done');
+          setTimeout(autoTick, 600);
+          return;
+        }
         // 用户取消预检
         _abortCtrl = null;
         setStatus('已取消', 'done');
