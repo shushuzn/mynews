@@ -204,14 +204,17 @@ body {
   display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600;
   padding: 5px 12px; border-radius: 999px; background: rgba(255, 255, 255, .18);
   backdrop-filter: blur(8px); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22);
+  transition: transform .2s var(--ease), background .2s var(--ease);
 }
+.hero-stats .st:hover { transform: translateY(-2px); background: rgba(255, 255, 255, .26); }
 
 .card {
   background: var(--surface); border-radius: var(--radius-lg);
   border: 1px solid var(--separator-light); padding: 20px; margin-bottom: 18px;
   box-shadow: var(--shadow-md); position: relative;
-  transition: background .35s, border-color .35s, box-shadow .25s var(--ease);
+  transition: background .35s, border-color .35s, box-shadow .25s var(--ease), transform .25s var(--ease);
 }
+.card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
 .card-title {
   font-size: 13px; font-weight: 700; color: var(--text-2); letter-spacing: .02em;
   margin-bottom: 14px; display: flex; align-items: center; gap: 10px;
@@ -236,7 +239,7 @@ body {
   position: absolute; top: 3px; bottom: 3px; left: 3px; z-index: 0;
   background: var(--surface); border-radius: 9px;
   box-shadow: var(--shadow-sm), 0 0 0 1px var(--separator-light);
-  transition: transform .28s var(--ease), width .28s var(--ease);
+  transition: transform .38s cubic-bezier(.34, 1.56, .64, 1), width .38s cubic-bezier(.34, 1.56, .64, 1);
   pointer-events: none;
 }
 body.dark .seg-slider { box-shadow: 0 1px 5px rgba(0,0,0,.5), 0 0 0 1px var(--separator); }
@@ -247,8 +250,10 @@ body.dark .seg-slider { box-shadow: 0 1px 5px rgba(0,0,0,.5), 0 0 0 1px var(--se
   display: flex; align-items: center; justify-content: center; gap: 6px;
   position: relative; z-index: 1;
 }
-.seg-btn .seg-ico { font-size: 14px; }
+.seg-btn .seg-ico { font-size: 14px; transition: transform .25s var(--ease); }
 .seg-btn:hover { color: var(--text); }
+.seg-btn:hover .seg-ico { transform: scale(1.2); }
+.seg-btn:active { transform: scale(.96); }
 .seg-btn.active { color: var(--blue); }
 
 /* ============ Inputs ============ */
@@ -314,7 +319,8 @@ textarea:focus, input[type="text"]:focus {
 .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(10, 132, 255, .5); }
 .btn-primary:active { transform: translateY(0) scale(.97); }
 .btn-primary:disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; }
-.btn svg { width: 14px; height: 14px; }
+.btn svg { width: 14px; height: 14px; transition: transform .2s var(--ease); }
+.btn-primary:hover svg { transform: translateX(2px); }
 .status-wrap { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 170px; }
 .status-badge {
   font-size: 12.5px; font-weight: 600; padding: 5px 13px; border-radius: 999px;
@@ -549,6 +555,9 @@ textarea:focus, input[type="text"]:focus {
 /* 最近记录新条目入场 */
 @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 .recent-item.enter { animation: fadeUp .4s var(--ease); }
+/* 删除记录淡出 */
+@keyframes fadeOutR { to { opacity: 0; transform: translateX(14px); } }
+.recent-item.removing { animation: fadeOutR .28s var(--ease) forwards; }
 /* 返回顶部弹出 */
 @keyframes popIn { from { opacity: 0; transform: scale(.7); } to { opacity: 1; transform: scale(1); } }
 #backTop.show { animation: popIn .25s var(--ease); }
@@ -1421,6 +1430,16 @@ function recordRecent(sections, output, duration) {
   renderStats();
 }
 function delRecord(time) {
+  // 先播放淡出动画再删除
+  const target = document.querySelector(`.recent-item[data-time="${time}"]`);
+  if (target) {
+    target.classList.add('removing');
+    setTimeout(() => { doDelRecord(time); }, 280);
+  } else {
+    doDelRecord(time);
+  }
+}
+function doDelRecord(time) {
   const list = getRecords().filter(r => r.time !== time);
   localStorage.setItem('mynews-records', JSON.stringify(list));
   renderRecent();
@@ -1515,7 +1534,7 @@ function renderRecent() {
     const t = new Date(r.time);
     const hm = String(t.getHours()).padStart(2,'0') + ':' + String(t.getMinutes()).padStart(2,'0');
     const d = t.toDateString() === todayStr ? '今天' : t.toDateString() === yest ? '昨天' : (t.getMonth()+1) + '/' + t.getDate();
-    return `<div class="recent-item" title="点击复制标题：${escapeHtml(r.title)}" onclick="copyText('${escapeHtml(r.title).replace(/'/g, "\\'")}', this)" style="cursor:pointer">
+    return `<div class="recent-item" data-time="${r.time}" title="点击复制标题：${escapeHtml(r.title)}" onclick="copyText('${escapeHtml(r.title).replace(/'/g, "\\'")}', this)" style="cursor:pointer">
       <span class="r-dot ${r.action}"></span>
       <div class="r-body">
         <div class="r-title">${escapeHtml(r.title)}</div>
