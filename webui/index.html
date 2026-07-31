@@ -118,14 +118,12 @@ body {
 .icon-btn svg { width: 16px; height: 16px; }
 
 /* ============ App shell（侧边栏 + 主区）============ */
-.app { display: flex; max-width: 1100px; margin: 0 auto; padding: 20px 20px 0; gap: 20px; align-items: flex-start; }
-.sidebar {
-  width: var(--sidebar-w); position: sticky; top: 76px; flex-shrink: 0;
-  display: flex; flex-direction: column; gap: 10px;
-}
-.sidebar .nav {
-  background: var(--surface); border: 1px solid var(--separator-light);
-  border-radius: var(--radius-lg); padding: 8px; box-shadow: var(--shadow-sm);
+.app { max-width: 760px; margin: 0 auto; padding: 20px 20px 0; }
+/* 侧栏弹层面板 */
+.sidebar-panel { width: min(320px, 92vw); display: flex; flex-direction: column; gap: 12px; }
+.sidebar-panel .nav {
+  background: var(--surface-2); border: 1px solid var(--separator-light);
+  border-radius: var(--radius-md); padding: 6px; box-shadow: var(--shadow-sm);
   display: flex; flex-direction: column; gap: 2px;
 }
 .nav-item {
@@ -133,24 +131,22 @@ body {
   border-radius: var(--radius-sm); font-size: 13.5px; font-weight: 600; color: var(--text-2);
   cursor: pointer; transition: all .18s var(--ease); position: relative; border: none; background: none; width: 100%; font-family: inherit; text-align: left;
 }
-.nav-item:hover { background: var(--surface-2); color: var(--text); }
-.nav-item.active { background: var(--accent-soft, rgba(0,122,255,.1)); color: var(--blue); }
+.nav-item:hover { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
+.nav-item.active { background: rgba(0,122,255,.1); color: var(--blue); }
 .nav-item .n-ico {
   width: 26px; height: 26px; border-radius: 8px; display: flex; align-items: center;
-  justify-content: center; font-size: 13px; flex-shrink: 0; background: var(--surface-2);
+  justify-content: center; font-size: 13px; flex-shrink: 0; background: var(--surface);
 }
 .nav-item.active .n-ico { background: rgba(0,122,255,.14); }
 .nav-item .n-badge {
   margin-left: auto; font-size: 10px; font-weight: 700; color: var(--text-3);
-  background: var(--surface-2); padding: 2px 7px; border-radius: 999px;
+  background: var(--surface); padding: 2px 7px; border-radius: 999px;
 }
-.nav-item.disabled { opacity: .45; cursor: not-allowed; }
-.nav-item.disabled:hover { background: none; color: var(--text-2); }
-.sidebar .stat-card {
+.stat-card {
   background: var(--grad-hero); color: #fff; border-radius: var(--radius-lg);
   padding: 16px; box-shadow: var(--shadow-hero); position: relative; overflow: hidden;
 }
-.sidebar .stat-card::after {
+.stat-card::after {
   content: ""; position: absolute; width: 110px; height: 110px; border-radius: 50%;
   background: rgba(255,255,255,.14); top: -50px; right: -40px;
 }
@@ -166,9 +162,9 @@ body {
 .stat-card .sg-item:hover { background: rgba(255, 255, 255, .24); transform: translateY(-1px); }
 .stat-card .sg-num { font-size: 19px; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
 .stat-card .sg-label { font-size: 10px; opacity: .8; margin-top: 1px; }
-.sidebar .tip-card {
-  background: var(--surface); border: 1px solid var(--separator-light); border-radius: var(--radius-lg);
-  padding: 14px; box-shadow: var(--shadow-sm); font-size: 12px; color: var(--text-2); line-height: 1.7;
+.tip-card {
+  background: var(--surface-2); border: 1px solid var(--separator-light); border-radius: var(--radius-md);
+  padding: 14px; font-size: 12px; color: var(--text-2); line-height: 1.7;
 }
 .tip-card .t-title { font-weight: 700; color: var(--text); font-size: 12.5px; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
 
@@ -605,23 +601,6 @@ textarea:focus, input[type="text"]:focus {
 .footer { text-align: center; color: var(--text-3); font-size: 11.5px; padding: 20px 0 8px; }
 
 /* ============ Responsive ============ */
-.menu-btn { display: none; }
-.sidebar-mask {
-  display: none; position: fixed; inset: 0; z-index: 140; background: rgba(0,0,0,.4);
-  backdrop-filter: blur(3px);
-}
-@media (max-width: 960px) {
-  .menu-btn { display: inline-flex; }
-  .sidebar { display: none; }
-  .sidebar.open {
-    display: flex; position: fixed; top: 0; bottom: 0; left: 0; z-index: 150;
-    width: 250px; padding: 20px 14px; margin: 0; overflow-y: auto;
-    background: var(--bg); border-right: 1px solid var(--separator-light);
-    box-shadow: var(--shadow-lg); animation: slideIn .28s var(--ease);
-  }
-  .sidebar-mask.show { display: block; animation: fadeIn .25s var(--ease); }
-}
-@keyframes slideIn { from { transform: translateX(-100%); } to { transform: translateX(0); } }
 @media (max-width: 680px) {
   .container { padding: 0 12px; }
   .card { padding: 17px; }
@@ -645,7 +624,7 @@ textarea:focus, input[type="text"]:focus {
 <body>
 
 <div class="header">
-  <button class="icon-btn menu-btn" onclick="toggleSidebar()" title="菜单">
+  <button class="icon-btn" onclick="showSidebar()" title="菜单 / 概览">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M4 6h16M4 12h16M4 18h16"/>
     </svg>
@@ -689,46 +668,6 @@ textarea:focus, input[type="text"]:focus {
 </div>
 
 <div class="app">
-
-<!-- 移动端侧栏遮罩 -->
-<div class="sidebar-mask" id="sidebarMask" onclick="closeSidebar()"></div>
-
-<!-- ============ Sidebar ============ -->
-<aside class="sidebar" id="sidebar">
-  <div class="hero fade-in sidebar-hero">
-    <div class="h-ico">✦</div>
-    <span class="h-spark s1"></span>
-    <span class="h-spark s2"></span>
-    <span class="h-spark s3"></span>
-    <span style="position:absolute;top:14px;right:16px;font-size:11px;font-weight:700;color:rgba(255,255,255,.9);background:rgba(255,255,255,.18);padding:4px 11px;border-radius:999px;backdrop-filter:blur(8px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.22);font-variant-numeric:tabular-nums" id="heroDate"></span>
-    <h2>我的知识库</h2>
-    <p id="heroSub">粘贴文章、URL 或图片，AI 自动分析内容、查重去重，沉淀为 flomo 结构化笔记。</p>
-    <div class="hero-stats">
-      <span class="st">🤖 AI 自动分析</span>
-      <span class="st">🔍 智能查重</span>
-      <span class="st">📚 flomo 同步</span>
-      <span class="st" id="heroToday">📈 今日 0 条</span>
-    </div>
-  </div>
-  <div class="nav">
-    <button class="nav-item active" onclick="goNewNote()"><span class="n-ico">📝</span> 新建笔记</button>
-    <button class="nav-item" onclick="showRecent()"><span class="n-ico">🕘</span> 最近处理 <span class="n-badge" id="navRecentCount">0</span></button>
-    <button class="nav-item" onclick="showSettings()"><span class="n-ico">⚙️</span> 设置</button>
-  </div>
-  <div class="stat-card">
-    <div class="sc-label">📊 统计概览</div>
-    <div class="stat-grid">
-      <div class="sg-item"><div class="sg-num" id="statToday">0</div><div class="sg-label">今日</div></div>
-      <div class="sg-item"><div class="sg-num" id="statWeek">0</div><div class="sg-label">本周</div></div>
-      <div class="sg-item"><div class="sg-num" id="statTotal">0</div><div class="sg-label">累计</div></div>
-      <div class="sg-item"><div class="sg-num" id="statStreak">1</div><div class="sg-label">连续天数</div></div>
-    </div>
-  </div>
-  <div class="tip-card">
-    <div class="t-title" id="tipTitle">💡 使用提示</div>
-    <div id="tipBody">支持正文、URL、图片三种输入；AI 自动分类并查重，相同主题会合并或跳过。</div>
-  </div>
-</aside>
 
 <!-- ============ Main ============ -->
 <main class="main">
@@ -890,17 +829,60 @@ textarea:focus, input[type="text"]:focus {
   </div>
 </div>
 
+<!-- 侧栏弹层（菜单 / 概览） -->
+<div class="shortcut-overlay" id="sidebarOverlay" onclick="if(event.target===this)hideSidebar()">
+  <div class="shortcut-panel sidebar-panel">
+    <h3>☰ 菜单</h3>
+    <div class="hero sidebar-hero">
+      <div class="h-ico">✦</div>
+      <span class="h-spark s1"></span>
+      <span class="h-spark s2"></span>
+      <span class="h-spark s3"></span>
+      <span style="position:absolute;top:14px;right:16px;font-size:11px;font-weight:700;color:rgba(255,255,255,.9);background:rgba(255,255,255,.18);padding:4px 11px;border-radius:999px;backdrop-filter:blur(8px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.22);font-variant-numeric:tabular-nums" id="heroDate"></span>
+      <h2>我的知识库</h2>
+      <p id="heroSub">粘贴文章、URL 或图片，AI 自动分析内容、查重去重，沉淀为 flomo 结构化笔记。</p>
+      <div class="hero-stats">
+        <span class="st">🤖 AI 自动分析</span>
+        <span class="st">🔍 智能查重</span>
+        <span class="st">📚 flomo 同步</span>
+        <span class="st" id="heroToday">📈 今日 0 条</span>
+      </div>
+    </div>
+    <div class="nav">
+      <button class="nav-item active" onclick="goNewNote()"><span class="n-ico">📝</span> 新建笔记</button>
+      <button class="nav-item" onclick="showRecent()"><span class="n-ico">🕘</span> 最近处理 <span class="n-badge" id="navRecentCount">0</span></button>
+      <button class="nav-item" onclick="showSettings()"><span class="n-ico">⚙️</span> 设置</button>
+    </div>
+    <div class="stat-card">
+      <div class="sc-label">📊 统计概览</div>
+      <div class="stat-grid">
+        <div class="sg-item"><div class="sg-num" id="statToday">0</div><div class="sg-label">今日</div></div>
+        <div class="sg-item"><div class="sg-num" id="statWeek">0</div><div class="sg-label">本周</div></div>
+        <div class="sg-item"><div class="sg-num" id="statTotal">0</div><div class="sg-label">累计</div></div>
+        <div class="sg-item"><div class="sg-num" id="statStreak">1</div><div class="sg-label">连续天数</div></div>
+      </div>
+    </div>
+    <div class="tip-card">
+      <div class="t-title" id="tipTitle">💡 使用提示</div>
+      <div id="tipBody">支持正文、URL、图片三种输入；AI 自动分类并查重，相同主题会合并或跳过。</div>
+    </div>
+    <button class="sc-close" onclick="hideSidebar()">关闭</button>
+  </div>
+</div>
+
 <script>
 function hideShortcuts() { document.getElementById('shortcutOverlay').classList.remove('show'); }
 function showShortcuts() { document.getElementById('shortcutOverlay').classList.add('show'); }
 function hideSettings() { document.getElementById('settingsOverlay').classList.remove('show'); }
 function showSettings() {
+  hideSidebar();
   document.getElementById('settingsOverlay').classList.add('show');
   syncThemeBtns();
   document.getElementById('soundToggle2').textContent = soundOn ? '开' : '关';
 }
 function hideRecent() { document.getElementById('recentOverlay').classList.remove('show'); }
 function showRecent() {
+  hideSidebar();
   renderRecent();
   document.getElementById('recentOverlay').classList.add('show');
 }
@@ -969,18 +951,14 @@ document.querySelectorAll('.btn-primary').forEach(function(b) {
   });
 });
 
-/* ============ 移动端侧栏抽屉 ============ */
-function toggleSidebar() {
-  const sb = document.getElementById('sidebar');
-  const mask = document.getElementById('sidebarMask');
-  const open = sb.classList.toggle('open');
-  mask.classList.toggle('show', open);
+/* ============ 侧栏弹层 ============ */
+function showSidebar() {
+  renderStats();
+  document.getElementById('sidebarOverlay').classList.add('show');
 }
-function closeSidebar() {
-  document.getElementById('sidebar').classList.remove('open');
-  document.getElementById('sidebarMask').classList.remove('show');
+function hideSidebar() {
+  document.getElementById('sidebarOverlay').classList.remove('show');
 }
-window.addEventListener('resize', () => { if (window.innerWidth > 960) closeSidebar(); });
 
 /* ============ 多窗口同步 ============ */
 window.addEventListener('storage', function(e) {
@@ -1203,6 +1181,7 @@ document.addEventListener('keydown', function(e) {
     hideShortcuts();
     hideSettings();
     hideRecent();
+    hideSidebar();
   } else if (e.key === '?') {
     const tag = (e.target && e.target.tagName) || '';
     if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
@@ -1624,6 +1603,7 @@ function renderStats() {
   renderStreak();
 }
 function goNewNote() {
+  hideSidebar();
   window.scrollTo({ top: 0, behavior: 'smooth' });
   setTimeout(() => {
     const c = document.getElementById('content');
