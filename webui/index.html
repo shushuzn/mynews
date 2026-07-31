@@ -120,7 +120,19 @@ body {
 /* ============ App shell（侧边栏 + 主区）============ */
 .app { max-width: 760px; margin: 0 auto; padding: 20px 20px 0; }
 /* 侧栏弹层面板 */
-.sidebar-panel { width: min(320px, 92vw); display: flex; flex-direction: column; gap: 12px; }
+.sidebar-panel {
+  width: min(320px, 88vw); display: flex; flex-direction: column; gap: 12px;
+  max-height: calc(100vh - 40px); overflow-y: auto;
+}
+/* 菜单抽屉：从左侧滑入展开 */
+#sidebarOverlay.shortcut-overlay { justify-content: flex-start; align-items: stretch; }
+#sidebarOverlay .sidebar-panel {
+  width: min(320px, 88vw); height: 100%; max-height: none; margin: 0;
+  border-radius: 0 var(--radius-lg) var(--radius-lg) 0; border-left: none;
+  animation: slideInL .32s var(--ease); box-shadow: var(--shadow-lg);
+  padding: 22px 20px;
+}
+@keyframes slideInL { from { transform: translateX(-100%); } to { transform: translateX(0); } }
 .sidebar-panel .nav {
   background: var(--surface-2); border: 1px solid var(--separator-light);
   border-radius: var(--radius-md); padding: 6px; box-shadow: var(--shadow-sm);
