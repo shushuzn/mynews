@@ -825,6 +825,7 @@ textarea:focus, input[type="text"]:focus {
       <button class="rf-btn" onclick="document.getElementById('importFile').click()">导入</button>
       <button class="rf-btn" onclick="clearRecords()">清空</button>
     </span></div>
+    <div class="sc-row"><span>自动处理记录</span><button class="rf-btn" onclick="clearAutoHistory()">清空已处理</button></div>
     <div class="sc-row"><span>版本</span><span style="color:var(--text-3);font-size:12px">mynews v2.1 · flomo 知识沉淀</span></div>
     <button class="sc-close" onclick="hideSettings()">关闭</button>
   </div>
@@ -867,13 +868,14 @@ textarea:focus, input[type="text"]:focus {
       <p id="heroSub">粘贴文章、URL 或图片，AI 自动分析内容、查重去重，沉淀为 flomo 结构化笔记。</p>
       <div class="hero-stats">
         <span class="st">🤖 AI 自动分析</span>
-        <span class="st">🔍 智能查重</span>
-        <span class="st">📚 flomo 同步</span>
+        <span class="st">📡 RSS 聚合</span>
+        <span class="st">⚡ 自动处理</span>
         <span class="st" id="heroToday">📈 今日 0 条</span>
       </div>
     </div>
     <div class="nav">
       <button class="nav-item active" onclick="goNewNote()"><span class="n-ico">📝</span> 新建笔记</button>
+      <button class="nav-item" onclick="toggleAuto();hideSidebar()"><span class="n-ico">⚡</span> 自动处理 <span class="n-badge" id="navAutoState">关</span></button>
       <button class="nav-item" onclick="showRecent()"><span class="n-ico">🕘</span> 最近处理 <span class="n-badge" id="navRecentCount">0</span></button>
       <button class="nav-item" onclick="showSettings()"><span class="n-ico">⚙️</span> 设置</button>
     </div>
@@ -1767,6 +1769,8 @@ function toggleAuto() {
   _autoMode = !_autoMode;
   const btn = document.getElementById('autoBtn');
   btn.classList.toggle('active', _autoMode);
+  const navSt = document.getElementById('navAutoState');
+  if (navSt) navSt.textContent = _autoMode ? '开' : '关';
   if (_autoMode) {
     document.getElementById('content').disabled = true;
     document.getElementById('url').disabled = true;
@@ -1851,6 +1855,12 @@ function markAutoProcessed(item) {
     if (!p.includes(urlKey)) p.push(urlKey);
     localStorage.setItem('hn-processed', JSON.stringify(p.slice(-600)));
   } catch (err) {}
+}
+function clearAutoHistory() {
+  if (!localStorage.getItem('hn-processed')) { setStatus('没有自动处理记录', 'done'); return; }
+  if (!confirm('确定清空自动处理的已处理记录吗？之后这些链接会被重新处理。')) return;
+  localStorage.removeItem('hn-processed');
+  setStatus('自动处理记录已清空', 'done');
 }
 
 /* ============ 处理 ============ */
@@ -2002,6 +2012,7 @@ function updateDateBadge() {
   // 提示轮换
   const tips = [
     ['💡 使用提示', '支持正文、URL、图片三种输入；AI 自动分类并查重，相同主题会合并或跳过。'],
+    ['⚡ 自动处理', '点击右上角闪电按钮，自动循环处理全部 RSS 源的最新未处理链接。'],
     ['⌨️ 快捷操作', 'Ctrl+Enter 快速提交；正文与 URL 输入框按 Enter 也可提交。'],
     ['🏷️ 标签规则', '首位为信号类型：#知识基座 / #趋势信号 / #信号笔记 / #分析框架 / #知识载体。'],
     ['🔍 查重机制', 'relevance ≥ 0.9 时 AI 判定：假阳性新建、有增量合并、零增量跳过。'],
