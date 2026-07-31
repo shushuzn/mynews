@@ -753,7 +753,7 @@ textarea:focus, input[type="text"]:focus {
         </div>
       </div>
       <div class="submit-row">
-        <button class="btn btn-primary" id="submitBtn" onclick="process()">
+        <button class="btn btn-primary" id="submitBtn" onclick="submitClick()">
           <span class="btn-spinner"></span>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg>
           <span id="btnLabel">处理并上传</span>
@@ -1750,6 +1750,19 @@ document.addEventListener('drop', e => {
 let _autoMode = false;
 let _autoCurrentUrl = '';
 let _autoCurrentId = '';
+let _abortCtrl = null;
+function submitClick() {
+  if (_processing) cancelProcess();
+  else process();
+}
+function cancelProcess() {
+  if (_abortCtrl) _abortCtrl.abort();
+  if (_autoMode) {
+    _autoMode = false;
+    document.getElementById('autoBtn').classList.remove('active', 'busy');
+  }
+  setStatus('正在取消…', 'running');
+}
 function toggleAuto() {
   _autoMode = !_autoMode;
   const btn = document.getElementById('autoBtn');
@@ -1761,6 +1774,8 @@ function toggleAuto() {
     setStatus('🔁 自动模式已开启，获取 HN 最新…', 'running');
     autoTick();
   } else {
+    // 关闭自动模式时，若正在处理/预检则立即中断
+    if (_processing && _abortCtrl) _abortCtrl.abort();
     document.getElementById('content').disabled = false;
     document.getElementById('url').disabled = false;
     document.querySelectorAll('.seg-btn').forEach(b => b.disabled = false);
@@ -1791,8 +1806,10 @@ async function autoTick() {
     }
     // 预检抓取：内容为空或被反爬拦截 → 直接标记跳过，不提交 AI
     setStatus('🔁 预检：' + (next.title || next.url).slice(0, 40) + '…', 'running');
+    _abortCtrl = new AbortController();
     try {
-      const pv = await fetch('/api/fetch?url=' + encodeURIComponent(next.url)).then(r => r.json());
+      const pv = await fetch('/api/fetch?url=' + encodeURIComponent(next.url), { signal: _abortCtrl.signal }).then(r => r.json());
+      _abortCtrl = null;
       const info = pv.success && typeof pv.output === 'object' ? pv.output : null;
       if (info && (info.blocked || info.length === 0)) {
         markAutoProcessed(next);
@@ -1801,6 +1818,13 @@ async function autoTick() {
         return;
       }
     } catch (pvErr) {
+      if (pvErr && pvErr.name === 'AbortError') {
+        // 用户取消预检
+        _abortCtrl = null;
+        setStatus('已取消', 'done');
+        btn.classList.remove('busy');
+        return;
+      }
       // 预检失败不阻断，继续尝试处理
       console.log('[auto] 预检失败', pvErr);
     }
@@ -1810,7 +1834,11 @@ async function autoTick() {
     document.getElementById('url').value = next.url;
     await process();
   } catch (e) {
-    setStatus('自动模式：请求失败 ' + e.message, 'error');
+    if (e && e.name === 'AbortError') {
+      setStatus('已取消', 'done');
+    } else {
+      setStatus('自动模式：请求失败 ' + e.message, 'error');
+    }
     btn.classList.remove('busy');
   }
 }
@@ -1844,9 +1872,10 @@ async function process() {
   const btn = document.getElementById('submitBtn');
   const startTime = Date.now();
   _processing = true;
+  _abortCtrl = new AbortController();
   document.title = '⏳ mynews — 处理中…';
-  btn.disabled = true; btn.classList.add('loading');
-  document.getElementById('btnLabel').textContent = '处理中…';
+  btn.disabled = false; btn.classList.add('loading');
+  document.getElementById('btnLabel').textContent = '⏹ 取消处理';
   document.getElementById('content').disabled = true;
   document.getElementById('url').disabled = true;
   document.querySelectorAll('.seg-btn').forEach(b => b.disabled = true);
@@ -1873,7 +1902,8 @@ async function process() {
     const resp = await fetch('/process', {
       method: 'POST',
       headers: headers,
-      body: body
+      body: body,
+      signal: _abortCtrl.signal
     });
     const data = await resp.json();
     const secs = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -1886,15 +1916,22 @@ async function process() {
         : '处理失败',
       data.success ? 'done' : 'error');
   } catch (e) {
-    document.getElementById('res-log').innerHTML = `<div class="raw-log">请求失败: ${escapeHtml(e.message)}</div>`;
-    document.getElementById('result-section').style.display = 'block';
-    setStatus('网络错误', 'error');
+    if (e && e.name === 'AbortError') {
+      // 用户主动取消
+      setStatus('已取消', 'done');
+      document.title = 'mynews — 知识笔记处理器';
+    } else {
+      document.getElementById('res-log').innerHTML = `<div class="raw-log">请求失败: ${escapeHtml(e.message)}</div>`;
+      document.getElementById('result-section').style.display = 'block';
+      setStatus('网络错误', 'error');
+    }
   } finally {
     btn.classList.remove('loading');
     document.getElementById('btnLabel').textContent = '处理并上传';
     document.getElementById('progressBar').classList.remove('on');
     clearInterval(ticker);
     _processing = false;
+    _abortCtrl = null;
     if (_autoMode) {
       // 自动模式：保持输入锁定，标记已处理，继续下一条
       document.getElementById('content').disabled = true;
@@ -1910,7 +1947,7 @@ async function process() {
       document.querySelectorAll('.seg-btn').forEach(b => b.disabled = false);
       updateSubmitState();
     }
-    if (!document.title.startsWith('✅') && !document.title.startsWith('❌')) {
+    if (!document.title.startsWith('✅') && !document.title.startsWith('❌') && document.title !== 'mynews — 知识笔记处理器') {
       document.title = 'mynews — 知识笔记处理器';
     }
     console.log('[mynews] 处理耗时', ((Date.now() - startTime) / 1000).toFixed(1) + 's');
