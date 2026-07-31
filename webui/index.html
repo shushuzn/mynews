@@ -1789,6 +1789,21 @@ async function autoTick() {
       btn.classList.remove('busy');
       return;
     }
+    // 预检抓取：内容为空或被反爬拦截 → 直接标记跳过，不提交 AI
+    setStatus('🔁 预检：' + (next.title || next.url).slice(0, 40) + '…', 'running');
+    try {
+      const pv = await fetch('/api/fetch?url=' + encodeURIComponent(next.url)).then(r => r.json());
+      const info = pv.success && typeof pv.output === 'object' ? pv.output : null;
+      if (info && (info.blocked || info.length === 0)) {
+        markAutoProcessed(next);
+        setStatus('⏭️ 跳过（抓取为空/被拦截）：' + (next.title || '').slice(0, 30) + '…', 'done');
+        setTimeout(autoTick, 600);
+        return;
+      }
+    } catch (pvErr) {
+      // 预检失败不阻断，继续尝试处理
+      console.log('[auto] 预检失败', pvErr);
+    }
     setStatus('🔁 处理：' + (next.title || next.url).slice(0, 40) + '…', 'running');
     _autoCurrentUrl = next.url;
     _autoCurrentId = next.id || '';
@@ -1798,6 +1813,16 @@ async function autoTick() {
     setStatus('自动模式：请求失败 ' + e.message, 'error');
     btn.classList.remove('busy');
   }
+}
+function markAutoProcessed(item) {
+  try {
+    const p = JSON.parse(localStorage.getItem('hn-processed') || '[]');
+    const idKey = 'id:' + (item.id || '');
+    const urlKey = 'url:' + item.url;
+    if (item.id && !p.includes(idKey)) p.push(idKey);
+    if (!p.includes(urlKey)) p.push(urlKey);
+    localStorage.setItem('hn-processed', JSON.stringify(p.slice(-600)));
+  } catch (err) {}
 }
 
 /* ============ 处理 ============ */
@@ -1876,13 +1901,7 @@ async function process() {
       document.getElementById('url').disabled = true;
       document.querySelectorAll('.seg-btn').forEach(b => b.disabled = true);
       if (_autoCurrentUrl) {
-        try {
-          const p = JSON.parse(localStorage.getItem('hn-processed') || '[]');
-          const idKey = 'id:' + _autoCurrentId, urlKey = 'url:' + _autoCurrentUrl;
-          if (_autoCurrentId && !p.includes(idKey)) p.push(idKey);
-          if (!p.includes(urlKey)) p.push(urlKey);
-          localStorage.setItem('hn-processed', JSON.stringify(p.slice(-600)));
-        } catch (err) {}
+        markAutoProcessed({ id: _autoCurrentId, url: _autoCurrentUrl });
       }
       setTimeout(autoTick, 900);
     } else {
