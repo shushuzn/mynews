@@ -155,12 +155,17 @@ body {
   background: rgba(255,255,255,.14); top: -50px; right: -40px;
 }
 .stat-card .sc-label { font-size: 11px; font-weight: 600; opacity: .85; letter-spacing: .04em; }
-.stat-card .sc-num { font-size: 26px; font-weight: 800; letter-spacing: -.03em; margin: 2px 0; font-variant-numeric: tabular-nums; }
-.stat-card .sc-sub { font-size: 11px; opacity: .8; }
-.stat-card .sc-row { display: flex; gap: 14px; margin-top: 10px; }
-.stat-card .sc-row .sc-mini { flex: 1; }
-.stat-card .sc-mini .m-num { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.stat-card .sc-mini .m-label { font-size: 10px; opacity: .8; }
+.stat-card .stat-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px;
+}
+.stat-card .sg-item {
+  background: rgba(255, 255, 255, .16); border-radius: 10px; padding: 9px 12px;
+  backdrop-filter: blur(6px); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .18);
+  transition: background .2s var(--ease), transform .2s var(--ease);
+}
+.stat-card .sg-item:hover { background: rgba(255, 255, 255, .24); transform: translateY(-1px); }
+.stat-card .sg-num { font-size: 19px; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.stat-card .sg-label { font-size: 10px; opacity: .8; margin-top: 1px; }
 .sidebar .tip-card {
   background: var(--surface); border: 1px solid var(--separator-light); border-radius: var(--radius-lg);
   padding: 14px; box-shadow: var(--shadow-sm); font-size: 12px; color: var(--text-2); line-height: 1.7;
@@ -627,9 +632,9 @@ textarea:focus, input[type="text"]:focus {
 }
 @media (max-width: 400px) {
   .seg-btn { padding: 7px 4px; font-size: 12px; gap: 4px; }
-  .stat-card .sc-row { gap: 6px; }
-  .stat-card .sc-mini .m-num { font-size: 13px; }
-  .stat-card .sc-mini .m-label { font-size: 9px; }
+  .stat-card .stat-grid { gap: 6px; }
+  .stat-card .sg-num { font-size: 16px; }
+  .stat-card .sg-label { font-size: 9px; }
   .hero-stats .st { font-size: 10.5px; padding: 4px 9px; }
   .btn-primary { width: 100%; justify-content: center; }
   .status-wrap { min-width: 0; width: 100%; }
@@ -706,19 +711,17 @@ textarea:focus, input[type="text"]:focus {
     </div>
   </div>
   <div class="nav">
-    <button class="nav-item active"><span class="n-ico">📝</span> 新建笔记</button>
-    <button class="nav-item disabled"><span class="n-ico">📚</span> 笔记库 <span class="n-badge">即将推出</span></button>
-    <button class="nav-item disabled"><span class="n-ico">🏷️</span> 标签管理 <span class="n-badge">即将推出</span></button>
-    <button class="nav-item disabled"><span class="n-ico">📊</span> 统计分析 <span class="n-badge">即将推出</span></button>
+    <button class="nav-item active" onclick="goNewNote()"><span class="n-ico">📝</span> 新建笔记</button>
+    <button class="nav-item" onclick="showRecent()"><span class="n-ico">🕘</span> 最近处理 <span class="n-badge" id="navRecentCount">0</span></button>
+    <button class="nav-item" onclick="showSettings()"><span class="n-ico">⚙️</span> 设置</button>
   </div>
   <div class="stat-card">
-    <div class="sc-label">今日处理</div>
-    <div class="sc-num" id="statToday">0</div>
-    <div class="sc-sub" id="statTodaySub">还没有处理记录</div>
-    <div class="sc-row">
-      <div class="sc-mini"><div class="m-num" id="statWeek">0</div><div class="m-label">本周</div></div>
-      <div class="sc-mini"><div class="m-num" id="statTotal">0</div><div class="m-label">累计</div></div>
-      <div class="sc-mini"><div class="m-num" id="statStreak">1</div><div class="m-label">连续天数</div></div>
+    <div class="sc-label">📊 统计概览</div>
+    <div class="stat-grid">
+      <div class="sg-item"><div class="sg-num" id="statToday">0</div><div class="sg-label">今日</div></div>
+      <div class="sg-item"><div class="sg-num" id="statWeek">0</div><div class="sg-label">本周</div></div>
+      <div class="sg-item"><div class="sg-num" id="statTotal">0</div><div class="sg-label">累计</div></div>
+      <div class="sg-item"><div class="sg-num" id="statStreak">1</div><div class="sg-label">连续天数</div></div>
     </div>
   </div>
   <div class="tip-card">
@@ -1613,11 +1616,19 @@ function renderStats() {
     if (d.getTime() >= weekStart) weekN++;
   }
   animateNum(document.getElementById('statToday'), todayN);
-  document.getElementById('statTodaySub').textContent = todayN ? '今天辛苦了，继续加油' : '还没有处理记录';
   document.getElementById('heroToday').textContent = '📈 今日 ' + todayN + ' 条';
+  const navCount = document.getElementById('navRecentCount');
+  if (navCount) navCount.textContent = list.length;
   animateNum(document.getElementById('statWeek'), weekN);
   animateNum(document.getElementById('statTotal'), list.length);
   renderStreak();
+}
+function goNewNote() {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  setTimeout(() => {
+    const c = document.getElementById('content');
+    if (!c.disabled) c.focus();
+  }, 350);
 }
 function renderStreak() {
   const KEY = 'mynews-first-day';
