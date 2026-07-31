@@ -26,7 +26,7 @@ if not FLOMO_TOKEN:
                 break
 
 # RSS 源列表（OPML 文件路径，可用环境变量 OPML_PATH 覆盖）
-OPML_PATH = Path(os.environ.get("OPML_PATH", r"C:/Users/35234/OneDrive/Desktop/_rss_sources.opml"))
+OPML_PATH = Path(os.environ.get("OPML_PATH", str(BASE_DIR / "rss_sources.opml")))
 
 # RSS 聚合缓存（首次全量抓取，之后 10 分钟内复用）
 RSS_CACHE = {"ts": 0.0, "items": []}
