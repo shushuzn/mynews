@@ -153,8 +153,21 @@ def _rss_background_refresh():
         time.sleep(RSS_INTERVAL)
 
 
-# 后台自动处理开关：MYNEWS_AUTO_BG=0 关闭（默认开启）
+# 后台自动处理开关：MYNEWS_AUTO_BG=0 初始关闭（默认开启）；运行时可用 API 切换
 AUTO_BG_ENABLED = os.environ.get("MYNEWS_AUTO_BG", "1") != "0"
+AUTO_BG_LOCK = threading.Lock()
+
+def _auto_bg_status() -> bool:
+    """读取当前后台自动处理开关状态（运行时可变）。"""
+    with AUTO_BG_LOCK:
+        return AUTO_BG_ENABLED
+
+def _set_auto_bg(enabled: bool):
+    """运行时切换后台自动处理开关。"""
+    global AUTO_BG_ENABLED
+    with AUTO_BG_LOCK:
+        AUTO_BG_ENABLED = enabled
+    print(f"[auto] 后台自动处理: {'开启' if enabled else '关闭'}")
 
 def _auto_background_process():
     """后台守护线程：每 10 分钟拉取 RSS，自动处理未处理过的条目（复用 auto_process.py）。
@@ -172,6 +185,9 @@ def _auto_background_process():
         print(f"[auto] 无法加载 auto_process.py: {e}")
         return
     while True:
+        if not _auto_bg_status():
+            time.sleep(RSS_INTERVAL)
+            continue
         try:
             items = ap.fetch_all_rss_items(limit_per_feed=3)
             processed = ap.load_processed()
@@ -204,6 +220,9 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path.startswith("/api/hn/newest"):
             # HN 最新文章列表：/api/hn/newest
             self._json_response(True, self._fetch_hn_newest())
+        elif self.path.startswith("/api/auto-bg"):
+            # 查询后台自动处理开关状态：/api/auto-bg
+            self._json_response(True, {"enabled": _auto_bg_status()})
         elif self.path.startswith("/api/processed"):
             # 服务端已处理记录（与前端 localStorage 合并，避免重复处理）
             try:
@@ -271,6 +290,14 @@ class Handler(BaseHTTPRequestHandler):
                 body = self.rfile.read(length).decode("utf-8")
                 data = json.loads(body)
                 self._handle_process(data)
+        elif self.path.startswith("/api/auto-bg"):
+            # 运行时切换后台自动处理：POST {"enabled": true|false}
+            try:
+                body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8"))
+                _set_auto_bg(bool(body.get("enabled")))
+                self._json_response(True, {"enabled": _auto_bg_status()})
+            except Exception as e:
+                self._json_response(False, f"切换失败: {e}")
         elif self.path.startswith("/api/mark-processed"):
             # 前端处理成功后通知服务端记录，与后台线程共用一份记录
             try:

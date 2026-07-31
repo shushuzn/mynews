@@ -831,6 +831,7 @@ textarea:focus, input[type="text"]:focus {
       <button class="rf-btn" onclick="document.getElementById('importFile').click()">导入</button>
       <button class="rf-btn" onclick="clearRecords()">清空</button>
     </span></div>
+    <div class="sc-row"><span>后台自动处理</span><button class="rf-btn" id="bgAutoToggle" onclick="toggleBgAuto()">…</button></div>
     <div class="sc-row"><span>自动处理记录</span><button class="rf-btn" onclick="clearAutoHistory()">清空已处理</button></div>
     <div class="sc-row"><span>版本</span><span style="color:var(--text-3);font-size:12px">mynews v2.1 · flomo 知识沉淀</span></div>
     <button class="sc-close" onclick="hideSettings()">关闭</button>
@@ -1928,6 +1929,37 @@ function clearAutoHistory() {
   localStorage.removeItem('hn-processed');
   setStatus('自动处理记录已清空', 'done');
 }
+async function refreshBgAutoState() {
+  try {
+    const r = await fetch('/api/auto-bg').then(r => r.json());
+    const el = document.getElementById('bgAutoToggle');
+    if (r.success && el) {
+      el.textContent = r.output.enabled ? '开' : '关';
+      el.classList.toggle('on', r.output.enabled);
+    }
+  } catch (e) {}
+}
+async function toggleBgAuto() {
+  const el = document.getElementById('bgAutoToggle');
+  const target = !(el && el.textContent === '开');
+  setStatus(target ? '⏳ 正在开启后台自动处理…' : '⏳ 正在关闭后台自动处理…', 'running');
+  try {
+    const r = await fetch('/api/auto-bg', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: target })
+    }).then(r => r.json());
+    if (r.success) {
+      el.textContent = r.output.enabled ? '开' : '关';
+      el.classList.toggle('on', r.output.enabled);
+      setStatus(r.output.enabled ? '✅ 后台自动处理已开启' : '✅ 后台自动处理已关闭', 'done');
+    } else {
+      setStatus('切换失败：' + (r.output || '未知错误'), 'error');
+    }
+  } catch (e) {
+    setStatus('切换失败：' + e.message, 'error');
+  }
+}
 function addTempSkip(url) {
   try {
     const s = JSON.parse(sessionStorage.getItem('hn-temp-skip') || '[]');
@@ -2060,6 +2092,7 @@ function setStatus(text, cls) {
 renderRecent();
 renderStats();
 updateSubmitState();
+refreshBgAutoState();
 moveSegSlider('text');
 restoreDraft();
 // 桌面端首屏自动聚焦正文（移动端避免弹出键盘）
