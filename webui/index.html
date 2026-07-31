@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%234f46e5'/%3E%3Cpath d='M12 5l1.9 4.6L18.5 11.5l-4.6 1.9L12 18l-1.9-4.6L5.5 11.5l4.6-1.9z' fill='white'/%3E%3C/svg%3E">
 <title>mynews — 知识笔记处理器</title>
 <style>
 /* ============ Design Tokens（Apple 质感 · 丰富层次）============ */
@@ -354,6 +355,11 @@ textarea:focus, input[type="text"]:focus {
 }
 .res-tab:hover { color: var(--text); }
 .res-tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+.res-tab .tab-count {
+  font-size: 10px; font-weight: 800; padding: 1px 7px; border-radius: 999px;
+  background: var(--surface-2); color: var(--text-3); transition: all .2s var(--ease);
+}
+.res-tab.active .tab-count { background: rgba(0,122,255,.12); color: var(--blue); }
 .res-pane { display: none; }
 .res-pane.active { display: block; animation: fadeIn .3s var(--ease); }
 
@@ -587,6 +593,10 @@ textarea:focus, input[type="text"]:focus {
         </div>
         <div id="imagePreview" style="display:none;margin-top:14px;position:relative">
           <img id="previewImg" style="max-width:100%;max-height:280px;border-radius:12px;border:1px solid var(--separator);box-shadow:var(--shadow-md)">
+          <div style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12px;color:var(--text-3)">
+            <span id="imgName" style="font-weight:600;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px"></span>
+            <span id="imgSize"></span>
+          </div>
           <button class="btn" style="position:absolute;top:8px;right:8px;padding:5px 11px;background:rgba(0,0,0,.65);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600" onclick="clearImage()">✕ 移除</button>
         </div>
       </div>
@@ -621,8 +631,8 @@ textarea:focus, input[type="text"]:focus {
           <span class="t-side"><button class="sample-btn" onclick="document.getElementById('result-section').style.display='none'">收起 ✕</button></span>
         </div>
         <div class="res-tabs">
-          <button class="res-tab active" onclick="switchRes('note')">📄 笔记</button>
-          <button class="res-tab" onclick="switchRes('compare')">🔍 对比</button>
+          <button class="res-tab active" onclick="switchRes('note')">📄 笔记 <span class="tab-count" id="cntNote">0</span></button>
+          <button class="res-tab" onclick="switchRes('compare')">🔍 对比 <span class="tab-count" id="cntCompare">0</span></button>
           <button class="res-tab" onclick="switchRes('log')">📋 日志</button>
         </div>
         <div id="res-summary" class="result-summary" style="display:none"></div>
@@ -698,7 +708,16 @@ function fillSampleUrl() {
 function updateCharCount() {
   const el = document.getElementById('content');
   const n = el.value.length;
-  document.getElementById('charCount').textContent = n + ' 字';
+  const cc = document.getElementById('charCount');
+  cc.textContent = n + ' 字';
+  if (n > 8000) {
+    cc.textContent = n + ' 字 · 超 8000 将被截断';
+    cc.style.color = 'var(--orange)';
+    cc.style.fontWeight = '700';
+  } else {
+    cc.style.color = '';
+    cc.style.fontWeight = '';
+  }
   updateSubmitState();
 }
 function updateSubmitState() {
@@ -720,6 +739,9 @@ document.addEventListener('keydown', function(e) {
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
     const btn = document.getElementById('submitBtn');
     if (!btn.disabled) process();
+  } else if (e.key === 'Escape') {
+    const rs = document.getElementById('result-section');
+    if (rs && rs.style.display !== 'none') rs.style.display = 'none';
   }
 });
 
@@ -848,6 +870,8 @@ function renderResults(data) {
   }).join('\n');
   document.getElementById('res-log').innerHTML = `<div class="raw-log">${logLines}</div>
     <div style="margin-top:10px;text-align:right"><button class="copy-btn" onclick="copyLog(this)">复制日志</button></div>`;
+  document.getElementById('cntNote').textContent = sections.flomoNote ? '1' : '0';
+  document.getElementById('cntCompare').textContent = sections.oldNote ? '1' : '0';
   document.getElementById('result-section').style.display = 'block';
   document.getElementById('result-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
 
@@ -989,14 +1013,22 @@ let uploadedFile = null;
 function previewImage(e) {
   const file = e.target.files[0];
   if (!file) return;
+  setImageFile(file);
+}
+
+function setImageFile(file) {
   uploadedFile = file;
   const reader = new FileReader();
   reader.onload = function(ev) {
     document.getElementById('previewImg').src = ev.target.result;
     document.getElementById('imagePreview').style.display = 'block';
     document.getElementById('dropZone').style.display = 'none';
+    document.getElementById('imgName').textContent = file.name || '剪贴板图片';
+    const kb = file.size / 1024;
+    document.getElementById('imgSize').textContent = kb >= 1024 ? (kb / 1024).toFixed(1) + ' MB' : Math.round(kb) + ' KB';
   };
   reader.readAsDataURL(file);
+  updateSubmitState();
 }
 
 function clearImage() {
@@ -1004,7 +1036,26 @@ function clearImage() {
   document.getElementById('fileInput').value = '';
   document.getElementById('imagePreview').style.display = 'none';
   document.getElementById('dropZone').style.display = 'block';
+  updateSubmitState();
 }
+
+// 粘贴图片（Ctrl+V）
+document.addEventListener('paste', function(e) {
+  if (document.getElementById('submitBtn').disabled) return;
+  const items = e.clipboardData && e.clipboardData.items;
+  if (!items) return;
+  for (const item of items) {
+    if (item.type && item.type.startsWith('image/')) {
+      const file = item.getAsFile();
+      if (file) {
+        e.preventDefault();
+        switchTab('image');
+        setImageFile(file);
+      }
+      break;
+    }
+  }
+});
 
 const dropZone = document.getElementById('dropZone');
 if (dropZone) {
