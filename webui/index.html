@@ -345,6 +345,12 @@ textarea:focus, input[type="text"]:focus {
 }
 .recent-item:hover { border-color: var(--blue); transform: translateX(2px); }
 .recent-item.copied { border-color: var(--green); background: rgba(52,199,89,.08); }
+.r-del {
+  border: none; background: none; color: var(--text-3); cursor: pointer; font-size: 12px;
+  padding: 2px 6px; border-radius: 6px; opacity: 0; transition: all .15s var(--ease); flex-shrink: 0;
+}
+.recent-item:hover .r-del { opacity: 1; }
+.r-del:hover { color: var(--red); background: rgba(255,59,48,.1); }
 .recent-item .r-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 .r-dot.create { background: var(--green); }
 .r-dot.update { background: var(--orange); }
@@ -527,9 +533,23 @@ textarea:focus, input[type="text"]:focus {
 .footer { text-align: center; color: var(--text-3); font-size: 11.5px; padding: 20px 0 8px; }
 
 /* ============ Responsive ============ */
-@media (max-width: 960px) {
-  .sidebar { display: none; }
+.menu-btn { display: none; }
+.sidebar-mask {
+  display: none; position: fixed; inset: 0; z-index: 140; background: rgba(0,0,0,.4);
+  backdrop-filter: blur(3px);
 }
+@media (max-width: 960px) {
+  .menu-btn { display: inline-flex; }
+  .sidebar { display: none; }
+  .sidebar.open {
+    display: flex; position: fixed; top: 0; bottom: 0; left: 0; z-index: 150;
+    width: 250px; padding: 20px 14px; margin: 0; overflow-y: auto;
+    background: var(--bg); border-right: 1px solid var(--separator-light);
+    box-shadow: var(--shadow-lg); animation: slideIn .28s var(--ease);
+  }
+  .sidebar-mask.show { display: block; animation: fadeIn .25s var(--ease); }
+}
+@keyframes slideIn { from { transform: translateX(-100%); } to { transform: translateX(0); } }
 @media (max-width: 680px) {
   .container { padding: 0 12px; }
   .card { padding: 17px; }
@@ -553,6 +573,11 @@ textarea:focus, input[type="text"]:focus {
 <body>
 
 <div class="header">
+  <button class="icon-btn menu-btn" onclick="toggleSidebar()" title="菜单">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 6h16M4 12h16M4 18h16"/>
+    </svg>
+  </button>
   <div class="brand">
     <div class="brand-logo">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
@@ -581,8 +606,11 @@ textarea:focus, input[type="text"]:focus {
 
 <div class="app">
 
+<!-- 移动端侧栏遮罩 -->
+<div class="sidebar-mask" id="sidebarMask" onclick="closeSidebar()"></div>
+
 <!-- ============ Sidebar ============ -->
-<aside class="sidebar">
+<aside class="sidebar" id="sidebar">
   <div class="nav">
     <button class="nav-item active"><span class="n-ico">📝</span> 新建笔记</button>
     <button class="nav-item disabled"><span class="n-ico">📚</span> 笔记库 <span class="n-badge">即将推出</span></button>
@@ -621,6 +649,7 @@ textarea:focus, input[type="text"]:focus {
         <span class="st">🤖 AI 自动分析</span>
         <span class="st">🔍 智能查重</span>
         <span class="st">📚 flomo 同步</span>
+        <span class="st" id="heroToday">📈 今日 0 条</span>
       </div>
     </div>
 
@@ -803,6 +832,19 @@ function continueInput() {
     }
   }, 400);
 }
+
+/* ============ 移动端侧栏抽屉 ============ */
+function toggleSidebar() {
+  const sb = document.getElementById('sidebar');
+  const mask = document.getElementById('sidebarMask');
+  const open = sb.classList.toggle('open');
+  mask.classList.toggle('show', open);
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarMask').classList.remove('show');
+}
+window.addEventListener('resize', () => { if (window.innerWidth > 960) closeSidebar(); });
 
 /* ============ 多窗口同步 ============ */
 window.addEventListener('storage', function(e) {
@@ -1282,6 +1324,13 @@ function recordRecent(sections, output) {
   renderRecent();
   renderStats();
 }
+function delRecord(time) {
+  const list = getRecords().filter(r => r.time !== time);
+  localStorage.setItem('mynews-records', JSON.stringify(list));
+  renderRecent();
+  renderStats();
+  setStatus('已删除该记录', 'done');
+}
 function clearRecords() {
   if (!getRecords().length) return;
   if (!confirm('确定清空本浏览器的所有处理记录吗？')) return;
@@ -1377,6 +1426,7 @@ function renderRecent() {
         <div class="r-sub">${r.label}${r.id ? ' · ' + escapeHtml(r.id) : ''}</div>
       </div>
       <span class="r-time">${d} ${hm}</span>
+      <button class="r-del" title="删除该记录" onclick="event.stopPropagation();delRecord(${r.time})">✕</button>
     </div>`;
   };
   const today = list.filter(r => new Date(r.time).toDateString() === todayStr);
@@ -1399,6 +1449,7 @@ function renderStats() {
   }
   animateNum(document.getElementById('statToday'), todayN);
   document.getElementById('statTodaySub').textContent = todayN ? '今天辛苦了，继续加油' : '还没有处理记录';
+  document.getElementById('heroToday').textContent = '📈 今日 ' + todayN + ' 条';
   animateNum(document.getElementById('statWeek'), weekN);
   animateNum(document.getElementById('statTotal'), list.length);
   renderStreak();
