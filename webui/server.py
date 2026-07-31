@@ -42,14 +42,12 @@ class Handler(BaseHTTPRequestHandler):
                 boundary = ctype.split("boundary=")[1].strip()
                 raw = self.rfile.read(int(self.headers.get("Content-Length", 0)))
                 parts = raw.split(b"--" + boundary.encode())
-                form_data = {}
                 image_file = None
                 for part in parts:
                     if b"Content-Disposition" not in part: continue
                     disp_line = part.split(b"\r\n", 2)[1].decode("utf-8", errors="replace")
                     name_match = re.search(r'name="([^"]+)"', disp_line)
                     if not name_match: continue
-                    field_name = name_match.group(1)
                     # 文件字段
                     if "filename=" in disp_line:
                         idx = part.find(b"\r\n\r\n") + 4
@@ -57,12 +55,7 @@ class Handler(BaseHTTPRequestHandler):
                         filename_match = re.search(r'filename="([^"]+)"', disp_line)
                         fname = filename_match.group(1) if filename_match else "upload.jpg"
                         image_file = type("FakeFile", (), {"file": type("FakeStream", (), {"read": lambda self, fd=file_data: fd})(), "filename": fname})()
-                    else:
-                        idx = part.find(b"\r\n\r\n") + 4
-                        val = part[idx:].rstrip(b"\r\n--").decode("utf-8", errors="replace")
-                        form_data[field_name] = val
-                force_new = form_data.get("forceNew", "") == "1"
-                self._handle_process({"content": "", "url": "", "forceNew": force_new, "image": image_file})
+                self._handle_process({"content": "", "url": "", "image": image_file})
             else:
                 length = int(self.headers.get("Content-Length", 0))
                 body = self.rfile.read(length).decode("utf-8")
@@ -86,7 +79,6 @@ class Handler(BaseHTTPRequestHandler):
     def _handle_process(self, data):
         content = data.get("content", "").strip()
         url = data.get("url", "").strip()
-        force_new = data.get("forceNew", False)
         image_file = data.get("image", None)
 
         # URL 抓取：拉取网页正文
@@ -135,8 +127,6 @@ class Handler(BaseHTTPRequestHandler):
             "--content", content,
             "--auto"
         ]
-        if force_new:
-            cmd.append("--force-new")
 
         env = os.environ.copy()
         if FLOMO_TOKEN:
@@ -148,9 +138,7 @@ class Handler(BaseHTTPRequestHandler):
             if r.stderr:
                 full_output += "\n--- stderr ---\n" + r.stderr
 
-            success = "上传成功" in r.stdout or "更新成功" in r.stdout or "处理完成" in r.stdout or "⏭️  已跳过" in r.stdout
-            if not success and ("已跳过" in r.stdout or "已跳过（未上传）" in r.stdout):
-                success = True
+            success = "上传成功" in r.stdout or "更新成功" in r.stdout or "处理完成" in r.stdout or "无增量 → 跳过" in r.stdout
             self._json_response(success, full_output)
         except subprocess.TimeoutExpired:
             self._json_response(False, "处理超时（>10分钟）")

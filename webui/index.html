@@ -186,9 +186,6 @@ body.dark .relevance-low { background: #1f2937; }
       <button class="btn" style="position:absolute;top:8px;right:8px;padding:4px 10px;background:rgba(0,0,0,.5);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px" onclick="clearImage()">✕ 移除</button>
     </div>
   </div>
-  <div class="options" style="margin-top:12px">
-    <label class="option-label"><input type="checkbox" id="forceNew"> 强制新建 (--force-new)</label>
-  </div>
   <div class="btn-row">
     <button class="btn btn-primary" id="submitBtn" onclick="process()">✨ 处理并上传</button>
     <span class="status-badge idle" id="status">就绪</span>
@@ -291,7 +288,8 @@ function renderResults(data) {
     noteDiv.innerHTML = renderFlomoNote(sections.flomoNote);
     if (sections.newId) noteDiv.innerHTML += `<div style="margin-top:12px;padding:8px 12px;background:var(--accent-light);border-radius:8px;font-size:12px;color:var(--accent)">✅ 已上传 · flomo ID: ${sections.newId}</div>`;
   } else if (data.success) {
-    noteDiv.innerHTML = '<div style="color:var(--text2);font-size:14px;text-align:center;padding:32px 0">已上传成功，笔记内容未捕获</div>';
+    const skipped = (data.output || '').includes('无增量 → 跳过') || (data.output || '').includes('已跳过');
+    noteDiv.innerHTML = `<div style="color:${skipped ? 'var(--orange)' : 'var(--text2)'};font-size:14px;text-align:center;padding:32px 0">${skipped ? '⏭️ 已跳过（与已有笔记重复，无增量）' : '✅ 已上传成功，笔记内容未捕获'}</div>`;
   } else {
     noteDiv.innerHTML = '<div style="color:var(--red);font-size:14px;text-align:center;padding:32px 0">❌ 处理未完成</div>';
   }
@@ -368,7 +366,6 @@ if (dropZone) {
 async function process() {
   const content = document.getElementById('content').value.trim();
   const url = document.getElementById('url').value.trim();
-  const forceNew = document.getElementById('forceNew').checked;
   const hasImage = !!uploadedFile;
 
   if (!content && !url && !hasImage) {
@@ -387,11 +384,10 @@ async function process() {
   if (hasImage) {
     const fd = new FormData();
     fd.append('image', uploadedFile);
-    if (forceNew) fd.append('forceNew', '1');
     body = fd;
   } else {
     headers['Content-Type'] = 'application/json';
-    body = JSON.stringify({ content, url, forceNew });
+    body = JSON.stringify({ content, url });
   }
 
   try {
