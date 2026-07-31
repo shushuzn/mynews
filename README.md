@@ -27,7 +27,7 @@ cd webui && python3 server.py
   → search_flomo 查重
     ├─ relevance < 0.9 → 自动新建
     └─ relevance ≥ 0.9 → AI 决策
-       ├─ 假阳性（主题不同）→ --force-new 新建
+       ├─ 假阳性（主题不同）→ 强制新建
        ├─ 有增量（主题相同但有新内容）→ AI 合并后 update
        └─ 真重复（无增量）→ skip 跳过
   → 上传 flomo
@@ -55,15 +55,12 @@ cd webui && python3 server.py
 python3 process_inbox.py --auto --content "文章正文"
 ```
 
-### CLI 手动精细控制
+### CLI（指定参数覆盖 AI 结果）
 
 ```bash
-python3 process_inbox.py \
-  --content "正文" \
+python3 process_inbox.py --auto --content "正文" \
   --domain "技术" --subdomain "AI" \
-  --title "知识点名称" \
-  --tags "#知识基座 #技术 #AI" \
-  --ai-content "**概念**：<mark>核心概念</mark>定义..."
+  --tags "#知识基座 #技术 #AI"
 ```
 
 ### Web UI
@@ -73,20 +70,16 @@ cd webui && python3 server.py
 # 浏览器打开 http://localhost:8080
 ```
 
-支持：粘贴正文、强制新建、三栏结果展示（笔记/对比/日志）。
+支持：正文 / URL（自动抓取+预览）/ 图片三种输入；AI 自动分析、查重、上传/更新/跳过；三栏结果展示（笔记/对比/日志）；侧边栏统计、最近处理记录（本地保存、可导出/导入备份）；三态主题（浅色/深色/跟随系统）、快捷键（`?` 查看）。
 
 ## 参数说明
 
 | 参数 | 说明 |
 |------|------|
-| `--content TEXT` | 原材料正文 |
-| `--auto` | 全自动模式（AI 自行分析/分类/生成/决策） |
-| `--domain`, `--subdomain` | 手动指定领域（自动模式下可选） |
-| `--title NAME` | 知识点名称（自动模式下可选） |
-| `--tags "T1 T2 T3"` | 标签，首位为信号类型（自动模式下可选） |
-| `--ai-content MD` | 已生成的概念内容 |
-| `--force-new` | 强制新建（跳过查重） |
-| `--update MEMO_ID` | 增量更新已有笔记 |
+| `--content TEXT` | 原材料正文（必填） |
+| `--auto` | 全自动模式（AI 自行分析/分类/生成/决策，默认行为） |
+| `--domain`, `--subdomain` | 可选：覆盖 AI 生成的领域 |
+| `--tags "T1 T2 T3"` | 可选：覆盖 AI 生成的标签（首位为信号类型） |
 
 ## 文档格式（flomo 笔记）
 

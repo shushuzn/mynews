@@ -698,7 +698,9 @@ textarea:focus, input[type="text"]:focus {
         <span class="t-ico purple">🕘</span> 最近处理
         <span class="t-side">
           <button class="sample-btn" onclick="exportRecords()">导出</button>
+          <button class="sample-btn" onclick="document.getElementById('importFile').click()">导入</button>
           <button class="sample-btn" onclick="clearRecords()">清空记录</button>
+          <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importRecords(event)">
         </span>
       </div>
       <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
@@ -1305,6 +1307,40 @@ function exportRecords() {
   URL.revokeObjectURL(a.href);
   setStatus('已导出 ' + list.length + ' 条记录', 'done');
 }
+function importRecords(e) {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      const data = JSON.parse(ev.target.result);
+      const incoming = Array.isArray(data) ? data : (data.records || []);
+      if (!incoming.length) { setStatus('文件中没有记录', 'error'); return; }
+      // 按 id+time 去重合并
+      const seen = new Set();
+      const merged = [...getRecords()];
+      for (const r of merged) seen.add(r.id + ':' + r.time);
+      let added = 0;
+      for (const r of incoming) {
+        const key = (r.id || '') + ':' + (r.time || 0);
+        if (r && typeof r.title === 'string' && !seen.has(key)) {
+          merged.push({ title: r.title, id: r.id || '', action: r.action || 'create', label: r.label || '新建', time: r.time || Date.now() });
+          seen.add(key);
+          added++;
+        }
+      }
+      merged.sort((a, b) => b.time - a.time);
+      localStorage.setItem('mynews-records', JSON.stringify(merged.slice(0, 50)));
+      renderRecent();
+      renderStats();
+      setStatus('导入成功：新增 ' + added + ' 条（共 ' + merged.length + ' 条）', 'done');
+    } catch (err) {
+      setStatus('导入失败：文件格式不正确', 'error');
+    }
+  };
+  reader.readAsText(file);
+}
 let _recentFilter = 'all';
 function setRecentFilter(f) {
   _recentFilter = f;
@@ -1498,6 +1534,7 @@ async function process() {
   const btn = document.getElementById('submitBtn');
   const startTime = Date.now();
   _processing = true;
+  document.title = '⏳ mynews — 处理中…';
   btn.disabled = true; btn.classList.add('loading');
   document.getElementById('btnLabel').textContent = '处理中…';
   document.getElementById('content').disabled = true;
@@ -1531,6 +1568,8 @@ async function process() {
     const data = await resp.json();
     renderResults(data);
     playSound(data.success);
+    document.title = data.success ? '✅ mynews — 处理完成' : '❌ mynews — 处理失败';
+    setTimeout(() => { document.title = 'mynews — 知识笔记处理器'; }, 2500);
     const secs = ((Date.now() - startTime) / 1000).toFixed(1);
     setStatus(data.success
         ? (data.output.includes('跳过') ? `已跳过 · ${secs}s` : `处理完成 · ${secs}s`)
@@ -1550,6 +1589,9 @@ async function process() {
     clearInterval(ticker);
     _processing = false;
     updateSubmitState();
+    if (!document.title.startsWith('✅') && !document.title.startsWith('❌')) {
+      document.title = 'mynews — 知识笔记处理器';
+    }
     console.log('[mynews] 处理耗时', ((Date.now() - startTime) / 1000).toFixed(1) + 's');
   }
 }
