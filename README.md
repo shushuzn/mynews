@@ -55,6 +55,16 @@ cd webui && python3 server.py
 python3 process_inbox.py --auto --content "文章正文"
 ```
 
+### 非交互式批量处理
+
+从 `rss_sources.opml` 中的所有 RSS 源循环抓取最新条目，自动处理直到全部完成：
+
+```bash
+python3 scripts/auto_process.py              # 处理全部（跳过已处理的）
+python3 scripts/auto_process.py --limit 20  # 最多处理 20 条
+python3 scripts/auto_process.py --delay 5    # 每条间隔 5 秒
+```
+
 ### CLI（指定参数覆盖 AI 结果）
 
 ```bash
@@ -70,7 +80,7 @@ cd webui && python3 server.py
 # 浏览器打开 http://localhost:8080
 ```
 
-支持：正文 / URL（自动抓取+预览）/ 图片三种输入；AI 自动分析、查重、上传/更新/跳过；三栏结果展示（笔记/对比/日志）；侧边栏统计、最近处理记录（本地保存、可导出/导入备份）；三态主题（浅色/深色/跟随系统）、快捷键（`?` 查看）。
+支持：正文 / URL（自动抓取+预览）/ 图片三种输入；AI 自动分析、查重、上传/更新/跳过；RSS 源聚合（从 OPML 读取）；自动处理模式（⚡ 按钮）；三栏结果展示（笔记/对比/日志）；侧边栏统计、最近处理记录（本地保存、可导出/导入备份）；三态主题（浅色/深色/跟随系统）、快捷键（`?` 查看）。
 
 ## 参数说明
 
@@ -122,7 +132,9 @@ mynews/
 ├── answers/                  # 本地草稿（.gitignore）
 ├── data/                     # 处理状态（reviewed_pass.json 等）
 ├── scripts/
-│   └── process_inbox.py      # 核心处理器（全自动+手动）
+│   ├── process_inbox.py      # 核心处理器（全自动+手动）
+│   └── auto_process.py       # 非交互式批量处理器
+├── rss_sources.opml          # RSS 源列表（88 个 feed）
 ├── webui/
 │   ├── server.py             # Web UI 后端
 │   └── index.html            # Web UI 前端（含夜色模式）
