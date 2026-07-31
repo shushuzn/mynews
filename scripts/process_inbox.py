@@ -30,6 +30,47 @@ def get_temp_dir() -> Path:
     return Path(tempfile.gettempdir())
 
 
+def _check_kimi():
+    """启动检查：kimi 是否存在、是否最新版。
+    找不到 → 报错退出（脚本依赖 kimi CLI）；版本过旧 → 警告不阻断。返回 kimi 二进制路径。"""
+    kimi_bin = shutil.which("kimi")
+    if not kimi_bin:
+        for cand in (os.path.expanduser("~/.kimi-code/bin/kimi"),
+                     os.path.expanduser("~/.local/bin/kimi"),
+                     "/usr/local/bin/kimi"):
+            if os.path.isfile(cand) and os.access(cand, os.X_OK):
+                kimi_bin = cand
+                break
+    if not kimi_bin:
+        print("[error] 未找到 kimi 命令，脚本依赖 kimi CLI 才能运行。")
+        print("  安装: curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash")
+        sys.exit(1)
+
+    # 版本检查：本地 kimi --version ↔ 远端 latest，仅提示不阻断
+    local_ver = ""
+    try:
+        r = subprocess.run([kimi_bin, "--version"], capture_output=True, text=True, timeout=10)
+        raw_ver = (r.stdout or r.stderr or "").strip()
+        m = re.search(r"(\d+\.\d+\.\d+)", raw_ver)
+        if m:
+            local_ver = m.group(1)
+    except Exception:
+        pass
+    latest_ver = ""
+    try:
+        with urllib.request.urlopen("https://code.kimi.com/kimi-code/latest", timeout=5) as resp:
+            latest_ver = resp.read().decode("utf-8").strip()
+    except Exception:
+        pass
+    if local_ver and latest_ver and local_ver != latest_ver:
+        print(f"  [warning] kimi 版本 {local_ver}，最新版 {latest_ver}，建议升级")
+    return kimi_bin
+
+
+# 脚本最前面：先检查 kimi 是否安装、是否最新版（在 FLOMO_TOKEN 检查之前）
+_check_kimi()
+
+
 
 BASE_DIR = get_base_dir()
 PYTHON_BIN = sys.executable if sys.executable else ("python" if os.name == "nt" else "python3")
