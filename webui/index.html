@@ -386,6 +386,7 @@ textarea:focus, input[type="text"]:focus {
 .flomo-note .tag-line span:nth-child(6) { background: rgba(48,176,199,.1); color: var(--teal); border-color: rgba(48,176,199,.22); }
 .flomo-note .tag-line span:nth-child(n+7) { background: rgba(88,86,214,.1); color: var(--indigo); border-color: rgba(88,86,214,.22); }
 .flomo-note .tag-line span:hover { transform: scale(1.06); }
+.flomo-note .tag-line span.copied { transform: scale(1.1); box-shadow: 0 0 0 2px var(--green); }
 .flomo-note .bold-title { font-size: 16.5px; font-weight: 700; letter-spacing: -.02em; margin-bottom: 5px; }
 .flomo-note .source { color: var(--text-3); font-size: 12px; margin-bottom: 13px; }
 .flomo-note .concept {
@@ -613,7 +614,10 @@ textarea:focus, input[type="text"]:focus {
       <div id="tab-text" class="tab-pane active">
         <div class="field-head">
           <span style="font-size:12px;color:var(--text-3)">文章正文 / 笔记原文</span>
-          <button class="sample-btn" onclick="fillSample()">填入示例</button>
+          <span>
+            <button class="sample-btn" onclick="fillSample()">填入示例</button>
+            <button class="sample-btn" onclick="clearInputs()">清空</button>
+          </span>
         </div>
         <div class="field">
           <textarea id="content" placeholder="粘贴文章正文或笔记内容…"></textarea>
@@ -939,7 +943,8 @@ function renderFlomoNote(text) {
   let html = '<div class="flomo-note">';
   for (const line of text.split('\n')) {
     if (line.startsWith('#')) {
-      const tags = line.split(/\s+/).filter(Boolean).map(t => `<span>${escapeHtml(t)}</span>`).join('');
+      const tags = line.split(/\s+/).filter(Boolean)
+        .map(t => `<span title="点击复制" onclick="copyText('${escapeHtml(t)}', this)">${escapeHtml(t)}</span>`).join('');
       html += `<div class="tag-line">${tags}</div>`;
     } else if (/^\*\*.*\*\*$/.test(line.trim()) && !line.includes('**来源**') && !line.includes('**概念**') ) {
       html += `<div class="bold-title">${escapeHtml(line).replace(/\*\*/g, '').replace(/\\_/g, '_')}</div>`;
@@ -978,7 +983,8 @@ function parseMarkers(text) {
   return sections;
 }
 
-function renderResults(data) {
+function renderResults(data, opts) {
+  opts = opts || {};
   const sections = parseMarkers(data.output || '');
   const log = data.output || '';
   window._lastNote = sections.flomoNote || '';
@@ -998,7 +1004,8 @@ function renderResults(data) {
     sumEl.style.display = 'flex';
   } else {
     sumEl.className = 'result-summary err';
-    sumEl.innerHTML = '<span class="rs-ico">❌</span> 处理失败，请查看下方日志';
+    sumEl.innerHTML = `<span class="rs-ico">❌</span> 处理失败，请查看下方日志
+      <button class="copy-btn" style="margin-left:auto" onclick="retryLast()">↻ 重试</button>`;
     sumEl.style.display = 'flex';
   }
 
@@ -1065,16 +1072,52 @@ function renderResults(data) {
   document.getElementById('cntNote').textContent = sections.flomoNote ? '1' : '0';
   document.getElementById('cntCompare').textContent = sections.oldNote ? '1' : '0';
   document.getElementById('result-section').style.display = 'block';
-  document.getElementById('result-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  // 持久化最近一次结果（刷新后恢复）
+  if (!opts.restore) {
+    try {
+      localStorage.setItem('mynews-last-result', JSON.stringify({ success: data.success, output: data.output, ts: Date.now() }));
+    } catch (e) {}
+    document.getElementById('result-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 
   // 失败时自动切到日志 tab
   if (!data.success) switchRes('log');
 
-  // 记录到本地；上传/更新成功后清空草稿
-  if (data.success) {
+  // 记录到本地；上传/更新成功后清空草稿（恢复模式不重复记录）
+  if (data.success && !opts.restore) {
     recordRecent(sections, data.output);
     if (!skipped) clearDraft();
   }
+}
+
+/* ============ 失败重试 ============ */
+let _lastSubmission = { content: '', url: '' };
+function retryLast() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('mynews-last-submission') || 'null');
+    if (saved) _lastSubmission = saved;
+  } catch (e) {}
+  if (!_lastSubmission.content && !_lastSubmission.url) {
+    setStatus('没有可重试的内容', 'error');
+    return;
+  }
+  document.getElementById('content').value = _lastSubmission.content;
+  document.getElementById('url').value = _lastSubmission.url;
+  updateCharCount();
+  switchTab(_lastSubmission.url && !_lastSubmission.content ? 'url' : 'text');
+  setStatus('正在重试…', 'running');
+  process();
+}
+function clearInputs() {
+  document.getElementById('content').value = '';
+  document.getElementById('url').value = '';
+  if (uploadedFile) clearImage();
+  localStorage.removeItem('mynews-draft');
+  document.getElementById('urlPreview').style.display = 'none';
+  updateCharCount();
+  updateSubmitState();
+  setStatus('已清空输入', 'done');
 }
 
 /* ============ 复制 ============ */
@@ -1321,6 +1364,8 @@ async function process() {
     setStatus('URL 需以 http:// 或 https:// 开头', 'error');
     return;
   }
+  _lastSubmission = { content, url };
+  try { localStorage.setItem('mynews-last-submission', JSON.stringify(_lastSubmission)); } catch (e) {}
   const btn = document.getElementById('submitBtn');
   const startTime = Date.now();
   btn.disabled = true; btn.classList.add('loading');
@@ -1389,6 +1434,15 @@ renderStats();
 updateSubmitState();
 moveSegSlider('text');
 restoreDraft();
+// 恢复最近一次处理结果（刷新后仍在）
+(function() {
+  try {
+    const last = JSON.parse(localStorage.getItem('mynews-last-result') || 'null');
+    if (last && last.output) {
+      renderResults(last, { restore: true });
+    }
+  } catch (e) {}
+})();
 (function() {
   const now = new Date();
   const week = ['日','一','二','三','四','五','六'][now.getDay()];
