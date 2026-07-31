@@ -282,6 +282,12 @@ textarea:focus, input[type="text"]:focus {
   cursor: pointer; transition: all .22s var(--ease); display: inline-flex; align-items: center; gap: 8px;
   font-family: inherit; letter-spacing: -.01em;
 }
+.btn .btn-spinner {
+  width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(255,255,255,.4);
+  border-top-color: #fff; animation: spin .7s linear infinite; display: none; flex-shrink: 0;
+}
+.btn.loading .btn-spinner { display: inline-block; }
+.btn.loading svg { display: none; }
 .btn-primary {
   background: var(--grad-btn); color: #fff;
   box-shadow: 0 5px 16px rgba(10, 132, 255, .38);
@@ -378,6 +384,23 @@ textarea:focus, input[type="text"]:focus {
   border: 1px solid rgba(52,199,89,.22); border-radius: var(--radius-sm);
   font-size: 12.5px; color: var(--green); font-weight: 600; display: flex; align-items: center; gap: 8px;
 }
+.copy-btn {
+  margin-left: auto; font-size: 11.5px; font-weight: 700; color: var(--blue);
+  background: rgba(0,122,255,.1); border: 1px solid rgba(0,122,255,.2);
+  padding: 3px 11px; border-radius: 999px; cursor: pointer; transition: all .15s var(--ease);
+  font-family: inherit; flex-shrink: 0;
+}
+.copy-btn:hover { background: rgba(0,122,255,.18); transform: scale(1.04); }
+.copy-btn.copied { color: var(--green); background: rgba(52,199,89,.12); border-color: rgba(52,199,89,.25); }
+.result-summary {
+  display: flex; align-items: center; gap: 10px; padding: 11px 15px;
+  border-radius: var(--radius-md); margin-bottom: 16px; font-size: 13px; font-weight: 700;
+  animation: fadeIn .3s var(--ease);
+}
+.result-summary.ok { background: rgba(52,199,89,.1); border: 1px solid rgba(52,199,89,.22); color: var(--green); }
+.result-summary.skip { background: var(--surface-2); border: 1px solid var(--separator-light); color: var(--text-2); }
+.result-summary.err { background: rgba(255,59,48,.08); border: 1px solid rgba(255,59,48,.22); color: var(--red); }
+.result-summary .rs-ico { font-size: 15px; }
 
 /* ============ Compare ============ */
 .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
@@ -556,8 +579,9 @@ textarea:focus, input[type="text"]:focus {
       </div>
       <div class="submit-row">
         <button class="btn btn-primary" id="submitBtn" onclick="process()">
+          <span class="btn-spinner"></span>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg>
-          处理并上传
+          <span id="btnLabel">处理并上传</span>
         </button>
         <div class="status-wrap">
           <span class="status-badge idle" id="status"><span class="spinner"></span> 就绪</span>
@@ -585,6 +609,7 @@ textarea:focus, input[type="text"]:focus {
           <button class="res-tab" onclick="switchRes('compare')">🔍 对比</button>
           <button class="res-tab" onclick="switchRes('log')">📋 日志</button>
         </div>
+        <div id="res-summary" class="result-summary" style="display:none"></div>
         <div id="res-note" class="res-pane active"></div>
         <div id="res-compare" class="res-pane"></div>
         <div id="res-log" class="res-pane"></div>
@@ -708,13 +733,31 @@ function renderResults(data) {
   const sections = parseMarkers(data.output || '');
   const log = data.output || '';
 
+  // 摘要条
+  const sumEl = document.getElementById('res-summary');
+  const skipped = (data.output || '').includes('无增量 → 跳过') || (data.output || '').includes('已跳过');
+  if (data.success) {
+    let cls = 'ok', icon = '✅', txt = '笔记已上传至 flomo';
+    if (skipped) { cls = 'skip'; icon = '⏭️'; txt = '与已有笔记重复，无增量，已跳过'; }
+    else if ((data.output || '').includes('更新成功')) { cls = 'ok'; icon = '📝'; txt = '增量合并完成，笔记已更新'; }
+    else if ((data.output || '').includes('强制新建')) { cls = 'ok'; icon = '🆕'; txt = '判定为不同主题，已新建独立笔记'; }
+    if (sections.newId || sections.oldId) txt += ` · ${escapeHtml(sections.newId || sections.oldId)}`;
+    sumEl.className = `result-summary ${cls}`;
+    sumEl.innerHTML = `<span class="rs-ico">${icon}</span> ${txt}`;
+    sumEl.style.display = 'flex';
+  } else {
+    sumEl.className = 'result-summary err';
+    sumEl.innerHTML = '<span class="rs-ico">❌</span> 处理失败，请查看下方日志';
+    sumEl.style.display = 'flex';
+  }
+
   // Note tab
   const noteDiv = document.getElementById('res-note');
   if (sections.flomoNote) {
     noteDiv.innerHTML = renderFlomoNote(sections.flomoNote);
-    if (sections.newId) noteDiv.innerHTML += `<div class="note-meta">✓ 已上传 · flomo ID: ${escapeHtml(sections.newId)}</div>`;
+    if (sections.newId) noteDiv.innerHTML += `<div class="note-meta">✓ 已上传 · flomo ID: ${escapeHtml(sections.newId)}
+      <button class="copy-btn" onclick="copyText('${escapeHtml(sections.newId)}', this)">复制 ID</button></div>`;
   } else if (data.success) {
-    const skipped = (data.output || '').includes('无增量 → 跳过') || (data.output || '').includes('已跳过');
     noteDiv.innerHTML = skipped
       ? '<div class="empty-state">⏭️ 已跳过（与已有笔记重复，无增量）</div>'
       : '<div class="empty-state">✓ 已上传成功</div>';
@@ -756,9 +799,33 @@ function renderResults(data) {
   // Log tab
   document.getElementById('res-log').innerHTML = `<div class="raw-log">${escapeHtml(log)}</div>`;
   document.getElementById('result-section').style.display = 'block';
+  document.getElementById('result-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   // 记录到本地
   if (data.success) recordRecent(sections, data.output);
+}
+
+/* ============ 复制 ============ */
+function copyText(text, btn) {
+  const done = function() {
+    if (!btn) return;
+    btn.textContent = '已复制 ✓';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = '复制 ID'; btn.classList.remove('copied'); }, 1800);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+  } else {
+    fallbackCopy(text, done);
+  }
+}
+function fallbackCopy(text, done) {
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); } catch (e) {}
+  document.body.removeChild(ta);
+  done();
 }
 
 /* ============ 本地记录与统计 ============ */
@@ -789,11 +856,14 @@ function renderRecent() {
     el.innerHTML = '<div class="recent-empty">还没有处理记录，处理第一条笔记后会显示在这里</div>';
     return;
   }
-  el.innerHTML = list.map(r => {
+  const now = new Date();
+  const todayStr = now.toDateString();
+  const yest = new Date(now.getTime() - 86400000).toDateString();
+  const fmt = r => {
     const t = new Date(r.time);
     const hm = String(t.getHours()).padStart(2,'0') + ':' + String(t.getMinutes()).padStart(2,'0');
-    const d = t.getMonth()+1 + '/' + t.getDate();
-    return `<div class="recent-item">
+    const d = t.toDateString() === todayStr ? '今天' : t.toDateString() === yest ? '昨天' : (t.getMonth()+1) + '/' + t.getDate();
+    return `<div class="recent-item" title="${escapeHtml(r.title)}">
       <span class="r-dot ${r.action}"></span>
       <div class="r-body">
         <div class="r-title">${escapeHtml(r.title)}</div>
@@ -801,7 +871,13 @@ function renderRecent() {
       </div>
       <span class="r-time">${d} ${hm}</span>
     </div>`;
-  }).join('');
+  };
+  const today = list.filter(r => new Date(r.time).toDateString() === todayStr);
+  const earlier = list.filter(r => new Date(r.time).toDateString() !== todayStr);
+  let html = '';
+  if (today.length) html += '<div style="font-size:11px;color:var(--text-3);font-weight:700;margin:2px 0 6px;letter-spacing:.05em">今天</div>' + today.map(fmt).join('');
+  if (earlier.length) html += '<div style="font-size:11px;color:var(--text-3);font-weight:700;margin:10px 0 6px;letter-spacing:.05em">更早</div>' + earlier.map(fmt).join('');
+  el.innerHTML = html;
 }
 function renderStats() {
   const list = getRecords();
@@ -868,7 +944,12 @@ async function process() {
     return;
   }
   const btn = document.getElementById('submitBtn');
-  btn.disabled = true; btn.innerHTML = '处理中…';
+  const startTime = Date.now();
+  btn.disabled = true; btn.classList.add('loading');
+  document.getElementById('btnLabel').textContent = '处理中…';
+  document.getElementById('content').disabled = true;
+  document.getElementById('url').disabled = true;
+  document.querySelectorAll('.seg-btn').forEach(b => b.disabled = true);
   setStatus('AI 分析中…', 'running');
   document.getElementById('progressBar').classList.add('on');
   document.getElementById('result-section').style.display = 'none';
@@ -899,9 +980,13 @@ async function process() {
     document.getElementById('result-section').style.display = 'block';
     setStatus('网络错误', 'error');
   } finally {
-    btn.disabled = false;
-    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg> 处理并上传';
+    btn.disabled = false; btn.classList.remove('loading');
+    document.getElementById('btnLabel').textContent = '处理并上传';
+    document.getElementById('content').disabled = false;
+    document.getElementById('url').disabled = false;
+    document.querySelectorAll('.seg-btn').forEach(b => b.disabled = false);
     document.getElementById('progressBar').classList.remove('on');
+    console.log('[mynews] 处理耗时', ((Date.now() - startTime) / 1000).toFixed(1) + 's');
   }
 }
 
