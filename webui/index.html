@@ -564,6 +564,21 @@ textarea:focus, input[type="text"]:focus {
 /* mark 荧光 hover */
 .flomo-note mark { transition: filter .2s var(--ease); }
 .flomo-note mark:hover { filter: brightness(1.15); }
+/* 笔记内容逐行浮现 */
+.flomo-note > div { animation: fadeUp .32s var(--ease) both; }
+.flomo-note > div:nth-child(2) { animation-delay: .04s; }
+.flomo-note > div:nth-child(3) { animation-delay: .08s; }
+.flomo-note > div:nth-child(4) { animation-delay: .12s; }
+.flomo-note > div:nth-child(5) { animation-delay: .16s; }
+.flomo-note > div:nth-child(6) { animation-delay: .2s; }
+.flomo-note > div:nth-child(7) { animation-delay: .24s; }
+.flomo-note > div:nth-child(n+8) { animation-delay: .28s; }
+/* 状态徽章弹跳 */
+.status-badge.pop { animation: popIn .3s var(--ease); }
+/* 摘要条弹出 */
+#res-summary { animation: fadeUp .3s var(--ease); }
+/* 空状态插画浮动 */
+.recent-empty svg { animation: floaty 4s ease-in-out infinite; }
 /* Hero 渐变缓慢流动 */
 .hero { background-size: 150% 150%; animation: gradFlow 14s ease-in-out infinite alternate; }
 @keyframes gradFlow { from { background-position: 0% 40%; } to { background-position: 100% 60%; } }
@@ -1260,6 +1275,11 @@ function renderResults(data, opts) {
       <button class="copy-btn" onclick="retryLast()">↻ 重试</button>`;
     sumEl.style.display = 'flex';
   }
+  // 重建节点重播入场动画
+  if (!opts.restore) {
+    const sum = document.getElementById('res-summary');
+    sum.outerHTML = sum.outerHTML;
+  }
 
   // Note tab
   const noteDiv = document.getElementById('res-note');
@@ -1768,6 +1788,10 @@ function setStatus(text, cls) {
   const el = document.getElementById('status');
   el.innerHTML = `<span class="spinner"></span> ${text}`;
   el.className = `status-badge ${cls}`;
+  // 重播弹跳动画
+  el.classList.remove('pop');
+  void el.offsetWidth;
+  el.classList.add('pop');
 }
 
 /* ============ 初始化 ============ */
