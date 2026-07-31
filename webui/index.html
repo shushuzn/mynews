@@ -345,6 +345,13 @@ textarea:focus, input[type="text"]:focus {
 .recent-item .r-sub { font-size: 11px; color: var(--text-3); margin-top: 1px; }
 .recent-item .r-time { font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums; flex-shrink: 0; }
 .recent-empty { color: var(--text-3); font-size: 12.5px; text-align: center; padding: 22px 0; }
+.rf-btn {
+  font-size: 11.5px; font-weight: 600; padding: 4px 12px; border-radius: 999px;
+  border: 1px solid var(--separator-light); background: var(--surface-2); color: var(--text-2);
+  cursor: pointer; font-family: inherit; transition: all .18s var(--ease);
+}
+.rf-btn:hover { color: var(--text); border-color: var(--border-strong); }
+.rf-btn.active { background: rgba(0,122,255,.1); color: var(--blue); border-color: rgba(0,122,255,.22); }
 
 /* ============ Result tabs ============ */
 .res-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--separator-light); margin-bottom: 18px; }
@@ -664,6 +671,12 @@ textarea:focus, input[type="text"]:focus {
       <div class="card-title">
         <span class="t-ico purple">🕘</span> 最近处理
         <span class="t-side"><button class="sample-btn" onclick="clearRecords()">清空记录</button></span>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
+        <button class="rf-btn active" data-f="all" onclick="setRecentFilter('all')">全部</button>
+        <button class="rf-btn" data-f="create" onclick="setRecentFilter('create')">🆕 新建</button>
+        <button class="rf-btn" data-f="update" onclick="setRecentFilter('update')">📝 更新</button>
+        <button class="rf-btn" data-f="skip" onclick="setRecentFilter('skip')">⏭️ 跳过</button>
       </div>
       <div class="recent-list" id="recentList">
         <div class="recent-empty">还没有处理记录，处理第一条笔记后会显示在这里</div>
@@ -1128,8 +1141,15 @@ function clearRecords() {
   renderStats();
   setStatus('记录已清空', 'done');
 }
+let _recentFilter = 'all';
+function setRecentFilter(f) {
+  _recentFilter = f;
+  document.querySelectorAll('.rf-btn').forEach(b => b.classList.toggle('active', b.dataset.f === f));
+  renderRecent();
+}
 function renderRecent() {
-  const list = getRecords();
+  let list = getRecords();
+  if (_recentFilter !== 'all') list = list.filter(r => r.action === _recentFilter);
   const el = document.getElementById('recentList');
   if (!list.length) {
     el.innerHTML = `<div class="recent-empty">
@@ -1309,6 +1329,10 @@ async function process() {
   document.getElementById('url').disabled = true;
   document.querySelectorAll('.seg-btn').forEach(b => b.disabled = true);
   setStatus('AI 分析中…', 'running');
+  const ticker = setInterval(() => {
+    const s = Math.floor((Date.now() - startTime) / 1000);
+    setStatus('AI 分析中… ' + s + 's', 'running');
+  }, 1000);
   document.getElementById('progressBar').classList.add('on');
   document.getElementById('result-section').style.display = 'none';
 
@@ -1347,6 +1371,7 @@ async function process() {
     document.getElementById('url').disabled = false;
     document.querySelectorAll('.seg-btn').forEach(b => b.disabled = false);
     document.getElementById('progressBar').classList.remove('on');
+    clearInterval(ticker);
     updateSubmitState();
     console.log('[mynews] 处理耗时', ((Date.now() - startTime) / 1000).toFixed(1) + 's');
   }
