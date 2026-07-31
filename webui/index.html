@@ -538,6 +538,16 @@ textarea:focus, input[type="text"]:focus {
   .compare-grid { grid-template-columns: 1fr; }
   .submit-row { flex-wrap: wrap; }
 }
+@media (max-width: 400px) {
+  .seg-btn { padding: 7px 4px; font-size: 12px; gap: 4px; }
+  .stat-card .sc-row { gap: 6px; }
+  .stat-card .sc-mini .m-num { font-size: 13px; }
+  .stat-card .sc-mini .m-label { font-size: 9px; }
+  .hero-stats .st { font-size: 10.5px; padding: 4px 9px; }
+  .btn-primary { width: 100%; justify-content: center; }
+  .status-wrap { min-width: 0; width: 100%; }
+  .res-tab { padding: 8px 10px; font-size: 12.5px; }
+}
 </style>
 </head>
 <body>
@@ -875,32 +885,43 @@ async function previewUrl() {
     return;
   }
   box.style.display = 'block';
+  // 60 秒缓存，避免重复抓取
+  try {
+    const cache = JSON.parse(localStorage.getItem('mynews-url-preview') || 'null');
+    if (cache && cache.url === url && Date.now() - cache.ts < 60000) {
+      renderUrlPreview(box, cache.data);
+      return;
+    }
+  } catch (e) {}
   box.innerHTML = '<span style="color:var(--text-3)">⏳ 正在抓取…</span>';
   try {
     const resp = await fetch('/api/fetch?url=' + encodeURIComponent(url));
     const data = await resp.json();
     if (data.success && typeof data.output === 'object') {
-      const o = data.output;
-      let html = '';
-      if (o.blocked) {
-        html += '<span style="color:var(--red);font-weight:700">⚠️ 该链接被反爬保护拦截</span><br>请手动打开链接复制正文后，粘贴到「正文」标签页。';
-      } else if (o.length === 0) {
-        html += '<span style="color:var(--orange);font-weight:700">⚠️ 抓取内容为空</span>，提交后 AI 将基于 URL 分析，建议直接粘贴正文。';
-      } else {
-        html += `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <span style="font-weight:700;color:var(--text)">${escapeHtml(o.title || '（无标题）')}</span>
-          <span style="font-size:11px;color:var(--green);background:rgba(52,199,89,.1);padding:2px 9px;border-radius:999px;font-weight:600">✓ 抓取成功</span>
-          <span style="font-size:11px;color:var(--text-3)">${o.length} 字符</span>
-        </div>
-        <div style="margin-top:8px;color:var(--text-2);max-height:120px;overflow:hidden;position:relative">${escapeHtml(o.preview)}</div>`;
-      }
-      box.innerHTML = html;
+      try { localStorage.setItem('mynews-url-preview', JSON.stringify({ url, ts: Date.now(), data: data.output })); } catch (e) {}
+      renderUrlPreview(box, data.output);
     } else {
       box.innerHTML = '<span style="color:var(--red)">抓取失败：' + escapeHtml(String(data.output)) + '</span>';
     }
   } catch (e) {
     box.innerHTML = '<span style="color:var(--red)">请求失败：' + escapeHtml(e.message) + '</span>';
   }
+}
+function renderUrlPreview(box, o) {
+  let html = '';
+  if (o.blocked) {
+    html += '<span style="color:var(--red);font-weight:700">⚠️ 该链接被反爬保护拦截</span><br>请手动打开链接复制正文后，粘贴到「正文」标签页。';
+  } else if (o.length === 0) {
+    html += '<span style="color:var(--orange);font-weight:700">⚠️ 抓取内容为空</span>，提交后 AI 将基于 URL 分析，建议直接粘贴正文。';
+  } else {
+    html += `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span style="font-weight:700;color:var(--text)">${escapeHtml(o.title || '（无标题）')}</span>
+      <span style="font-size:11px;color:var(--green);background:rgba(52,199,89,.1);padding:2px 9px;border-radius:999px;font-weight:600">✓ 抓取成功</span>
+      <span style="font-size:11px;color:var(--text-3)">${o.length} 字符</span>
+    </div>
+    <div style="margin-top:8px;color:var(--text-2);max-height:120px;overflow:hidden;position:relative">${escapeHtml(o.preview)}</div>`;
+  }
+  box.innerHTML = html;
 }
 
 /* ============ 字数统计 & 快捷键 & 输入状态 & 草稿 ============ */
@@ -945,7 +966,11 @@ function restoreDraft() {
       document.getElementById('content').value = d.content;
       updateCharCount();
     }
-    if (d.url) document.getElementById('url').value = d.url;
+    if (d.url) {
+      document.getElementById('url').value = d.url;
+      // 恢复 URL 后自动触发一次抓取预览
+      setTimeout(() => { if (/^https?:\/\/.+/i.test(d.url)) previewUrl(); }, 300);
+    }
     if (d.content || d.url) {
       const ago = age < 3600000 ? Math.round(age / 60000) + ' 分钟前'
         : age < 86400000 ? Math.round(age / 3600000) + ' 小时前'
@@ -1541,6 +1566,13 @@ renderStats();
 updateSubmitState();
 moveSegSlider('text');
 restoreDraft();
+// 桌面端首屏自动聚焦正文（移动端避免弹出键盘）
+if (!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches)) {
+  setTimeout(() => {
+    const c = document.getElementById('content');
+    if (!c.value.trim() && !document.getElementById('url').value.trim()) c.focus();
+  }, 400);
+}
 // 恢复最近一次处理结果（刷新后仍在）
 (function() {
   try {
