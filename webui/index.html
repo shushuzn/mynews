@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" id="themeColor" content="#f2f2f7">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%234f46e5'/%3E%3Cpath d='M12 5l1.9 4.6L18.5 11.5l-4.6 1.9L12 18l-1.9-4.6L5.5 11.5l4.6-1.9z' fill='white'/%3E%3C/svg%3E">
 <title>mynews — 知识笔记处理器</title>
 <style>
@@ -742,6 +743,8 @@ function applyTheme(t) {
   document.getElementById('themeIcoMoon').style.display = t === 'light' ? 'block' : 'none';
   document.getElementById('themeIcoSun').style.display = t === 'dark' ? 'block' : 'none';
   document.getElementById('themeIcoAuto').style.display = t === 'auto' ? 'block' : 'none';
+  const tc = document.getElementById('themeColor');
+  if (tc) tc.setAttribute('content', isDark ? '#0b0b10' : '#f2f2f7');
 }
 function toggleTheme() {
   const cur = localStorage.getItem('mynews-theme') || 'light';
@@ -1260,17 +1263,25 @@ function renderStreak() {
   document.getElementById('statStreak').textContent = days;
 }
 function animateNum(el, target) {
-  const start = parseInt(el.textContent, 10) || 0;
+  const start = parseInt(el.textContent.replace(/,/g, ''), 10) || 0;
   if (start === target) return;
   const dur = 500, t0 = performance.now();
   function step(t) {
     const p = Math.min((t - t0) / dur, 1);
     const eased = 1 - Math.pow(1 - p, 3);
-    el.textContent = Math.round(start + (target - start) * eased);
+    el.textContent = Math.round(start + (target - start) * eased).toLocaleString();
     if (p < 1) requestAnimationFrame(step);
   }
   requestAnimationFrame(step);
 }
+// 处理中防止误关页面
+let _processing = false;
+window.addEventListener('beforeunload', function(e) {
+  if (_processing) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
 
 /* ============ 图片 ============ */
 let uploadedFile = null;
@@ -1368,6 +1379,7 @@ async function process() {
   try { localStorage.setItem('mynews-last-submission', JSON.stringify(_lastSubmission)); } catch (e) {}
   const btn = document.getElementById('submitBtn');
   const startTime = Date.now();
+  _processing = true;
   btn.disabled = true; btn.classList.add('loading');
   document.getElementById('btnLabel').textContent = '处理中…';
   document.getElementById('content').disabled = true;
@@ -1417,6 +1429,7 @@ async function process() {
     document.querySelectorAll('.seg-btn').forEach(b => b.disabled = false);
     document.getElementById('progressBar').classList.remove('on');
     clearInterval(ticker);
+    _processing = false;
     updateSubmitState();
     console.log('[mynews] 处理耗时', ((Date.now() - startTime) / 1000).toFixed(1) + 's');
   }
@@ -1440,6 +1453,8 @@ restoreDraft();
     const last = JSON.parse(localStorage.getItem('mynews-last-result') || 'null');
     if (last && last.output) {
       renderResults(last, { restore: true });
+      const sum = document.getElementById('res-summary');
+      if (sum) sum.innerHTML += '<span style="margin-left:auto;font-size:11px;opacity:.65;font-weight:600">· 上次结果</span>';
     }
   } catch (e) {}
 })();
