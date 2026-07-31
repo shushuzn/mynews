@@ -602,6 +602,12 @@ textarea:focus, input[type="text"]:focus {
       <path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" fill-opacity=".18"/>
     </svg>
   </button>
+  <button class="icon-btn" onclick="showSettings()" title="设置">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </svg>
+  </button>
 </div>
 
 <div class="app">
@@ -788,17 +794,51 @@ textarea:focus, input[type="text"]:focus {
   </div>
 </div>
 
+<!-- 设置面板 -->
+<div class="shortcut-overlay" id="settingsOverlay" onclick="if(event.target===this)hideSettings()">
+  <div class="shortcut-panel">
+    <h3>⚙️ 设置</h3>
+    <div class="sc-row"><span>主题外观</span><span style="display:flex;gap:6px">
+      <button class="rf-btn" id="themeLight" onclick="applyTheme('light')">浅色</button>
+      <button class="rf-btn" id="themeDark" onclick="applyTheme('dark')">深色</button>
+      <button class="rf-btn" id="themeAuto" onclick="applyTheme('auto')">跟随系统</button>
+    </span></div>
+    <div class="sc-row"><span>完成提示音</span><button class="rf-btn" id="soundToggle2" onclick="toggleSound()">开</button></div>
+    <div class="sc-row"><span>本地数据</span><span style="display:flex;gap:6px">
+      <button class="rf-btn" onclick="exportRecords()">导出</button>
+      <button class="rf-btn" onclick="document.getElementById('importFile').click()">导入</button>
+      <button class="rf-btn" onclick="clearRecords()">清空</button>
+    </span></div>
+    <div class="sc-row"><span>版本</span><span style="color:var(--text-3);font-size:12px">mynews v2.1 · flomo 知识沉淀</span></div>
+    <button class="sc-close" onclick="hideSettings()">关闭</button>
+  </div>
+</div>
+
 <script>
 function hideShortcuts() { document.getElementById('shortcutOverlay').classList.remove('show'); }
 function showShortcuts() { document.getElementById('shortcutOverlay').classList.add('show'); }
+function hideSettings() { document.getElementById('settingsOverlay').classList.remove('show'); }
+function showSettings() {
+  document.getElementById('settingsOverlay').classList.add('show');
+  syncThemeBtns();
+  document.getElementById('soundToggle2').textContent = soundOn ? '开' : '关';
+}
+function syncThemeBtns() {
+  const t = localStorage.getItem('mynews-theme') || 'light';
+  document.getElementById('themeLight').classList.toggle('active', t === 'light');
+  document.getElementById('themeDark').classList.toggle('active', t === 'dark');
+  document.getElementById('themeAuto').classList.toggle('active', t === 'auto');
+}
 
 /* ============ 完成提示音（可开关）============ */
 let soundOn = localStorage.getItem('mynews-sound') !== 'off';
 function toggleSound() {
   soundOn = !soundOn;
   localStorage.setItem('mynews-sound', soundOn ? 'on' : 'off');
-  const b = document.getElementById('soundToggle');
-  if (b) b.textContent = soundOn ? '开' : '关';
+  ['soundToggle', 'soundToggle2'].forEach(id => {
+    const b = document.getElementById(id);
+    if (b) b.textContent = soundOn ? '开' : '关';
+  });
   if (soundOn) playSound(true);
 }
 function playSound(ok) {
@@ -1234,7 +1274,8 @@ function renderResults(data, opts) {
 
   // 记录到本地；上传/更新成功后清空草稿（恢复模式不重复记录）
   if (data.success && !opts.restore) {
-    recordRecent(sections, data.output);
+    const dur = opts.duration || null;
+    recordRecent(sections, data.output, dur);
     if (!skipped) clearDraft();
   }
 }
@@ -1307,7 +1348,7 @@ function fallbackCopy(text, done) {
 function getRecords() {
   try { return JSON.parse(localStorage.getItem('mynews-records') || '[]'); } catch (e) { return []; }
 }
-function recordRecent(sections, output) {
+function recordRecent(sections, output, duration) {
   let action = 'create', label = '新建笔记';
   if ((output || '').includes('无增量 → 跳过') || (output || '').includes('已跳过')) { action = 'skip'; label = '跳过'; }
   else if ((output || '').includes('更新成功')) { action = 'update'; label = '更新'; }
@@ -1318,7 +1359,7 @@ function recordRecent(sections, output) {
   if (tm) title = tm[1].replace(/\\_/g, '_');
   const id = sections.newId || sections.oldId || '';
 
-  const rec = { title, id, action, label, time: Date.now() };
+  const rec = { title, id, action, label, time: Date.now(), duration: duration || null };
   const list = [rec, ...getRecords()].slice(0, 8);
   localStorage.setItem('mynews-records', JSON.stringify(list));
   renderRecent();
@@ -1423,7 +1464,7 @@ function renderRecent() {
       <span class="r-dot ${r.action}"></span>
       <div class="r-body">
         <div class="r-title">${escapeHtml(r.title)}</div>
-        <div class="r-sub">${r.label}${r.id ? ' · ' + escapeHtml(r.id) : ''}</div>
+        <div class="r-sub">${r.label}${r.duration ? ' · ' + r.duration + 's' : ''}${r.id ? ' · ' + escapeHtml(r.id) : ''}</div>
       </div>
       <span class="r-time">${d} ${hm}</span>
       <button class="r-del" title="删除该记录" onclick="event.stopPropagation();delRecord(${r.time})">✕</button>
@@ -1617,11 +1658,11 @@ async function process() {
       body: body
     });
     const data = await resp.json();
-    renderResults(data);
+    const secs = ((Date.now() - startTime) / 1000).toFixed(1);
+    renderResults(data, { duration: parseFloat(secs) });
     playSound(data.success);
     document.title = data.success ? '✅ mynews — 处理完成' : '❌ mynews — 处理失败';
     setTimeout(() => { document.title = 'mynews — 知识笔记处理器'; }, 2500);
-    const secs = ((Date.now() - startTime) / 1000).toFixed(1);
     setStatus(data.success
         ? (data.output.includes('跳过') ? `已跳过 · ${secs}s` : `处理完成 · ${secs}s`)
         : '处理失败',
