@@ -30,6 +30,26 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path.startswith("/favicon"):
             self.send_response(204)
             self.end_headers()
+        elif self.path.startswith("/api/fetch"):
+            # URL 抓取预览：/api/fetch?url=xxx
+            from urllib.parse import urlparse, parse_qs
+            qs = parse_qs(urlparse(self.path).query)
+            url = (qs.get("url") or [""])[0].strip()
+            if not url:
+                self._json_response(False, "缺少 url 参数")
+                return
+            content = self._fetch_url(url)
+            anti_patterns = ['环境异常', 'captcha', 'verify you are human', 'access denied']
+            blocked = any(p in content[:200].lower() for p in anti_patterns)
+            title = ""
+            for line in content.split("\n")[:2]:
+                if line.startswith("标题:"):
+                    title = line[3:].strip()
+                    break
+            self._json_response(True, {
+                "url": url, "title": title, "length": len(content),
+                "blocked": blocked, "preview": content[:400]
+            })
         else:
             self.send_response(404)
             self.end_headers()
