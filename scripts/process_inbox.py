@@ -499,15 +499,15 @@ def _call_kimi(prompt: str, timeout: int = 180) -> str:
         return f"[error] kimi 调用失败: {e}"
 
 
-def _auto_analyze(text: str) -> dict:
-    """全自动模式：调用 AI 分析正文，返回 {{domain, subdomain, title, tags, ai_content}}。"""
+def _auto_analyze(text: str, hint: str = "") -> dict:
+    """全自动模式：调用 AI 分析正文，返回 {{domain, subdomain, title, tags, ai_content}}。hint 为重试时的修正提示。"""
     prompt = '你是一个知识文档分析助手。只输出 JSON，不要 markdown 代码块、不要额外文字。\n\n' + json.dumps({
         "domain": "一级领域（根据内容自选）",
         "subdomain": "二级领域（根据内容自选，如 AI芯片/大模型/外交/产业）",
         "title": "知识点名称（10字以内，不含下划线/空格/斜杠。用中性客观的知识点短语，不要新闻式标题或主观评价，如 科创板利好信号、纳米金催化MMA工艺、Go监督式后台任务）",
         "tags": ["#信号类型标签", "#领域标签", "#二级领域标签"],
         "ai_content": "**概念**：<mark>核心概念</mark>定义..."
-    }, ensure_ascii=False, indent=2) + '\n\n信号类型（五选一贴在第一行）：#知识基座（概念/定理）、#趋势信号（正在发生的结构性变化）、#信号笔记（单次事件）、#分析框架（方法论）、#知识载体（工具/资源）\n\n⚠️ 严格遵守：\n- ai_content 必须包含 **概念**：段落（用中文冒号：），不要包含 # 标签行（脚本自动添加）\n- **概念** 段用 <mark>高亮</mark> 标记核心关键词\n- 禁止：代码块、链接、图片、表格、>引用\n- JSON 内所有引号必须用 \\" 转义，值内不能出现未转义的双引号\n- 不要用 ```json 包裹\n- 原文未明确提及的年份/月份/日期一律禁止填入，宁缺毋错\n- 信息量大时学会分段：不要一段堆到底，用空行分隔成多个自然段，每段聚焦一个要点\n\n文章：\n' + text[:8000]
+    }, ensure_ascii=False, indent=2) + '\n\n信号类型（五选一贴在第一行）：#知识基座（概念/定理）、#趋势信号（正在发生的结构性变化）、#信号笔记（单次事件）、#分析框架（方法论）、#知识载体（工具/资源）\n\n⚠️ 严格遵守：\n- ai_content 必须包含 **概念**：段落（用中文冒号：），不要包含 # 标签行（脚本自动添加）\n- **概念** 段用 <mark>高亮</mark> 标记核心关键词\n- 禁止：代码块、链接、图片、表格、>引用\n- JSON 内所有引号必须用 \\" 转义，值内不能出现未转义的双引号\n- 不要用 ```json 包裹\n- 原文未明确提及的年份/月份/日期一律禁止填入，宁缺毋错\n- 信息量大时学会分段：不要一段堆到底，用空行分隔成多个自然段，每段聚焦一个要点\n' + (hint + '\n\n' if hint else '') + '文章：\n' + text[:8000]
 
     out = _call_kimi(prompt)
     if not out:
@@ -517,36 +517,39 @@ def _auto_analyze(text: str) -> dict:
     # 去掉 markdown 代码块包裹和行首列表符号（不剥 *，避免破坏 JSON 或粗体）
     out = _re.sub(r'^\s*[•\-]\s*', '', out, flags=_re.MULTILINE)
     out = _re.sub(r'```(?:json)?\s*', '', out)
-    # 检查是否为截断输出（缺少完整的 } 结尾）
-    if out.count('{') > out.count('}'):
-        print("  [auto] AI 输出不完整（被截断），重试...")
-        return {}
     # 提取第一个 { 到最后一个 }
     start = out.find('{')
     end = out.rfind('}')
-    if start >= 0 and end > start:
-        raw = out[start:end+1]
-        # 优先尝试直接解析（AI 输出有效的 JSON 时走此路径）
-        try:
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            pass
-        # 修复 AI 输出中结构引号被转义的情况（\"key\" → "key"）
-        try:
-            return json.loads(raw.replace('\\"', '"'))
-        except json.JSONDecodeError:
-            pass
-        # 尝试修复值内未转义的双引号（将 "xxx" 替换为 \"xxx\"）
-        fixed = _re.sub(r'(?<=[:,\s])"([^":,\}\]]+)"(?=\s*[:,\}\]])', r'\\"\1\\"', raw)
-        try:
-            return json.loads(fixed)
-        except json.JSONDecodeError:
-            pass
-        # 更暴力的修复：把值内所有非结构性的 " 转义
-        try:
-            return json.loads(raw.replace('"', '\\"').replace('\\"{', '{').replace('\\"\\[', '[').replace('\\\\\\"', '\\"'))
-        except json.JSONDecodeError:
-            pass
+    if start < 0 or end <= start:
+        print(f"  [auto] AI 输出无有效 JSON，原始输出：{out[:300]}")
+        return {}
+    raw = out[start:end+1]
+    # 截断检测：{ 比 } 多时尝试补齐缺失的右花括号再解析
+    balance = out.count('{') - out.count('}')
+    if balance > 0:
+        raw = raw + '}' * min(balance, 5)
+        print(f"  [auto] 输出疑似截断（缺 {balance} 个 }}），尝试补齐修复...")
+    # 解析链
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        pass
+    # 修复 AI 输出中结构引号被转义的情况（\"key\" → "key"）
+    try:
+        return json.loads(raw.replace('\\"', '"'))
+    except json.JSONDecodeError:
+        pass
+    # 尝试修复值内未转义的双引号（将 "xxx" 替换为 \"xxx\"）
+    fixed = _re.sub(r'(?<=[:,\s])"([^":,\}\]]+)"(?=\s*[:,\}\]])', r'\\"\1\\"', raw)
+    try:
+        return json.loads(fixed)
+    except json.JSONDecodeError:
+        pass
+    # 更暴力的修复：把值内所有非结构性的 " 转义
+    try:
+        return json.loads(raw.replace('"', '\\"').replace('\\"{', '{').replace('\\"\\[', '[').replace('\\\\\\"', '\\"'))
+    except json.JSONDecodeError:
+        pass
     print(f"  [auto] AI 输出解析失败，原始输出：{out[:500]}")
     return {}
 
@@ -662,7 +665,11 @@ def process_content(args):
     for retry in range(2):
         if retry > 0:
             print(f"  [auto] 第 {retry+1} 次尝试（修正上次错误）...")
-        result = _auto_analyze(text)
+        hint = ""
+        if retry == 1:
+            hint = ("⚠️ 上次输出不完整或解析失败。请输出更精简的 JSON：ai_content 控制在 300 字以内、"
+                    "2-3 个自然段，JSON 必须完整闭合（以 } 结尾）、所有字符串引号闭合，不要截断。")
+        result = _auto_analyze(text, hint)
         if not result:
             if retry < 2:
                 print("  [auto] 分析失败，重试...")
@@ -716,7 +723,8 @@ def process_content(args):
     domain = args.domain
     subdomain = args.subdomain
     if not domain or not subdomain:
-        print("  [error] 必须指定 --domain 和 --subdomain")
+        print("  [error] AI 分析多次失败，未生成领域参数（domain/subdomain）")
+        print("  [error] 请检查网络或稍后重试；也可手动指定 --domain \"领域\" --subdomain \"二级领域\"")
         return False
     if not (hasattr(args, 'tags') and args.tags):
         print("错误：--tags 必须提供信号类型标签")
