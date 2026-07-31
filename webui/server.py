@@ -150,7 +150,12 @@ class Handler(BaseHTTPRequestHandler):
             # HN 最新文章列表：/api/hn/newest
             self._json_response(True, self._fetch_hn_newest())
         elif self.path.startswith("/api/rss/items"):
-            # RSS 聚合：全部源最新条目（含缓存）
+            # RSS 聚合：全部源最新条目（含缓存）；?refresh=1 强制刷新缓存
+            global RSS_CACHE
+            from urllib.parse import urlparse, parse_qs
+            qs = parse_qs(urlparse(self.path).query)
+            if qs.get("refresh") == ["1"]:
+                RSS_CACHE = {"ts": 0.0, "items": []}
             self._json_response(True, _fetch_rss_items())
         elif self.path.startswith("/api/fetch"):
             # URL 抓取预览：/api/fetch?url=xxx

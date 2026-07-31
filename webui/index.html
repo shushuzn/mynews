@@ -677,6 +677,12 @@ textarea:focus, input[type="text"]:focus {
       <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/>
     </svg>
   </button>
+  <button class="icon-btn" onclick="refreshRss()" title="立即拉取：强制刷新 RSS 并检查新条目">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 12a9 9 0 1 1-2.64-6.36"/>
+      <path d="M21 3v6h-6"/>
+    </svg>
+  </button>
   <button class="icon-btn" onclick="showRecent()" title="最近处理">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="9"/>
@@ -1766,6 +1772,23 @@ function cancelProcess() {
     document.getElementById('autoBtn').classList.remove('active', 'busy');
   }
   setStatus('正在取消…', 'running');
+}
+async function refreshRss() {
+  setStatus('🔁 强制拉取 RSS 源中…', 'running');
+  try {
+    const resp = await fetch('/api/rss/items?refresh=1');
+    const data = await resp.json();
+    if (!data.success || !Array.isArray(data.output)) {
+      setStatus('拉取失败：' + (data.output || '未知错误'), 'error');
+      return;
+    }
+    setStatus('✅ 已拉取 ' + data.output.length + ' 条新条目', 'done');
+    if (_autoMode) {
+      setTimeout(autoTick, 300); // 自动模式下直接检查新条目
+    }
+  } catch (e) {
+    setStatus('拉取失败：' + e.message, 'error');
+  }
 }
 function toggleAuto() {
   _autoMode = !_autoMode;
