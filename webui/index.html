@@ -456,6 +456,42 @@ textarea:focus, input[type="text"]:focus {
 .relevance-high { background: rgba(255,59,48,.1); color: var(--red); }
 .relevance-low { background: rgba(52,199,89,.13); color: var(--green); }
 
+/* ============ Back to top & shortcuts panel ============ */
+#backTop {
+  position: fixed; right: 22px; bottom: 24px; width: 42px; height: 42px; border-radius: 50%;
+  border: 1px solid var(--separator-light); background: var(--surface); color: var(--text-2);
+  font-size: 17px; cursor: pointer; box-shadow: var(--shadow-md); z-index: 90;
+  display: none; align-items: center; justify-content: center; transition: all .25s var(--ease);
+}
+#backTop:hover { color: var(--blue); border-color: var(--blue); transform: translateY(-3px); }
+#backTop.show { display: flex; }
+.shortcut-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 200;
+  display: none; align-items: center; justify-content: center; backdrop-filter: blur(4px);
+}
+.shortcut-overlay.show { display: flex; animation: fadeIn .2s var(--ease); }
+.shortcut-panel {
+  background: var(--surface); border: 1px solid var(--separator-light); border-radius: var(--radius-lg);
+  padding: 22px 26px; width: min(420px, 90vw); box-shadow: var(--shadow-lg);
+}
+.shortcut-panel h3 { font-size: 15px; font-weight: 700; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+.shortcut-panel .sc-row {
+  display: flex; align-items: center; justify-content: space-between; padding: 7px 0;
+  font-size: 13px; color: var(--text-2); border-bottom: 1px solid var(--separator-light);
+}
+.shortcut-panel .sc-row:last-child { border-bottom: none; }
+.shortcut-panel kbd {
+  font-family: inherit; font-size: 11.5px; font-weight: 600; color: var(--text);
+  background: var(--surface-2); border: 1px solid var(--separator); border-bottom-width: 2px;
+  padding: 2px 8px; border-radius: 6px; margin-left: 4px;
+}
+.shortcut-panel .sc-close {
+  width: 100%; margin-top: 14px; padding: 9px; border: 1px solid var(--separator-light);
+  background: var(--surface-2); border-radius: var(--radius-sm); cursor: pointer;
+  font-size: 13px; font-weight: 600; color: var(--text-2); font-family: inherit; transition: all .2s;
+}
+.shortcut-panel .sc-close:hover { color: var(--text); border-color: var(--border-strong); }
+
 /* ============ Log & footer ============ */
 .raw-log {
   background: var(--code-bg); color: var(--code-text); padding: 15px 17px;
@@ -659,7 +695,25 @@ textarea:focus, input[type="text"]:focus {
 
 </div>
 
+<!-- 返回顶部 -->
+<button id="backTop" onclick="window.scrollTo({top:0,behavior:'smooth'})" title="返回顶部">↑</button>
+
+<!-- 快捷键面板 -->
+<div class="shortcut-overlay" id="shortcutOverlay" onclick="if(event.target===this)hideShortcuts()">
+  <div class="shortcut-panel">
+    <h3>⌨️ 快捷键</h3>
+    <div class="sc-row"><span>快速提交</span><span><kbd>Ctrl</kbd>+<kbd>Enter</kbd></span></div>
+    <div class="sc-row"><span>URL 输入框提交</span><span><kbd>Enter</kbd></span></div>
+    <div class="sc-row"><span>粘贴剪贴板图片</span><span><kbd>Ctrl</kbd>+<kbd>V</kbd></span></div>
+    <div class="sc-row"><span>收起结果区</span><span><kbd>Esc</kbd></span></div>
+    <div class="sc-row"><span>打开/关闭本面板</span><span><kbd>?</kbd></span></div>
+    <button class="sc-close" onclick="hideShortcuts()">关闭</button>
+  </div>
+</div>
+
 <script>
+function hideShortcuts() { document.getElementById('shortcutOverlay').classList.remove('show'); }
+function showShortcuts() { document.getElementById('shortcutOverlay').classList.add('show'); }
 /* ============ 主题 ============ */
 /* ============ 主题（浅色 / 深色 / 跟随系统）============ */
 const THEMES = ['light', 'dark', 'auto'];
@@ -836,6 +890,32 @@ document.addEventListener('keydown', function(e) {
   } else if (e.key === 'Escape') {
     const rs = document.getElementById('result-section');
     if (rs && rs.style.display !== 'none') rs.style.display = 'none';
+    hideShortcuts();
+  } else if (e.key === '?') {
+    const tag = (e.target && e.target.tagName) || '';
+    if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
+      e.preventDefault();
+      const ov = document.getElementById('shortcutOverlay');
+      ov.classList.contains('show') ? hideShortcuts() : showShortcuts();
+    }
+  }
+});
+
+// 返回顶部按钮显隐
+window.addEventListener('scroll', function() {
+  document.getElementById('backTop').classList.toggle('show', window.scrollY > 500);
+}, { passive: true });
+
+// 粘贴纯 URL 自动切到 URL tab
+document.getElementById('content').addEventListener('paste', function(e) {
+  const text = (e.clipboardData || {}).getData && e.clipboardData.getData('text');
+  if (text && /^https?:\/\/\S+$/.test(text.trim()) && text.trim().length < 300) {
+    e.preventDefault();
+    document.getElementById('url').value = text.trim();
+    switchTab('url');
+    updateSubmitState();
+    saveDraft();
+    document.getElementById('url').focus();
   }
 });
 
@@ -964,6 +1044,11 @@ function renderResults(data) {
   }).join('\n');
   document.getElementById('res-log').innerHTML = `<div class="raw-log">${logLines}</div>
     <div style="margin-top:10px;text-align:right"><button class="copy-btn" onclick="copyLog(this)">复制日志</button></div>`;
+  // 日志自动滚动到底部（失败时定位到错误处）
+  requestAnimationFrame(() => {
+    const rl = document.querySelector('#res-log .raw-log');
+    if (rl) rl.scrollTop = rl.scrollHeight;
+  });
   document.getElementById('cntNote').textContent = sections.flomoNote ? '1' : '0';
   document.getElementById('cntCompare').textContent = sections.oldNote ? '1' : '0';
   document.getElementById('result-section').style.display = 'block';
