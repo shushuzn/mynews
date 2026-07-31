@@ -114,6 +114,13 @@ body {
   transition: all .2s var(--ease);
 }
 .icon-btn:hover { background: var(--surface-3); color: var(--text); transform: scale(1.08); }
+#autoBtn.active {
+  background: var(--grad-btn); color: #fff; border-color: transparent;
+  box-shadow: 0 3px 12px rgba(10, 132, 255, .4);
+}
+#autoBtn.active svg { animation: spin 3s linear infinite; }
+#autoBtn.busy { animation: autoPulse 1.2s ease infinite; }
+@keyframes autoPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(10,132,255,.45); } 50% { box-shadow: 0 0 0 7px rgba(10,132,255,0); } }
 .icon-btn:active { transform: scale(.92); }
 .icon-btn svg { width: 16px; height: 16px; }
 
@@ -663,6 +670,11 @@ textarea:focus, input[type="text"]:focus {
     <svg id="themeIcoAuto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
       <circle cx="12" cy="12" r="9"/>
       <path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" fill-opacity=".18"/>
+    </svg>
+  </button>
+  <button class="icon-btn" id="autoBtn" onclick="toggleAuto()" title="自动处理：从 Hacker News 获取最新未处理链接">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/>
     </svg>
   </button>
   <button class="icon-btn" onclick="showRecent()" title="最近处理">
@@ -1734,6 +1746,56 @@ document.addEventListener('drop', e => {
   }
 });
 
+/* ============ 自动处理（Hacker News）============ */
+let _autoMode = false;
+let _autoCurrentUrl = '';
+function toggleAuto() {
+  _autoMode = !_autoMode;
+  const btn = document.getElementById('autoBtn');
+  btn.classList.toggle('active', _autoMode);
+  if (_autoMode) {
+    document.getElementById('content').disabled = true;
+    document.getElementById('url').disabled = true;
+    document.querySelectorAll('.seg-btn').forEach(b => b.disabled = true);
+    setStatus('🔁 自动模式已开启，获取 HN 最新…', 'running');
+    autoTick();
+  } else {
+    document.getElementById('content').disabled = false;
+    document.getElementById('url').disabled = false;
+    document.querySelectorAll('.seg-btn').forEach(b => b.disabled = false);
+    btn.classList.remove('busy');
+    setStatus('自动模式已关闭', 'done');
+  }
+}
+async function autoTick() {
+  if (!_autoMode) return;
+  const btn = document.getElementById('autoBtn');
+  btn.classList.add('busy');
+  try {
+    const resp = await fetch('/api/hn/newest');
+    const data = await resp.json();
+    if (!data.success || !Array.isArray(data.output) || !data.output.length) {
+      setStatus('自动模式：获取 HN 列表失败', 'error');
+      _autoMode = false; toggleAuto();
+      return;
+    }
+    const processed = JSON.parse(localStorage.getItem('hn-processed') || '[]');
+    const next = data.output.find(i => i.url && !processed.includes(i.url));
+    if (!next) {
+      setStatus('自动模式：HN 最新均已处理过', 'done');
+      btn.classList.remove('busy');
+      return;
+    }
+    setStatus('🔁 处理：' + (next.title || next.url).slice(0, 40) + '…', 'running');
+    _autoCurrentUrl = next.url;
+    document.getElementById('url').value = next.url;
+    await process();
+  } catch (e) {
+    setStatus('自动模式：请求失败 ' + e.message, 'error');
+    btn.classList.remove('busy');
+  }
+}
+
 /* ============ 处理 ============ */
 async function process() {
   const content = document.getElementById('content').value.trim();
@@ -1801,13 +1863,30 @@ async function process() {
   } finally {
     btn.classList.remove('loading');
     document.getElementById('btnLabel').textContent = '处理并上传';
-    document.getElementById('content').disabled = false;
-    document.getElementById('url').disabled = false;
-    document.querySelectorAll('.seg-btn').forEach(b => b.disabled = false);
     document.getElementById('progressBar').classList.remove('on');
     clearInterval(ticker);
     _processing = false;
-    updateSubmitState();
+    if (_autoMode) {
+      // 自动模式：保持输入锁定，标记已处理，继续下一条
+      document.getElementById('content').disabled = true;
+      document.getElementById('url').disabled = true;
+      document.querySelectorAll('.seg-btn').forEach(b => b.disabled = true);
+      if (_autoCurrentUrl) {
+        try {
+          const p = JSON.parse(localStorage.getItem('hn-processed') || '[]');
+          if (!p.includes(_autoCurrentUrl)) {
+            p.push(_autoCurrentUrl);
+            localStorage.setItem('hn-processed', JSON.stringify(p.slice(-300)));
+          }
+        } catch (err) {}
+      }
+      setTimeout(autoTick, 900);
+    } else {
+      document.getElementById('content').disabled = false;
+      document.getElementById('url').disabled = false;
+      document.querySelectorAll('.seg-btn').forEach(b => b.disabled = false);
+      updateSubmitState();
+    }
     if (!document.title.startsWith('✅') && !document.title.startsWith('❌')) {
       document.title = 'mynews — 知识笔记处理器';
     }
