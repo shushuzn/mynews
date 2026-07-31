@@ -4,23 +4,106 @@ mynews Web UI 服务器
 启动: python3 server.py [端口]
 前端: http://localhost:8080
 """
-import os, sys, json, subprocess, urllib.parse, threading, tempfile, re
+import os, sys, json, subprocess, urllib.parse, threading, tempfile, re, random, time
 from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
+import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = BASE_DIR / "scripts"
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
 
-# 优先环境变量，其次 .env 文件
-FLOMO_TOKEN = os.environ.get("FLOMO_TOKEN")
-if not FLOMO_TOKEN:
-    env_file = BASE_DIR / ".flomo_env"
-    if env_file.exists():
-        for line in env_file.read_text(encoding="utf-8").splitlines():
-            if line.startswith("FLOMO_TOKEN="):
-                FLOMO_TOKEN = line.split("=", 1)[1].strip().strip("\"'")
+# RSS 源列表（OPML 文件路径，可用环境变量 OPML_PATH 覆盖）
+OPML_PATH = Path(os.environ.get("OPML_PATH", r"C:/Users/35234/OneDrive/Desktop/_rss_sources.opml"))
+
+# RSS 聚合缓存（首次全量抓取，之后 10 分钟内复用）
+RSS_CACHE = {"ts": 0.0, "items": []}
+RSS_LOCK = threading.Lock()
+
+def _load_feeds() -> list:
+    """解析 OPML，返回 [{name, url}]。"""
+    try:
+        if not OPML_PATH.exists():
+            print(f"[server] OPML 不存在: {OPML_PATH}")
+            return []
+        root = ET.parse(str(OPML_PATH)).getroot()
+        feeds = []
+        for o in root.iter("outline"):
+            url = (o.get("xmlUrl") or "").strip()
+            name = (o.get("text") or o.get("title") or "").strip()
+            if url:
+                feeds.append({"name": name or url, "url": url})
+        print(f"[server] OPML 加载: {len(feeds)} 个 RSS 源")
+        return feeds
+    except Exception as e:
+        print(f"[server] OPML 解析失败: {e}")
+        return []
+
+FEEDS = _load_feeds()
+
+def _local(tag: str) -> str:
+    """去掉 XML 命名空间前缀。"""
+    return tag.split("}")[-1]
+
+def _fetch_feed_items(feed: dict, limit: int = 2) -> list:
+    """抓取单个源的最新条目，返回 [{title, url, source}]。"""
+    import urllib.request as _ur
+    try:
+        req = _ur.Request(feed["url"], headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
+        with _ur.urlopen(req, timeout=8) as resp:
+            xml = resp.read(300000).decode("utf-8", errors="replace")
+        root = ET.fromstring(xml)
+        items = []
+        for child in root.iter():
+            if _local(child.tag) not in ("item", "entry"):
+                continue
+            title = link = ""
+            for sub in child:
+                ln = _local(sub.tag)
+                if ln == "title":
+                    title = (sub.text or "").strip()
+                elif ln == "link":
+                    href = sub.get("href")
+                    if href:
+                        link = href.strip()
+                    elif sub.text:
+                        link = sub.text.strip()
+            if title and link:
+                items.append({"title": title, "url": link, "source": feed["name"]})
+            if len(items) >= limit:
                 break
+        return items
+    except Exception:
+        return []
+
+def _fetch_rss_items() -> list:
+    """并发抓取所有源最新条目，合并去重并打乱，带 10 分钟缓存。"""
+    global RSS_CACHE
+    with RSS_LOCK:
+        if RSS_CACHE["items"] and (time.time() - RSS_CACHE["ts"] < 600):
+            return RSS_CACHE["items"]
+    if not FEEDS:
+        return []
+    results = []
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futures = {pool.submit(_fetch_feed_items, f): f for f in FEEDS}
+        for fut in futures:
+            try:
+                results.extend(fut.result())
+            except Exception:
+                pass
+    # 按 URL 去重（保留首个），打乱顺序均匀分布
+    seen, merged = set(), []
+    for it in results:
+        if it["url"] not in seen:
+            seen.add(it["url"])
+            merged.append(it)
+    random.shuffle(merged)
+    with RSS_LOCK:
+        RSS_CACHE = {"ts": time.time(), "items": merged}
+    print(f"[server] RSS 聚合: {len(merged)} 条（{len(FEEDS)} 源）")
+    return merged
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -33,6 +116,9 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path.startswith("/api/hn/newest"):
             # HN 最新文章列表：/api/hn/newest
             self._json_response(True, self._fetch_hn_newest())
+        elif self.path.startswith("/api/rss/items"):
+            # RSS 聚合：全部源最新条目（含缓存）
+            self._json_response(True, _fetch_rss_items())
         elif self.path.startswith("/api/fetch"):
             # URL 抓取预览：/api/fetch?url=xxx
             from urllib.parse import urlparse, parse_qs

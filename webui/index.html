@@ -672,7 +672,7 @@ textarea:focus, input[type="text"]:focus {
       <path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" fill-opacity=".18"/>
     </svg>
   </button>
-  <button class="icon-btn" id="autoBtn" onclick="toggleAuto()" title="自动处理：从 Hacker News 获取最新未处理链接">
+  <button class="icon-btn" id="autoBtn" onclick="toggleAuto()" title="自动处理：从 RSS 源获取最新未处理链接">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/>
     </svg>
@@ -1788,24 +1788,24 @@ async function autoTick() {
   const btn = document.getElementById('autoBtn');
   btn.classList.add('busy');
   try {
-    const resp = await fetch('/api/hn/newest');
+    const resp = await fetch('/api/rss/items');
     const data = await resp.json();
     if (!data.success || !Array.isArray(data.output) || !data.output.length) {
-      setStatus('自动模式：获取 HN 列表失败', 'error');
+      setStatus('自动模式：获取 RSS 列表失败', 'error');
       _autoMode = false; toggleAuto();
       return;
     }
     const processed = JSON.parse(localStorage.getItem('hn-processed') || '[]');
-    // 双键判断：HN story id 或 URL 任一命中即视为已处理
+    // 判断已处理：URL（含旧 HN id 键）任一命中即跳过
     const next = data.output.find(i => i.url &&
-      !processed.includes('id:' + i.id) && !processed.includes('url:' + i.url));
+      !processed.includes('url:' + i.url) && !processed.includes('id:' + (i.id || '')));
     if (!next) {
-      setStatus('自动模式：HN 最新均已处理过', 'done');
+      setStatus('自动模式：所有源最新条目均已处理过', 'done');
       btn.classList.remove('busy');
       return;
     }
     // 预检抓取：内容为空或被反爬拦截 → 直接标记跳过，不提交 AI
-    setStatus('🔁 预检：' + (next.title || next.url).slice(0, 40) + '…', 'running');
+    setStatus('🔁 预检 [' + (next.source || '未知源') + ']：' + (next.title || next.url).slice(0, 40) + '…', 'running');
     _abortCtrl = new AbortController();
     try {
       const pv = await fetch('/api/fetch?url=' + encodeURIComponent(next.url), { signal: _abortCtrl.signal }).then(r => r.json());
@@ -1828,7 +1828,7 @@ async function autoTick() {
       // 预检失败不阻断，继续尝试处理
       console.log('[auto] 预检失败', pvErr);
     }
-    setStatus('🔁 处理：' + (next.title || next.url).slice(0, 40) + '…', 'running');
+    setStatus('🔁 处理 [' + (next.source || '未知源') + ']：' + (next.title || next.url).slice(0, 40) + '…', 'running');
     _autoCurrentUrl = next.url;
     _autoCurrentId = next.id || '';
     document.getElementById('url').value = next.url;
