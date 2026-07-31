@@ -703,6 +703,9 @@ textarea:focus, input[type="text"]:focus {
         <div id="res-note" class="res-pane active"></div>
         <div id="res-compare" class="res-pane"></div>
         <div id="res-log" class="res-pane"></div>
+        <div style="text-align:center;margin-top:18px">
+          <button class="btn" style="background:var(--surface-2);color:var(--text-2);border:1px solid var(--separator-light)" onclick="continueInput()">＋ 继续处理下一条</button>
+        </div>
       </div>
     </div>
 
@@ -725,6 +728,7 @@ textarea:focus, input[type="text"]:focus {
     <div class="sc-row"><span>粘贴剪贴板图片</span><span><kbd>Ctrl</kbd>+<kbd>V</kbd></span></div>
     <div class="sc-row"><span>收起结果区</span><span><kbd>Esc</kbd></span></div>
     <div class="sc-row"><span>打开/关闭本面板</span><span><kbd>?</kbd></span></div>
+    <div class="sc-row"><span>处理完成提示音</span><button class="sample-btn" id="soundToggle" onclick="toggleSound()">开</button></div>
     <button class="sc-close" onclick="hideShortcuts()">关闭</button>
   </div>
 </div>
@@ -732,6 +736,55 @@ textarea:focus, input[type="text"]:focus {
 <script>
 function hideShortcuts() { document.getElementById('shortcutOverlay').classList.remove('show'); }
 function showShortcuts() { document.getElementById('shortcutOverlay').classList.add('show'); }
+
+/* ============ 完成提示音（可开关）============ */
+let soundOn = localStorage.getItem('mynews-sound') !== 'off';
+function toggleSound() {
+  soundOn = !soundOn;
+  localStorage.setItem('mynews-sound', soundOn ? 'on' : 'off');
+  const b = document.getElementById('soundToggle');
+  if (b) b.textContent = soundOn ? '开' : '关';
+  if (soundOn) playSound(true);
+}
+function playSound(ok) {
+  if (!soundOn) return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const notes = ok ? [659.25, 783.99] : [220, 174.61];
+    notes.forEach((f, i) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'sine'; o.frequency.value = f;
+      o.connect(g); g.connect(ctx.destination);
+      const t0 = ctx.currentTime + i * 0.12;
+      g.gain.setValueAtTime(0.001, t0);
+      g.gain.exponentialRampToValueAtTime(0.12, t0 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.35);
+      o.start(t0); o.stop(t0 + 0.4);
+    });
+  } catch (e) {}
+}
+(function() { const b = document.getElementById('soundToggle'); if (b) b.textContent = soundOn ? '开' : '关'; })();
+
+/* ============ 继续处理 ============ */
+function continueInput() {
+  document.getElementById('result-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  setTimeout(() => {
+    const c = document.getElementById('content');
+    if (!document.getElementById('content').value.trim() && document.getElementById('url').value.trim()) {
+      document.getElementById('url').focus();
+    } else {
+      c.focus();
+    }
+  }, 400);
+}
+
+/* ============ 多窗口同步 ============ */
+window.addEventListener('storage', function(e) {
+  if (e.key === 'mynews-records') { renderRecent(); renderStats(); }
+  else if (e.key === 'mynews-last-result' && e.newValue) {
+    try { renderResults(JSON.parse(e.newValue), { restore: true }); } catch (err) {}
+  }
+});
 /* ============ 主题 ============ */
 /* ============ 主题（浅色 / 深色 / 跟随系统）============ */
 const THEMES = ['light', 'dark', 'auto'];
@@ -1412,6 +1465,7 @@ async function process() {
     });
     const data = await resp.json();
     renderResults(data);
+    playSound(data.success);
     const secs = ((Date.now() - startTime) / 1000).toFixed(1);
     setStatus(data.success
         ? (data.output.includes('跳过') ? `已跳过 · ${secs}s` : `处理完成 · ${secs}s`)
