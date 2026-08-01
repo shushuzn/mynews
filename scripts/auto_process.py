@@ -121,12 +121,12 @@ def fetch_all_rss_items(limit_per_feed=3):
         print(f"[error] OPML 解析失败: {e}")
         return []
     feeds = []
-    # 可选过滤：MYNEWS_RSS_ONLY="https://hnrss.org/newest" 时只抓取该源（或该 URL 的关键词变体）
+    # 可选过滤：MYNEWS_RSS_ONLY="https://hnrss.org/newest" 时只抓取该源（精确匹配，不含关键词变体）
     only_filter = os.environ.get("MYNEWS_RSS_ONLY", "").strip()
     for o in root.iter("outline"):
         url = (o.get("xmlUrl") or "").strip()
         name = (o.get("text") or o.get("title") or "").strip()
-        if url and (not only_filter or url == only_filter or url.startswith(only_filter + "?")):
+        if url and (not only_filter or url == only_filter):
             feeds.append({"name": name or url, "url": url})
     print(f"[rss] 共 {len(feeds)} 个 RSS 源（过滤: {'无' if not only_filter else only_filter}），并发抓取中...")
     from concurrent.futures import ThreadPoolExecutor, as_completed
