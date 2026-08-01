@@ -224,16 +224,15 @@ def _auto_background_process():
             items = ap.fetch_all_rss_items(limit_per_feed=3)
             done = 0
             for it in items:
-                # 每条处理前实时复查记录（处理期间前端可能已标记同一条，避免重复）
+                # 处理前实时复查记录；未处理则先认领标记（防止与前端 ⚡ 竞态重复处理），再抓取/处理
                 if it["url"] in ap.load_processed():
                     continue
+                ap.mark_processed(it["url"])
                 content, err = ap.fetch_article(it["url"])
                 if err or not content:
-                    ap.mark_processed(it["url"])
                     print(f"  [auto] 抓取失败，标记跳过: {err or '空内容'} | {it['title'][:40]}")
                     continue
                 ok, out = ap.process_article(content, it["url"])
-                ap.mark_processed(it["url"])
                 done += 1
                 print(f"  [auto] {'成功' if ok else '失败'}: {it['title'][:40]}")
             print(f"[auto] 后台处理完成: {done} 条新条目")

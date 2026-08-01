@@ -1850,6 +1850,15 @@ async function autoTick() {
       _autoTimer = setTimeout(autoTick, 180000 + Math.floor(Math.random() * 30000));
       return;
     }
+    // 先认领服务端标记（后台线程只读服务端 .auto_processed.json），防止竞态重复处理同一条；
+    // 本地 localStorage 保持原语义不变（预检失败仍可重试）
+    try {
+      await fetch('/api/mark-processed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: next.url })
+      });
+    } catch (e) {}
     // 预检抓取：内容为空/被拦截/超时 → 直接标记跳过，不提交 AI
     setStatus('🔁 预检 [' + (next.source || '未知源') + ']：' + (next.title || next.url).slice(0, 40) + '…', 'running');
     _abortCtrl = new AbortController();
