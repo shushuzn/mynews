@@ -36,19 +36,20 @@ RSS_CACHE = {"ts": 0.0, "items": []}
 RSS_LOCK = threading.Lock()
 
 def _load_feeds() -> list:
-    """解析 OPML，返回 [{name, url}]。"""
+    """解析 OPML，返回 [{name, url}]。MYNEWS_RSS_ONLY 设置时只保留精确匹配该 URL 的源。"""
     try:
         if not OPML_PATH.exists():
             print(f"[server] OPML 不存在: {OPML_PATH}")
             return []
         root = ET.parse(str(OPML_PATH)).getroot()
+        only_filter = os.environ.get("MYNEWS_RSS_ONLY", "").strip()
         feeds = []
         for o in root.iter("outline"):
             url = (o.get("xmlUrl") or "").strip()
             name = (o.get("text") or o.get("title") or "").strip()
-            if url:
+            if url and (not only_filter or url == only_filter):
                 feeds.append({"name": name or url, "url": url})
-        print(f"[server] OPML 加载: {len(feeds)} 个 RSS 源")
+        print(f"[server] OPML 加载: {len(feeds)} 个 RSS 源（过滤: {'无' if not only_filter else only_filter}）")
         return feeds
     except Exception as e:
         print(f"[server] OPML 解析失败: {e}")
