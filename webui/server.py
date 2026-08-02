@@ -512,7 +512,8 @@ class Handler(BaseHTTPRequestHandler):
             return []
 
     def log_message(self, format, *args):
-        sys.stderr.write(f"[webui] {args[0]} {args[1]} {args[2]}\n")
+        # 参数数量不固定（如 send_error 只传 2 个），不能硬编码下标，否则 IndexError 导致请求线程崩溃
+        sys.stderr.write(f"[webui] {format % args if args else format}\n")
 
 
 if __name__ == "__main__":
