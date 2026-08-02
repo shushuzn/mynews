@@ -943,12 +943,16 @@ function renderFeedList() {
     wrap.innerHTML = '<div class="recent-empty">没有匹配的 RSS 源</div>';
     return;
   }
-  wrap.innerHTML = list.map(f => `
+  wrap.innerHTML = list.map(f => {
+    // 在模板字符串外先转义，避免模板内的双重转义把正则 /\\/g 变成 /\/g（匹配斜杠）
+    const escUrl = f.url.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    const expId = 'fe-exp-' + f.url.replace(/[^a-zA-Z0-9]/g, '_');
+    return `
     <div style="border:1px solid var(--separator-light);border-radius:10px;background:var(--surface-2);overflow:hidden;opacity:${f.enabled ? 1 : .55};transition:opacity .2s">
-      <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer" onclick="toggleFeedExpand('${f.url.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">
+      <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer" onclick="toggleFeedExpand('${escUrl}')">
         <input type="checkbox" ${f.enabled ? 'checked' : ''} ${f.hard_locked ? 'disabled' : ''}
           onclick="event.stopPropagation()"
-          onchange="toggleFeed('${f.url.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', this.checked)" style="accent-color:var(--blue);width:15px;height:15px;flex-shrink:0">
+          onchange="toggleFeed('${escUrl}', this.checked)" style="accent-color:var(--blue);width:15px;height:15px;flex-shrink:0">
         <div style="min-width:0;flex:1">
           <div style="font-size:12.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.name || ''}</div>
           <div style="font-size:10.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.url || ''}</div>
@@ -956,8 +960,9 @@ function renderFeedList() {
         ${f.hard_locked ? '<span style="font-size:10px;color:var(--text-3)">受限</span>' : ''}
         <span style="font-size:11px;color:var(--text-3);flex-shrink:0">▾</span>
       </div>
-      <div id="fe-exp-${f.url.replace(/[^a-zA-Z0-9]/g, '_')}" style="display:none;padding:0 12px 10px;border-top:1px dashed var(--separator-light)"></div>
-    </div>`).join('');
+      <div id="${expId}" style="display:none;padding:0 12px 10px;border-top:1px dashed var(--separator-light)"></div>
+    </div>`;
+  }).join('');
 }
 async function toggleFeedExpand(url) {
   const expId = 'fe-exp-' + url.replace(/[^a-zA-Z0-9]/g, '_');
