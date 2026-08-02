@@ -944,15 +944,47 @@ function renderFeedList() {
     return;
   }
   wrap.innerHTML = list.map(f => `
-    <label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;border:1px solid var(--separator-light);background:var(--surface-2);cursor:pointer;opacity:${f.enabled ? 1 : .55};transition:opacity .2s">
-      <input type="checkbox" ${f.enabled ? 'checked' : ''} ${f.hard_locked ? 'disabled' : ''}
-        onchange="toggleFeed('${f.url.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', this.checked)" style="accent-color:var(--blue);width:15px;height:15px;flex-shrink:0">
-      <div style="min-width:0">
-        <div style="font-size:12.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.name || ''}</div>
-        <div style="font-size:10.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.url || ''}</div>
+    <div style="border:1px solid var(--separator-light);border-radius:10px;background:var(--surface-2);overflow:hidden;opacity:${f.enabled ? 1 : .55};transition:opacity .2s">
+      <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer" onclick="toggleFeedExpand('${f.url.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">
+        <input type="checkbox" ${f.enabled ? 'checked' : ''} ${f.hard_locked ? 'disabled' : ''}
+          onclick="event.stopPropagation()"
+          onchange="toggleFeed('${f.url.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', this.checked)" style="accent-color:var(--blue);width:15px;height:15px;flex-shrink:0">
+        <div style="min-width:0;flex:1">
+          <div style="font-size:12.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.name || ''}</div>
+          <div style="font-size:10.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.url || ''}</div>
+        </div>
+        ${f.hard_locked ? '<span style="font-size:10px;color:var(--text-3)">受限</span>' : ''}
+        <span style="font-size:11px;color:var(--text-3);flex-shrink:0">▾</span>
       </div>
-      ${f.hard_locked ? '<span style="margin-left:auto;font-size:10px;color:var(--text-3)">受 MYNEWS_RSS_ONLY 限制</span>' : ''}
-    </label>`).join('');
+      <div id="fe-exp-${f.url.replace(/[^a-zA-Z0-9]/g, '_')}" style="display:none;padding:0 12px 10px;border-top:1px dashed var(--separator-light)"></div>
+    </div>`).join('');
+}
+async function toggleFeedExpand(url) {
+  const expId = 'fe-exp-' + url.replace(/[^a-zA-Z0-9]/g, '_');
+  const el = document.getElementById(expId);
+  if (!el) return;
+  if (el.style.display === 'block') {
+    el.style.display = 'none';
+    return;
+  }
+  el.style.display = 'block';
+  el.innerHTML = '<div style="padding:10px 2px;font-size:12px;color:var(--text-3)">加载中…</div>';
+  try {
+    const r = await fetch('/api/rss/feed/items?url=' + encodeURIComponent(url) + '&limit=5').then(res => res.json());
+    if (!r.success || !Array.isArray(r.output) || !r.output.length) {
+      el.innerHTML = '<div style="padding:10px 2px;font-size:12px;color:var(--text-3)">该源暂无条目（可能是周末停更或源为空）</div>';
+      return;
+    }
+    el.innerHTML = r.output.map(it => `
+      <a href="${it.url}" target="_blank" rel="noopener"
+        style="display:block;padding:7px 4px;font-size:12px;color:var(--text-2);text-decoration:none;border-radius:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
+        onmouseover="this.style.background='var(--surface)';this.style.color='var(--blue)'"
+        onmouseout="this.style.background='transparent';this.style.color='var(--text-2)'">
+        ${it.title || ''}
+      </a>`).join('');
+  } catch (e) {
+    el.innerHTML = '<div style="padding:10px 2px;font-size:12px;color:var(--red)">加载失败：' + e.message + '</div>';
+  }
 }
 async function toggleFeed(url, enabled) {
   try {
