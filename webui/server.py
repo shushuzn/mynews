@@ -328,22 +328,6 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path.startswith("/api/rss/feeds"):
             # RSS 源列表及启用状态：GET /api/rss/feeds
             self._json_response(True, _feed_list())
-        elif self.path.startswith("/api/rss/feed/items"):
-            # 单源最新条目：GET /api/rss/feed/items?url=xxx&limit=5
-            from urllib.parse import urlparse, parse_qs
-            qs = parse_qs(urlparse(self.path).query)
-            url = (qs.get("url") or [""])[0].strip()
-            limit = int((qs.get("limit") or ["5"])[0])
-            if not url:
-                self._json_response(False, "缺少 url")
-                return
-            name = url
-            for f in _feed_list()["feeds"]:
-                if f["url"] == url:
-                    name = f["name"]
-                    break
-            items = _fetch_feed_items({"name": name, "url": url}, limit=max(1, min(limit, 20)))
-            self._json_response(True, items)
         elif self.path.startswith("/api/fetch"):
             # URL 抓取预览：/api/fetch?url=xxx
             from urllib.parse import urlparse, parse_qs
