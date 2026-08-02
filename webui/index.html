@@ -842,6 +842,23 @@ textarea:focus, input[type="text"]:focus {
   </div>
 </div>
 
+<!-- RSS 源管理弹层 -->
+<div class="shortcut-overlay" id="feedsOverlay" onclick="if(event.target===this)hideFeeds()">
+  <div class="shortcut-panel" style="width:min(560px,92vw)">
+    <h3>📡 RSS 源管理</h3>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+      <input id="feedSearch" placeholder="🔍 搜索源名称/域名…" oninput="renderFeedList()"
+        style="flex:1;min-width:160px;padding:8px 12px;border-radius:8px;border:1px solid var(--separator-light);background:var(--surface-2);color:var(--text);font-size:12.5px;outline:none">
+      <button class="rf-btn" id="feedToggleAll" onclick="toggleAllFeeds()">全部禁用</button>
+      <span style="font-size:11.5px;color:var(--text-3)" id="feedCountLabel"></span>
+    </div>
+    <div id="feedList" style="max-height:52vh;overflow-y:auto;padding-right:4px;display:flex;flex-direction:column;gap:6px">
+      <div class="recent-empty">加载中…</div>
+    </div>
+    <button class="sc-close" onclick="hideFeeds()">关闭</button>
+  </div>
+</div>
+
 <!-- 侧栏弹层（菜单 / 概览） -->
 <div class="shortcut-overlay" id="sidebarOverlay" onclick="if(event.target===this)hideSidebar()">
   <div class="shortcut-panel sidebar-panel">
@@ -856,6 +873,7 @@ textarea:focus, input[type="text"]:focus {
       <button class="nav-item active" onclick="goNewNote()"><span class="n-ico">📝</span> 新建笔记</button>
       <button class="nav-item" onclick="toggleAuto();hideSidebar()"><span class="n-ico">⚡</span> 自动处理 <span class="n-badge" id="navAutoState">关</span></button>
       <button class="nav-item" onclick="showRecent()"><span class="n-ico">🕘</span> 最近处理 <span class="n-badge" id="navRecentCount">0</span></button>
+      <button class="nav-item" onclick="showFeedManager()"><span class="n-ico">📡</span> RSS 源 <span class="n-badge" id="navFeedCount">–</span></button>
       <button class="nav-item" onclick="showSettings()"><span class="n-ico">⚙️</span> 设置</button>
     </div>
     <div class="stat-card">
@@ -884,6 +902,89 @@ function showRecent() {
   hideSidebar();
   renderRecent();
   document.getElementById('recentOverlay').classList.add('show');
+}
+
+/* ============ RSS 源管理 ============ */
+let _feedData = { feeds: [], total: 0, enabled_count: 0 };
+async function showFeedManager() {
+  hideSidebar();
+  document.getElementById('feedsOverlay').classList.add('show');
+  document.getElementById('feedSearch').value = '';
+  await refreshFeedList();
+}
+function hideFeeds() { document.getElementById('feedsOverlay').classList.remove('show'); }
+async function refreshFeedList() {
+  try {
+    const r = await fetch('/api/rss/feeds').then(res => res.json());
+    if (r.success && r.output) {
+      _feedData = r.output;
+      updateFeedBadge();
+      renderFeedList();
+    }
+  } catch (e) {
+    document.getElementById('feedList').innerHTML = '<div class="recent-empty">加载失败：' + e.message + '</div>';
+  }
+}
+function updateFeedBadge() {
+  const b = document.getElementById('navFeedCount');
+  if (b) b.textContent = _feedData.enabled_count + '/' + _feedData.total;
+  const lbl = document.getElementById('feedCountLabel');
+  if (lbl) lbl.textContent = '已启用 ' + _feedData.enabled_count + ' / ' + _feedData.total;
+  const ta = document.getElementById('feedToggleAll');
+  if (ta) ta.textContent = _feedData.enabled_count > 0 ? '全部禁用' : '全部启用';
+}
+function renderFeedList() {
+  const q = (document.getElementById('feedSearch').value || '').trim().toLowerCase();
+  const wrap = document.getElementById('feedList');
+  const list = _feedData.feeds.filter(f =>
+    !q || (f.name || '').toLowerCase().includes(q) || (f.url || '').toLowerCase().includes(q)
+  );
+  if (!list.length) {
+    wrap.innerHTML = '<div class="recent-empty">没有匹配的 RSS 源</div>';
+    return;
+  }
+  wrap.innerHTML = list.map(f => `
+    <label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;border:1px solid var(--separator-light);background:var(--surface-2);cursor:pointer;opacity:${f.enabled ? 1 : .55};transition:opacity .2s">
+      <input type="checkbox" ${f.enabled ? 'checked' : ''} ${f.hard_locked ? 'disabled' : ''}
+        onchange="toggleFeed('${f.url.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', this.checked)" style="accent-color:var(--blue);width:15px;height:15px;flex-shrink:0">
+      <div style="min-width:0">
+        <div style="font-size:12.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.name || ''}</div>
+        <div style="font-size:10.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.url || ''}</div>
+      </div>
+      ${f.hard_locked ? '<span style="margin-left:auto;font-size:10px;color:var(--text-3)">受 MYNEWS_RSS_ONLY 限制</span>' : ''}
+    </label>`).join('');
+}
+async function toggleFeed(url, enabled) {
+  try {
+    const r = await fetch('/api/rss/feeds/toggle', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, enabled })
+    }).then(res => res.json());
+    if (r.success && r.output && r.output.feeds) {
+      _feedData = r.output.feeds;
+      updateFeedBadge();
+      renderFeedList();
+    } else {
+      refreshFeedList();
+    }
+  } catch (e) {
+    refreshFeedList();
+  }
+}
+async function toggleAllFeeds() {
+  const target = _feedData.enabled_count > 0 ? false : true;
+  try {
+    for (const f of _feedData.feeds) {
+      if (f.hard_locked || f.enabled === target) continue;
+      await fetch('/api/rss/feeds/toggle', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: f.url, enabled: target })
+      });
+    }
+    await refreshFeedList();
+  } catch (e) {
+    refreshFeedList();
+  }
 }
 function syncThemeBtns() {
   const t = localStorage.getItem('mynews-theme') || 'light';
@@ -2053,6 +2154,13 @@ updateSubmitState();
 refreshBgAutoState();
 moveSegSlider('text');
 restoreDraft();
+// 加载 RSS 源启用状态到侧边栏徽章（失败静默，不影响页面）
+fetch('/api/rss/feeds').then(r => r.json()).then(r => {
+  if (r.success && r.output) {
+    _feedData = r.output;
+    updateFeedBadge();
+  }
+}).catch(() => {});
 // 桌面端首屏自动聚焦正文（移动端避免弹出键盘）
 if (!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches)) {
   setTimeout(() => {

@@ -28,6 +28,51 @@ if not FLOMO_TOKEN:
 # RSS 源列表（OPML 文件路径，可用环境变量 OPML_PATH 覆盖）
 OPML_PATH = Path(os.environ.get("OPML_PATH", str(BASE_DIR / "rss_sources.opml")))
 
+# RSS 源启用配置（scripts/.rss_feeds.json）：{"url": true/false}，缺省全部启用；
+# MYNEWS_RSS_ONLY 环境变量仍为硬过滤（精确匹配时只保留该源）
+RSS_FEEDS_PREFS = SCRIPTS_DIR / ".rss_feeds.json"
+RSS_PREFS_LOCK = threading.Lock()
+
+def _load_feed_prefs() -> dict:
+    """读取启用配置，返回 {url: bool}；文件不存在返回空（=全部启用）。"""
+    try:
+        if RSS_FEEDS_PREFS.exists():
+            return json.loads(RSS_FEEDS_PREFS.read_text(encoding="utf-8"))
+    except Exception as e:
+        print(f"[server] RSS 配置解析失败: {e}")
+    return {}
+
+def _save_feed_prefs(prefs: dict):
+    with RSS_PREFS_LOCK:
+        RSS_FEEDS_PREFS.write_text(json.dumps(prefs, ensure_ascii=False, indent=2), encoding="utf-8")
+
+def _feed_enabled(url: str, prefs: dict) -> bool:
+    """URL 是否启用：配置中有记录按配置，无记录默认启用。"""
+    return prefs.get(url, True)
+
+def _feed_list() -> dict:
+    """返回全部 RSS 源及启用状态：{feeds: [{name, url, enabled}], total, enabled_count}。"""
+    try:
+        if not OPML_PATH.exists():
+            return {"feeds": [], "total": 0, "enabled_count": 0}
+        root = ET.parse(str(OPML_PATH)).getroot()
+        prefs = _load_feed_prefs()
+        only_filter = os.environ.get("MYNEWS_RSS_ONLY", "").strip()
+        feeds = []
+        for o in root.iter("outline"):
+            url = (o.get("xmlUrl") or "").strip()
+            name = (o.get("text") or o.get("title") or "").strip()
+            if not url:
+                continue
+            feeds.append({"name": name or url, "url": url,
+                          "enabled": _feed_enabled(url, prefs),
+                          "hard_locked": bool(only_filter) and url != only_filter})
+        enabled_count = sum(1 for f in feeds if f["enabled"])
+        return {"feeds": feeds, "total": len(feeds), "enabled_count": enabled_count}
+    except Exception as e:
+        print(f"[server] RSS 源列表失败: {e}")
+        return {"feeds": [], "total": 0, "enabled_count": 0}
+
 # 后台刷新间隔（秒），可用环境变量 MYNEWS_RSS_INTERVAL 覆盖
 RSS_INTERVAL = max(30, int(os.environ.get("MYNEWS_RSS_INTERVAL", "180")))
 
@@ -36,20 +81,29 @@ RSS_CACHE = {"ts": 0.0, "items": []}
 RSS_LOCK = threading.Lock()
 
 def _load_feeds() -> list:
-    """解析 OPML，返回 [{name, url}]。MYNEWS_RSS_ONLY 设置时只保留精确匹配该 URL 的源。"""
+    """解析 OPML，返回 [{name, url}]。优先级：MYNEWS_RSS_ONLY 硬过滤 > .rss_feeds.json 启用配置。"""
     try:
         if not OPML_PATH.exists():
             print(f"[server] OPML 不存在: {OPML_PATH}")
             return []
         root = ET.parse(str(OPML_PATH)).getroot()
         only_filter = os.environ.get("MYNEWS_RSS_ONLY", "").strip()
+        prefs = _load_feed_prefs()
         feeds = []
+        disabled = []
         for o in root.iter("outline"):
             url = (o.get("xmlUrl") or "").strip()
             name = (o.get("text") or o.get("title") or "").strip()
-            if url and (not only_filter or url == only_filter):
-                feeds.append({"name": name or url, "url": url})
-        print(f"[server] OPML 加载: {len(feeds)} 个 RSS 源（过滤: {'无' if not only_filter else only_filter}）")
+            if not url:
+                continue
+            if only_filter and url != only_filter:
+                continue
+            if not _feed_enabled(url, prefs):
+                disabled.append(name or url)
+                continue
+            feeds.append({"name": name or url, "url": url})
+        n_total = sum(1 for o in root.iter("outline") if (o.get("xmlUrl") or "").strip())
+        print(f"[server] OPML 加载: {len(feeds)}/{n_total} 个 RSS 源（过滤: {'无' if not only_filter else only_filter}，禁用: {len(disabled)}）")
         return feeds
     except Exception as e:
         print(f"[server] OPML 解析失败: {e}")
@@ -271,6 +325,9 @@ class Handler(BaseHTTPRequestHandler):
             if qs.get("refresh") == ["1"]:
                 RSS_CACHE = {"ts": 0.0, "items": []}
             self._json_response(True, _fetch_rss_items())
+        elif self.path.startswith("/api/rss/feeds"):
+            # RSS 源列表及启用状态：GET /api/rss/feeds
+            self._json_response(True, _feed_list())
         elif self.path.startswith("/api/fetch"):
             # URL 抓取预览：/api/fetch?url=xxx
             from urllib.parse import urlparse, parse_qs
@@ -328,6 +385,23 @@ class Handler(BaseHTTPRequestHandler):
                 body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8"))
                 _set_auto_bg(bool(body.get("enabled")))
                 self._json_response(True, {"enabled": _auto_bg_status()})
+            except Exception as e:
+                self._json_response(False, f"切换失败: {e}")
+        elif self.path.startswith("/api/rss/feeds/toggle"):
+            # 切换单个源启用状态：POST {"url": "...", "enabled": true|false}
+            try:
+                body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8"))
+                url = (body.get("url") or "").strip()
+                if not url:
+                    self._json_response(False, "缺少 url")
+                    return
+                prefs = _load_feed_prefs()
+                prefs[url] = bool(body.get("enabled", True))
+                _save_feed_prefs(prefs)
+                global FEEDS, RSS_CACHE
+                FEEDS = _load_feeds()
+                RSS_CACHE = {"ts": 0.0, "items": []}
+                self._json_response(True, {"url": url, "enabled": prefs[url], "feeds": _feed_list()})
             except Exception as e:
                 self._json_response(False, f"切换失败: {e}")
         elif self.path.startswith("/api/mark-processed"):

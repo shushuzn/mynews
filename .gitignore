@@ -6,3 +6,4 @@ data/
 __pycache__/
 .mcp.json
 .flomo_env
+scripts/.rss_feeds.json
