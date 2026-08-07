@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 
 # 共享 RSS / 网页抓取工具（rss_utils.py 与 server.py 同目录/被 webui 复用）
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from rss_utils import local_tag, parse_ts, fetch_feed_items, fetch_article_text
+from rss_utils import local_tag, parse_ts, fetch_feed_items, fetch_article_text, load_feeds
 
 # Windows 下禁止子进程弹出控制台窗口（避免终端闪现）
 CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
@@ -80,34 +80,13 @@ def fetch_all_rss_items(limit_per_feed=3):
     if not OPML_PATH.exists():
         print(f"[error] OPML 不存在: {OPML_PATH}")
         return []
-    try:
-        root = ET.parse(str(OPML_PATH)).getroot()
-    except Exception as e:
-        print(f"[error] OPML 解析失败: {e}")
+    # 共享：解析 OPML + 应用启用配置（.rss_feeds.json）与 MYNEWS_RSS_ONLY 硬过滤
+    feeds, disabled, only_filter = load_feeds(
+        OPML_PATH, prefs_path=SCRIPTS_DIR / ".rss_feeds.json",
+        only_filter=os.environ.get("MYNEWS_RSS_ONLY", ""))
+    if not feeds and only_filter:
+        print(f"[error] OPML 解析失败或过滤后无源: {OPML_PATH}")
         return []
-    # 启用配置：scripts/.rss_feeds.json（{"url": bool}，缺省启用），与 Web UI 共用
-    prefs = {}
-    prefs_file = SCRIPTS_DIR / ".rss_feeds.json"
-    try:
-        if prefs_file.exists():
-            prefs = json.loads(prefs_file.read_text(encoding="utf-8"))
-    except Exception:
-        pass
-    # 可选过滤：MYNEWS_RSS_ONLY="https://hnrss.org/newest" 时只抓取该源（精确匹配，不含关键词变体）
-    only_filter = os.environ.get("MYNEWS_RSS_ONLY", "").strip()
-    feeds = []
-    disabled = []
-    for o in root.iter("outline"):
-        url = (o.get("xmlUrl") or "").strip()
-        name = (o.get("text") or o.get("title") or "").strip()
-        if not url:
-            continue
-        if only_filter and url != only_filter:
-            continue
-        if not prefs.get(url, True):
-            disabled.append(name or url)
-            continue
-        feeds.append({"name": name or url, "url": url})
     print(f"[rss] 共 {len(feeds)} 个 RSS 源（过滤: {'无' if not only_filter else only_filter}，禁用: {len(disabled)}），并发抓取中...")
     from concurrent.futures import ThreadPoolExecutor, as_completed
     all_items = []

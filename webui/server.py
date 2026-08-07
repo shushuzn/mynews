@@ -16,7 +16,7 @@ PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
 
 # 共享 RSS / 网页抓取工具（scripts/rss_utils.py）
 sys.path.insert(0, str(SCRIPTS_DIR))
-from rss_utils import local_tag, parse_ts, fetch_feed_items, fetch_article_text
+from rss_utils import local_tag, parse_ts, fetch_feed_items, fetch_article_text, load_feeds
 
 # 优先环境变量，其次 .env 文件
 FLOMO_TOKEN = os.environ.get("FLOMO_TOKEN")
@@ -85,32 +85,23 @@ RSS_LOCK = threading.Lock()
 
 def _load_feeds() -> list:
     """解析 OPML，返回 [{name, url}]。优先级：MYNEWS_RSS_ONLY 硬过滤 > .rss_feeds.json 启用配置。"""
-    try:
-        if not OPML_PATH.exists():
-            print(f"[server] OPML 不存在: {OPML_PATH}")
-            return []
-        root = ET.parse(str(OPML_PATH)).getroot()
-        only_filter = os.environ.get("MYNEWS_RSS_ONLY", "").strip()
-        prefs = _load_feed_prefs()
-        feeds = []
-        disabled = []
-        for o in root.iter("outline"):
-            url = (o.get("xmlUrl") or "").strip()
-            name = (o.get("text") or o.get("title") or "").strip()
-            if not url:
-                continue
-            if only_filter and url != only_filter:
-                continue
-            if not _feed_enabled(url, prefs):
-                disabled.append(name or url)
-                continue
-            feeds.append({"name": name or url, "url": url})
-        n_total = sum(1 for o in root.iter("outline") if (o.get("xmlUrl") or "").strip())
-        print(f"[server] OPML 加载: {len(feeds)}/{n_total} 个 RSS 源（过滤: {'无' if not only_filter else only_filter}，禁用: {len(disabled)}）")
-        return feeds
-    except Exception as e:
-        print(f"[server] OPML 解析失败: {e}")
+    if not OPML_PATH.exists():
+        print(f"[server] OPML 不存在: {OPML_PATH}")
         return []
+    # 共享：解析 OPML + 应用启用配置与 MYNEWS_RSS_ONLY 硬过滤
+    feeds, disabled, only_filter = load_feeds(
+        OPML_PATH, prefs_path=RSS_FEEDS_PREFS,
+        only_filter=os.environ.get("MYNEWS_RSS_ONLY", ""))
+    if not feeds and only_filter:
+        print(f"[server] OPML 解析失败或过滤后无源: {OPML_PATH}")
+        return []
+    try:
+        root = ET.parse(str(OPML_PATH)).getroot()
+        n_total = sum(1 for o in root.iter("outline") if (o.get("xmlUrl") or "").strip())
+    except Exception:
+        n_total = len(feeds)
+    print(f"[server] OPML 加载: {len(feeds)}/{n_total} 个 RSS 源（过滤: {'无' if not only_filter else only_filter}，禁用: {len(disabled)}）")
+    return feeds
 
 FEEDS = _load_feeds()
 

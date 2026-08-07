@@ -32,6 +32,44 @@ def parse_ts(text: str) -> float:
         return 0
 
 
+def load_feeds(opml_path, prefs_path=None, only_filter=""):
+    """解析 OPML 并应用启用配置/硬过滤，返回 [{name, url}]。
+
+    - prefs_path：scripts/.rss_feeds.json（{"url": bool}，缺省启用）；None 或文件缺失 = 全部启用
+    - only_filter：MYNEWS_RSS_ONLY 硬过滤，非空时仅保留 URL 精确匹配的源
+    - 解析失败或 OPML 不存在返回 []
+    """
+    import os as _os
+    import json as _json
+    try:
+        if not _os.path.exists(str(opml_path)):
+            return []
+        root = ET.parse(str(opml_path)).getroot()
+    except Exception:
+        return []
+    prefs = {}
+    if prefs_path is not None:
+        try:
+            if _os.path.exists(str(prefs_path)):
+                prefs = _json.loads(open(str(prefs_path), encoding="utf-8").read())
+        except Exception:
+            pass
+    only_filter = (only_filter or "").strip()
+    feeds, disabled = [], []
+    for o in root.iter("outline"):
+        url = (o.get("xmlUrl") or "").strip()
+        name = (o.get("text") or o.get("title") or "").strip()
+        if not url:
+            continue
+        if only_filter and url != only_filter:
+            continue
+        if not prefs.get(url, True):
+            disabled.append(name or url)
+            continue
+        feeds.append({"name": name or url, "url": url})
+    return feeds, disabled, only_filter
+
+
 def _read_http(url: str, timeout: int = 15) -> bytes:
     """GET 请求并自动解压 gzip，返回原始字节。失败抛异常由调用方处理。"""
     import urllib.request as _ur
