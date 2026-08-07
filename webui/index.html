@@ -21,11 +21,13 @@
   --blue: #007aff;
   --purple: #af52de;
   --pink: #ff2d55;
+  --red: #ff3b30;
   --orange: #ff9500;
   --green: #34c759;
   --yellow: #ffcc00;
   --teal: #30b0c7;
   --indigo: #5856d6;
+  --border-strong: #a8a8ad;
   --grad-hero: linear-gradient(130deg, #0a84ff 0%, #5e5ce6 55%, #af52de 100%);
   --grad-btn: linear-gradient(135deg, #0a84ff 0%, #5e5ce6 100%);
   --mark-bg: #ffe8a3;
@@ -56,11 +58,13 @@ body.dark {
   --blue: #0a84ff;
   --purple: #bf5af2;
   --pink: #ff375f;
+  --red: #ff453a;
   --orange: #ff9f0a;
   --green: #30d158;
   --yellow: #ffd60a;
   --teal: #40c8e0;
   --indigo: #5e5ce6;
+  --border-strong: #636366;
   --grad-hero: linear-gradient(130deg, #0a84ff 0%, #5e5ce6 55%, #bf5af2 100%);
   --grad-btn: linear-gradient(135deg, #0a84ff 0%, #5e5ce6 100%);
   --mark-bg: #5a4700;
@@ -400,6 +404,11 @@ textarea:focus, input[type="text"]:focus {
 .recent-item .r-title { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .recent-item .r-sub { font-size: 11px; color: var(--text-3); margin-top: 1px; }
 .recent-item .r-time { font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.r-idlink {
+  color: var(--blue); text-decoration: none; font-weight: 600; border-bottom: 1px dashed rgba(0,122,255,.4);
+  transition: all .15s var(--ease); font-variant-numeric: tabular-nums;
+}
+.r-idlink:hover { color: var(--purple); border-bottom-color: rgba(175,82,222,.5); }
 .recent-empty { color: var(--text-3); font-size: 12.5px; text-align: center; padding: 22px 0; }
 .rf-btn {
   font-size: 11.5px; font-weight: 600; padding: 4px 12px; border-radius: 999px;
@@ -472,6 +481,13 @@ textarea:focus, input[type="text"]:focus {
 }
 .copy-btn:hover { background: rgba(0,122,255,.18); transform: scale(1.04); }
 .copy-btn.copied { color: var(--green); background: rgba(52,199,89,.12); border-color: rgba(52,199,89,.25); }
+.flomo-link {
+  font-size: 11px; font-weight: 700; color: var(--purple); text-decoration: none;
+  background: rgba(175,82,222,.1); border: 1px solid rgba(175,82,222,.2);
+  padding: 3px 11px; border-radius: 999px; cursor: pointer; transition: all .15s var(--ease);
+  flex-shrink: 0;
+}
+.flomo-link:hover { background: rgba(175,82,222,.18); transform: scale(1.04); }
 .result-summary {
   display: flex; align-items: center; gap: 10px; padding: 11px 15px;
   border-radius: var(--radius-md); margin-bottom: 16px; font-size: 13px; font-weight: 700;
@@ -618,6 +634,56 @@ textarea:focus, input[type="text"]:focus {
 .hero { background-size: 150% 150%; animation: gradFlow 14s ease-in-out infinite alternate; }
 @keyframes gradFlow { from { background-position: 0% 40%; } to { background-position: 100% 60%; } }
 .footer { text-align: center; color: var(--text-3); font-size: 11.5px; padding: 20px 0 8px; }
+
+/* ============ RSS 信息流 ============ */
+.rss-toolbar {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap;
+}
+.rss-toolbar select {
+  padding: 6px 12px; border: 1px solid var(--separator); border-radius: var(--radius-sm);
+  background: var(--surface-2); color: var(--text); font-size: 12.5px; font-weight: 600;
+  font-family: inherit; outline: none; cursor: pointer; transition: border-color .2s var(--ease);
+  max-width: 220px;
+}
+.rss-toolbar select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(0,122,255,.12); }
+.rss-count {
+  font-size: 11px; font-weight: 700; color: var(--text-3); background: var(--surface-2);
+  padding: 3px 10px; border-radius: 999px; font-variant-numeric: tabular-nums;
+}
+.rss-list { display: flex; flex-direction: column; gap: 6px; max-height: 420px; overflow-y: auto; padding-right: 4px; }
+.rss-item {
+  display: flex; align-items: center; gap: 11px; padding: 9px 13px;
+  border: 1px solid var(--separator-light); border-radius: var(--radius-md);
+  background: var(--surface-2); transition: all .18s var(--ease); cursor: pointer;
+}
+.rss-item:hover { border-color: var(--blue); transform: translateX(2px); box-shadow: var(--shadow-sm); }
+.rss-item.done { opacity: .5; }
+.rss-item.done .rss-title { text-decoration: line-through; }
+.rss-item .rss-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--blue); flex-shrink: 0; }
+.rss-item.done .rss-dot { background: var(--green); }
+.rss-item .rss-body { flex: 1; min-width: 0; }
+.rss-item .rss-title {
+  font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; color: var(--text); transition: color .18s var(--ease);
+}
+.rss-item:hover .rss-title { color: var(--blue); }
+.rss-item .rss-sub { font-size: 10.5px; color: var(--text-3); margin-top: 2px; display: flex; gap: 8px; align-items: center; }
+.rss-item .rss-src {
+  font-weight: 700; color: var(--purple); background: rgba(175,82,222,.1);
+  padding: 1px 8px; border-radius: 999px; flex-shrink: 0;
+}
+.rss-item .rss-time { flex-shrink: 0; font-size: 10.5px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.rss-item .rss-go {
+  width: 26px; height: 26px; border-radius: 8px; border: none; flex-shrink: 0;
+  background: rgba(0,122,255,.1); color: var(--blue); font-size: 13px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; transition: all .18s var(--ease);
+}
+.rss-item:hover .rss-go { background: var(--grad-btn); color: #fff; transform: scale(1.08); }
+.rss-item .rss-go:active { transform: scale(.9); }
+.rss-item .rss-go.done { background: rgba(52,199,89,.14); color: var(--green); }
+.rss-list::-webkit-scrollbar { width: 6px; }
+.rss-list::-webkit-scrollbar-thumb { background: var(--separator); border-radius: 3px; }
+.rss-list::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
 
 /* ============ Responsive ============ */
 @media (max-width: 680px) {
@@ -771,6 +837,25 @@ textarea:focus, input[type="text"]:focus {
       </div>
     </div>
 
+    <!-- RSS 信息流 -->
+    <div class="card fade-in" id="rssCard">
+      <div class="card-title"><span class="t-ico purple">📡</span> RSS 最新
+        <span class="t-side">
+          <button class="sample-btn" onclick="refreshRss()">刷新</button>
+        </span>
+      </div>
+      <div class="rss-toolbar">
+        <select id="rssSourceFilter" onchange="renderRss()">
+          <option value="">全部来源</option>
+        </select>
+        <span class="rss-count" id="rssCount"></span>
+        <span style="margin-left:auto;font-size:11px;color:var(--text-3)" id="rssUpdated"></span>
+      </div>
+      <div class="rss-list" id="rssList">
+        <div class="empty-state">⏳ 正在加载 RSS…</div>
+      </div>
+    </div>
+
     <!-- Result -->
     <div id="result-section" style="display:none">
       <div class="card fade-in">
@@ -833,6 +918,7 @@ textarea:focus, input[type="text"]:focus {
     </span></div>
     <div class="sc-row"><span>后台自动处理</span><button class="rf-btn" id="bgAutoToggle" onclick="toggleBgAuto()">…</button></div>
     <div class="sc-row"><span>自动处理记录</span><button class="rf-btn" onclick="clearAutoHistory()">清空已处理</button></div>
+    <div class="sc-row"><span>RSS 源统计</span><span id="rssStatsInfo" style="color:var(--text-3);font-size:12px">…</span></div>
     <div class="sc-row"><span>版本</span><span style="color:var(--text-3);font-size:12px">mynews v2.1 · flomo 知识沉淀</span></div>
     <button class="sc-close" onclick="hideSettings()">关闭</button>
   </div>
@@ -912,6 +998,7 @@ function showSettings() {
   document.getElementById('settingsOverlay').classList.add('show');
   syncThemeBtns();
   document.getElementById('soundToggle2').textContent = soundOn ? '开' : '关';
+  refreshRssStats();
 }
 function hideRecent() { document.getElementById('recentOverlay').classList.remove('show'); }
 function showRecent() {
@@ -1329,6 +1416,7 @@ function renderResults(data, opts) {
   if (sections.flomoNote) {
     noteDiv.innerHTML = renderFlomoNote(sections.flomoNote);
     if (sections.newId) noteDiv.innerHTML += `<div class="note-meta">✓ 已上传 · flomo ID: ${escapeHtml(sections.newId)}
+      <a class="flomo-link" href="https://v.flomoapp.com/mine/?memo_id=${escapeHtml(sections.newId)}" target="_blank" rel="noopener" title="在 flomo 中打开">打开 ↗</a>
       <button class="copy-btn" onclick="copyText('${escapeHtml(sections.newId)}', this)">复制 ID</button>
       <button class="copy-btn" onclick="copyNote(this)">复制全文</button></div>`;
   } else if (data.success) {
@@ -1404,6 +1492,8 @@ function renderResults(data, opts) {
     const dur = opts.duration || null;
     recordRecent(sections, data.output, dur);
     if (!skipped) clearDraft();
+    // 处理成功 → 刷新 RSS 列表使该条目标记为已处理
+    if (_rssLoaded) setTimeout(renderRss, 300);
   }
 }
 
@@ -1597,11 +1687,14 @@ function renderRecent() {
     const t = new Date(r.time);
     const hm = String(t.getHours()).padStart(2,'0') + ':' + String(t.getMinutes()).padStart(2,'0');
     const d = t.toDateString() === todayStr ? '今天' : t.toDateString() === yest ? '昨天' : (t.getMonth()+1) + '/' + t.getDate();
+    const idLink = r.id
+      ? `<a class="r-idlink" href="https://v.flomoapp.com/mine/?memo_id=${escapeHtml(r.id)}" target="_blank" rel="noopener" title="在 flomo 中打开 ${escapeHtml(r.id)}">${escapeHtml(r.id)}</a>`
+      : '';
     return `<div class="recent-item" data-time="${r.time}" title="点击复制标题：${escapeHtml(r.title)}" onclick="copyText('${escapeHtml(r.title).replace(/'/g, "\\'")}', this)" style="cursor:pointer">
       <span class="r-dot ${r.action}"></span>
       <div class="r-body">
         <div class="r-title">${escapeHtml(r.title)}</div>
-        <div class="r-sub">${r.label}${r.duration ? ' · ' + r.duration + 's' : ''}${r.id ? ' · ' + escapeHtml(r.id) : ''}</div>
+        <div class="r-sub">${r.label}${r.duration ? ' · ' + r.duration + 's' : ''}${r.id ? ' · ' + idLink : ''}</div>
       </div>
       <span class="r-time">${d} ${hm}</span>
       <button class="r-del" title="删除该记录" onclick="event.stopPropagation();delRecord(${r.time})">✕</button>
@@ -1784,12 +1877,96 @@ async function refreshRss() {
       return;
     }
     setStatus('✅ 已拉取 ' + data.output.length + ' 条新条目', 'done');
+    _rssItems = data.output;
+    renderRss();
     if (_autoMode) {
       setTimeout(autoTick, 300); // 自动模式下直接检查新条目
     }
   } catch (e) {
     setStatus('拉取失败：' + e.message, 'error');
   }
+}
+
+/* ============ RSS 信息流 ============ */
+let _rssItems = [];
+let _rssLoaded = false;
+
+async function loadRss() {
+  try {
+    const resp = await fetch('/api/rss/items');
+    const data = await resp.json();
+    if (!data.success || !Array.isArray(data.output)) {
+      document.getElementById('rssList').innerHTML = '<div class="empty-state">⚠️ RSS 加载失败</div>';
+      return;
+    }
+    _rssItems = data.output;
+    _rssLoaded = true;
+    renderRss();
+  } catch (e) {
+    document.getElementById('rssList').innerHTML = '<div class="empty-state">⚠️ RSS 加载失败：' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+function renderRss() {
+  const filter = document.getElementById('rssSourceFilter').value;
+  // 来源下拉选项（保持当前选中）
+  const sources = [...new Set(_rssItems.map(i => i.source || '未知'))].sort();
+  const sel = document.getElementById('rssSourceFilter');
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">全部来源</option>' +
+    sources.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+  sel.value = prev;
+
+  const items = filter ? _rssItems.filter(i => (i.source || '未知') === filter) : _rssItems;
+  const el = document.getElementById('rssList');
+  if (!items.length) {
+    el.innerHTML = '<div class="empty-state">暂无 RSS 条目，点击右上角「刷新」拉取</div>';
+    document.getElementById('rssCount').textContent = '0 条';
+    document.getElementById('rssUpdated').textContent = '';
+    return;
+  }
+  document.getElementById('rssCount').textContent = items.length + ' 条';
+  document.getElementById('rssUpdated').textContent = '更新于 ' + new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+  // 合并已处理集合（localStorage + 服务端记录）后一次性渲染，避免闪烁
+  const localDone = new Set();
+  try { JSON.parse(localStorage.getItem('hn-processed') || '[]').forEach(k => localDone.add(k.replace(/^url:/, ''))); } catch (e) {}
+  el.innerHTML = '<div class="empty-state" style="padding:14px 0">⏳ 加载已处理状态…</div>';
+  fetch('/api/processed').then(r => r.json()).then(d => {
+    if (d.success && Array.isArray(d.output.urls)) {
+      d.output.urls.forEach(u => localDone.add(u));
+    }
+    renderRssList(el, items, localDone);
+  }).catch(() => renderRssList(el, items, localDone));
+}
+
+function renderRssList(el, items, processed) {
+  el.innerHTML = items.slice(0, 30).map(i => {
+    const isDone = processed.has(i.url);
+    const t = i.ts ? new Date(i.ts * 1000) : null;
+    const timeStr = t ? (t.toDateString() === new Date().toDateString()
+      ? t.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+      : (t.getMonth() + 1) + '/' + t.getDate()) : '';
+    return `<div class="rss-item ${isDone ? 'done' : ''}" title="${escapeHtml(i.title)}" onclick="useRssItem('${escapeHtml(i.url).replace(/'/g, "\\'")}')">
+      <span class="rss-dot"></span>
+      <div class="rss-body">
+        <div class="rss-title">${escapeHtml(i.title)}</div>
+        <div class="rss-sub"><span class="rss-src">${escapeHtml(i.source || '未知')}</span><span>${isDone ? '✓ 已处理' : '未处理'}</span></div>
+      </div>
+      <span class="rss-time">${timeStr}</span>
+      <button class="rss-go ${isDone ? 'done' : ''}" onclick="event.stopPropagation();useRssItem('${escapeHtml(i.url).replace(/'/g, "\\'")}')" title="填入 URL 处理">${isDone ? '✓' : '→'}</button>
+    </div>`;
+  }).join('');
+}
+
+function useRssItem(url) {
+  document.getElementById('url').value = url;
+  switchTab('url');
+  updateSubmitState();
+  saveDraft();
+  document.getElementById('urlPreview').style.display = 'block';
+  previewUrl();
+  document.getElementById('rssCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  setStatus('已填入 RSS 条目 URL', 'done');
 }
 function toggleAuto() {
   _autoMode = !_autoMode;
@@ -1937,6 +2114,19 @@ async function refreshBgAutoState() {
     if (r.success && el) {
       el.textContent = r.output.enabled ? '开' : '关';
       el.classList.toggle('on', r.output.enabled);
+    }
+  } catch (e) {}
+}
+async function refreshRssStats() {
+  try {
+    const r = await fetch('/api/rss/stats').then(r => r.json());
+    const el = document.getElementById('rssStatsInfo');
+    if (r.success && el) {
+      const cacheAge = r.output.cache_ts
+        ? Math.max(0, Math.round((Date.now() / 1000 - r.output.cache_ts) / 60)) + ' 分钟前更新'
+        : '未拉取';
+      el.textContent = `${r.output.feeds} 源 · ${r.output.items} 条 · ${cacheAge}`;
+      el.title = `刷新间隔 ${r.output.interval}s · 后台自动处理 ${r.output.auto_bg ? '开' : '关'}`;
     }
   } catch (e) {}
 }
@@ -2094,8 +2284,10 @@ renderRecent();
 renderStats();
 updateSubmitState();
 refreshBgAutoState();
+refreshRssStats();
 moveSegSlider('text');
 restoreDraft();
+loadRss();
 // 桌面端首屏自动聚焦正文（移动端避免弹出键盘）
 if (!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches)) {
   setTimeout(() => {

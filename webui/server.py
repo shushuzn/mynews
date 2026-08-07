@@ -4,7 +4,7 @@ mynews Web UI 服务器
 启动: python3 server.py [端口]
 前端: http://localhost:8080
 """
-import os, sys, json, subprocess, urllib.parse, threading, tempfile, re, random, time, datetime
+import os, sys, json, subprocess, urllib.parse, threading, tempfile, re, random, time, datetime, socket
 from email.utils import parsedate_to_datetime
 from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
@@ -76,11 +76,21 @@ def _parse_ts(text: str) -> float:
 
 def _fetch_feed_items(feed: dict, limit: int = 2) -> list:
     """抓取单个源的最新条目，返回 [{title, url, source, ts}]。"""
-    import urllib.request as _ur
+    import urllib.request as _ur, gzip as _gz
     try:
-        req = _ur.Request(feed["url"], headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
-        with _ur.urlopen(req, timeout=8) as resp:
-            xml = resp.read(300000).decode("utf-8", errors="replace")
+        req = _ur.Request(feed["url"], headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36", "Accept-Encoding": "gzip"})
+        with _ur.urlopen(req, timeout=15) as resp:
+            raw = resp.read(10_000_000)
+            # 处理 gzip 压缩响应（Swift.org 等返回 Content-Encoding: gzip）
+            if (resp.headers.get("Content-Encoding", "") or "").lower() == "gzip":
+                try:
+                    raw = _gz.decompress(raw)
+                except Exception:
+                    pass
+            xml = raw.decode("utf-8", errors="replace")
+        # 防御性清理：修复源侧未转义的裸 &（如 爱范儿 feed 中 &</image>）
+        if "&" in xml:
+            xml = re.sub(r"&(?!amp;|lt;|gt;|quot;|apos;|#\d+;|#x[0-9a-fA-F]+;)", "&amp;", xml)
         root = ET.fromstring(xml)
         items = []
         for child in root.iter():
@@ -97,6 +107,9 @@ def _fetch_feed_items(feed: dict, limit: int = 2) -> list:
                         link = href.strip()
                     elif sub.text:
                         link = sub.text.strip()
+                elif ln == "guid" and not link:
+                    # 部分源无 <link> 元素（如安全客），回退用 <guid> 作为 URL
+                    link = (sub.text or "").strip()
                 elif ln in ("pubDate", "published", "updated", "date"):
                     ts_text = (sub.text or "").strip()
             if title and link:
@@ -109,6 +122,9 @@ def _fetch_feed_items(feed: dict, limit: int = 2) -> list:
             if len(items) >= limit:
                 break
         return items
+    except ET.ParseError as e:
+        print(f"[server] RSS 解析失败: {feed['name']} ({feed['url']}): {e}")
+        return []
     except Exception:
         return []
 
@@ -271,6 +287,16 @@ class Handler(BaseHTTPRequestHandler):
             if qs.get("refresh") == ["1"]:
                 RSS_CACHE = {"ts": 0.0, "items": []}
             self._json_response(True, _fetch_rss_items())
+        elif self.path.startswith("/api/rss/stats"):
+            # RSS 统计：源数量、条目总数、缓存时间、刷新间隔
+            items = _fetch_rss_items()
+            self._json_response(True, {
+                "feeds": len(FEEDS),
+                "items": len(items),
+                "cache_ts": RSS_CACHE.get("ts", 0),
+                "interval": RSS_INTERVAL,
+                "auto_bg": _auto_bg_status(),
+            })
         elif self.path.startswith("/api/fetch"):
             # URL 抓取预览：/api/fetch?url=xxx
             from urllib.parse import urlparse, parse_qs
@@ -514,7 +540,11 @@ class Handler(BaseHTTPRequestHandler):
             return []
 
     def log_message(self, format, *args):
-        sys.stderr.write(f"[webui] {args[0]} {args[1]} {args[2]}\n")
+        """稳健的请求日志：args 数量不定，避免 IndexError 崩溃。"""
+        try:
+            sys.stderr.write(f"[webui] {format % args if args else format}\n")
+        except Exception:
+            sys.stderr.write(f"[webui] {format}\n")
 
 
 if __name__ == "__main__":
@@ -522,7 +552,22 @@ if __name__ == "__main__":
     threading.Thread(target=_rss_background_refresh, daemon=True).start()
     if AUTO_BG_ENABLED:
         threading.Thread(target=_auto_background_process, daemon=True).start()
-    server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
+
+    # IPv6 双栈监听（IPv4/IPv6 均可访问，兼容 localhost 解析为 ::1 的环境）
+    class _DualStackHTTPServer(ThreadingHTTPServer):
+        address_family = socket.AF_INET6
+
+        def server_bind(self):
+            try:
+                self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+            except OSError:
+                pass
+            super().server_bind()
+
+    try:
+        server = _DualStackHTTPServer(("::", PORT), Handler)
+    except OSError:
+        server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     print(f"[mynews] Web UI 启动: http://localhost:{PORT}")
     print(f"   后台 RSS 自动刷新已启动（每 {RSS_INTERVAL} 秒）")
     print(f"   后台自动处理: {'已启动' if AUTO_BG_ENABLED else '已关闭（MYNEWS_AUTO_BG=0）'}")
