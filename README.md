@@ -53,6 +53,8 @@ cd webui && python3 server.py
 |------|------|------|
 | `MYNEWS_AUTO_BG` | `1` | 设为 `0` 关闭服务端后台自动处理 |
 | `MYNEWS_RSS_INTERVAL` | `180` | 后台拉取/处理间隔（秒），最低 30 |
+| `MYNEWS_RSS_ONLY` | `""` | 硬过滤：设为某源 URL 时只抓取该源（精确匹配） |
+| `MYNEWS_SKIP_KIMI_CHECK` | `""` | 设为 `1` 跳过 kimi 远端版本检查（离线环境提速） |
 | `OPML_PATH` | `rss_sources.opml` | RSS 源列表路径 |
 
 ## 使用方式
@@ -149,10 +151,12 @@ mynews/
 │   ├── auto_process.py       # 非交互式批量处理器
 │   ├── rss_utils.py          # RSS/网页抓取共享模块
 │   └── check_rss_health.py   # RSS 源健康检查工具
-├── tests/                    # 单元测试（python -m unittest discover -s tests）
+├── tests/                    # 单元测试（python -m unittest discover -s tests，52 用例）
 │   ├── test_rss_utils.py
 │   ├── test_process_inbox.py
-│   └── test_auto_process.py
+│   ├── test_auto_process.py
+│   ├── test_server.py
+│   └── test_check_rss_health.py
 ├── rss_sources.opml          # RSS 源列表（152 个 feed）
 ├── webui/
 │   ├── server.py             # Web UI 后端
