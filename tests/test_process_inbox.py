@@ -11,6 +11,7 @@ from unittest import mock
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"))
 
 os.environ["FLOMO_TOKEN"] = "test-token"
+os.environ["MYNEWS_SKIP_KIMI_CHECK"] = "1"  # 测试环境无 kimi CLI，跳过启动检查
 import process_inbox as pi
 
 # 标准格式示例（第一行标签 + 粗体标题 + 概念/来源）

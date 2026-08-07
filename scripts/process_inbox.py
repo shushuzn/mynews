@@ -50,8 +50,11 @@ def _check_kimi():
     找不到 → 报错退出（脚本依赖 kimi CLI）；版本过旧 → 警告不阻断。返回 kimi 二进制路径。
 
     版本检查的远端请求在网络不可用时以 2 秒快速失败；也可用环境变量
-    MYNEWS_SKIP_KIMI_CHECK=1 完全跳过网络检查（无网络/离线环境提速）。
+    MYNEWS_SKIP_KIMI_CHECK=1 完全跳过检查（含存在性检查）——用于测试/CI 等
+    不实际调用 kimi 的环境，避免 import 时因缺少 kimi CLI 而 sys.exit。
     """
+    if os.environ.get("MYNEWS_SKIP_KIMI_CHECK") == "1":
+        return None
     kimi_bin = _find_kimi_bin()
     if not kimi_bin:
         print("[error] 未找到 kimi 命令，脚本依赖 kimi CLI 才能运行。")
@@ -68,8 +71,6 @@ def _check_kimi():
             local_ver = m.group(1)
     except Exception:
         pass
-    if os.environ.get("MYNEWS_SKIP_KIMI_CHECK") == "1":
-        return kimi_bin
     # 远端版本检查（2 秒超时快速失败，离线环境不阻塞）
     latest_ver = ""
     try:
