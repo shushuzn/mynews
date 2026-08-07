@@ -2133,9 +2133,9 @@ async function autoTick() {
       const recCount = processed.length;
       setStatus(recCount > 50
         ? '自动模式：已处理记录较多（' + recCount + '条）且当前无新条目。如想重跑，请先清空已处理记录'
-        : '自动模式：所有源最新条目均已处理过，3 分钟后自动重新检查', 'done');
-      // 与服务端后台刷新间隔（默认 3 分钟）同步，自动重查
-      _autoTimer = setTimeout(autoTick, 180000 + Math.floor(Math.random() * 30000));
+        : '自动模式：所有源最新条目均已处理过，约 ' + Math.round(_serverRssInterval / 60) + ' 分钟后自动重新检查', 'done');
+      // 与服务端后台刷新间隔（MYNEWS_RSS_INTERVAL，可从 stats 接口读取）同步，自动重查
+      _autoTimer = setTimeout(autoTick, _serverRssInterval * 1000 + Math.floor(Math.random() * 30000));
       return;
     }
     // 先认领服务端标记（后台线程只读服务端 .auto_processed.json），防止竞态重复处理同一条；
@@ -2237,11 +2237,14 @@ async function refreshBgAutoState() {
     }
   } catch (e) {}
 }
+// 服务端 RSS 刷新间隔（秒），从 /api/rss/stats 读取；默认 180 兜底
+let _serverRssInterval = 180;
 async function refreshRssStats() {
   try {
     const r = await fetch('/api/rss/stats').then(r => r.json());
     const el = document.getElementById('rssStatsInfo');
     if (r.success && el) {
+      if (r.output.interval > 0) _serverRssInterval = r.output.interval;
       const cacheAge = r.output.cache_ts
         ? Math.max(0, Math.round((Date.now() / 1000 - r.output.cache_ts) / 60)) + ' 分钟前更新'
         : '未拉取';
