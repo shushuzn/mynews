@@ -7,7 +7,6 @@ import os
 import sys
 import json
 import subprocess
-import time
 import argparse
 import shutil
 import re

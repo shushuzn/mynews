@@ -5,7 +5,7 @@ mynews Web UI 服务器
 前端: http://localhost:8080
 """
 import os, sys, json, subprocess, threading, re, time, socket
-from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
@@ -16,7 +16,7 @@ PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
 
 # 共享 RSS / 网页抓取工具（scripts/rss_utils.py）
 sys.path.insert(0, str(SCRIPTS_DIR))
-from rss_utils import local_tag, parse_ts, fetch_feed_items, fetch_article_text, load_feeds
+from rss_utils import fetch_feed_items, fetch_article_text, load_feeds
 
 # 优先环境变量，其次 .env 文件
 FLOMO_TOKEN = os.environ.get("FLOMO_TOKEN")

@@ -4,13 +4,12 @@
 从 OPML RSS 源循环抓取最新条目，自动处理直到全部完成。
 用法: python auto_process.py [--limit N] [--force] [--delay S]
 """
-import os, sys, json, subprocess, time, re, tempfile, argparse, threading
+import os, sys, json, subprocess, time, argparse, threading
 from pathlib import Path
-import xml.etree.ElementTree as ET
 
 # 共享 RSS / 网页抓取工具（rss_utils.py 与 server.py 同目录/被 webui 复用）
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from rss_utils import local_tag, parse_ts, fetch_feed_items, fetch_article_text, load_feeds
+from rss_utils import fetch_feed_items, fetch_article_text, load_feeds
 
 # Windows 下禁止子进程弹出控制台窗口（避免终端闪现）
 CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
