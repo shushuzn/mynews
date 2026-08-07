@@ -146,8 +146,14 @@ mynews/
 ├── data/                     # 处理状态（reviewed_pass.json 等）
 ├── scripts/
 │   ├── process_inbox.py      # 核心处理器（全自动+手动）
-│   └── auto_process.py       # 非交互式批量处理器
-├── rss_sources.opml          # RSS 源列表（88 个 feed）
+│   ├── auto_process.py       # 非交互式批量处理器
+│   ├── rss_utils.py          # RSS/网页抓取共享模块
+│   └── check_rss_health.py   # RSS 源健康检查工具
+├── tests/                    # 单元测试（python -m unittest discover -s tests）
+│   ├── test_rss_utils.py
+│   ├── test_process_inbox.py
+│   └── test_auto_process.py
+├── rss_sources.opml          # RSS 源列表（152 个 feed）
 ├── webui/
 │   ├── server.py             # Web UI 后端
 │   └── index.html            # Web UI 前端（含夜色模式）
@@ -155,6 +161,20 @@ mynews/
 ├── struct-doc-answer/SKILL.md
 ├── .flomo_env                # flomo token（.gitignore 保护）
 └── start-webui.bat           # 一键启动 Web UI
+```
+
+### 运行测试
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+### RSS 源健康检查
+
+```bash
+python scripts/check_rss_health.py              # 全部检查，输出摘要
+python scripts/check_rss_health.py --failed-only  # 只显示失效/异常的源
+python scripts/check_rss_health.py --verbose     # 显示每个源的状态
 ```
 
 ## 技术栈
