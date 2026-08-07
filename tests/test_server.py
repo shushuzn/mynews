@@ -83,5 +83,63 @@ class TestServerHTTP(unittest.TestCase):
         self.assertIn(b"<!DOCTYPE html>", body)
 
 
+class TestFetchRssSingleFlight(unittest.TestCase):
+    """single-flight：缓存过期时并发请求只触发一次全量抓取。"""
+
+    @classmethod
+    def setUpClass(cls):
+        # 直接 import server 需要 webui 在 sys.path（现有 HTTP 测试走子进程绕开）
+        if WEBUI not in sys.path:
+            sys.path.insert(0, WEBUI)
+        # server.py 顶层用 sys.argv[1] 解析端口，unittest 会把测试名传进来；临时清理避免崩溃
+        cls._saved_argv = sys.argv[:]
+        sys.argv = [sys.argv[0]]
+        try:
+            import server as srv
+        finally:
+            sys.argv = cls._saved_argv
+        cls.srv = srv
+
+    def _reset_cache(self):
+        self.srv.RSS_CACHE["ts"] = 0.0
+        self.srv.RSS_CACHE["items"] = []
+
+    def test_concurrent_requests_share_one_fetch(self):
+        from unittest import mock
+        call_count = {"n": 0}
+        single_feed = [{"name": "A", "url": "https://a.com/feed"}]
+
+        def fake_fetch_feed_items(feed, limit=2):
+            call_count["n"] += 1
+            return [{"title": f"T{feed['url']}", "url": f"https://x.com/{feed['url']}", "source": feed["name"], "ts": 0}]
+
+        # patch _load_feeds 返回单源 + patch fetch_feed_items 计数，避免真实抓取 152 源
+        with mock.patch.object(self.srv, "_load_feeds", return_value=single_feed):
+            with mock.patch.object(self.srv, "fetch_feed_items", side_effect=fake_fetch_feed_items):
+                self._reset_cache()
+                # 并发发起 8 个请求（用线程模拟），缓存空 + force=False 走自然过期路径
+                import threading
+                results = [None] * 8
+                threads = []
+                # 用 barrier 保证线程真正同时启动，模拟"缓存刚过期瞬间"的并发
+                barrier = threading.Barrier(8)
+                for i in range(8):
+                    def _run(idx=i):
+                        try:
+                            barrier.wait(timeout=5)
+                        except Exception:
+                            pass
+                        results[idx] = self.srv._fetch_rss_items()
+                    t = threading.Thread(target=_run)
+                    threads.append(t)
+                    t.start()
+                for t in threads:
+                    t.join(timeout=30)
+        # 8 个并发请求应共享一次抓取（single-flight）
+        self.assertEqual(call_count["n"], 1)
+        for r in results:
+            self.assertEqual(len(r), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

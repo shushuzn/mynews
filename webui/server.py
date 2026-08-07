@@ -82,6 +82,8 @@ RSS_INTERVAL = max(30, int(os.environ.get("MYNEWS_RSS_INTERVAL", "180")))
 # RSS 聚合缓存（首次全量抓取，之后 RSS_INTERVAL*2 内复用）
 RSS_CACHE = {"ts": 0.0, "items": []}
 RSS_LOCK = threading.Lock()
+# 缓存过期时"正在抓取"标志（single-flight）：并发请求共享一次全量抓取，避免重复穿透
+RSS_FETCHING = threading.Lock()
 
 def _load_feeds() -> list:
     """解析 OPML，返回 [{name, url}]。优先级：MYNEWS_RSS_ONLY 硬过滤 > .rss_feeds.json 启用配置。"""
@@ -106,33 +108,52 @@ def _load_feeds() -> list:
 FEEDS = _load_feeds()
 
 def _fetch_rss_items(force: bool = False) -> list:
-    """并发抓取所有源最新条目，合并去重并打乱，带缓存（RSS_INTERVAL*2 秒）。每次刷新重读 OPML（新增源即时生效）。"""
+    """并发抓取所有源最新条目，合并去重并打乱，带缓存（RSS_INTERVAL*2 秒）。每次刷新重读 OPML（新增源即时生效）。
+
+    single-flight：缓存过期时仅首个请求执行全量抓取，其余并发请求复用其结果（RSS_FETCHING 非阻塞锁）。
+    """
     global RSS_CACHE, FEEDS
     with RSS_LOCK:
         if not force and RSS_CACHE["items"] and (time.time() - RSS_CACHE["ts"] < RSS_INTERVAL * 2):
             return RSS_CACHE["items"]
-    FEEDS = _load_feeds()  # 缓存过期时重新加载 OPML
-    if not FEEDS:
-        return []
-    results = []
-    with ThreadPoolExecutor(max_workers=8) as pool:
-        futures = {pool.submit(fetch_feed_items, f): f for f in FEEDS}
-        for fut in futures:
-            try:
-                results.extend(fut.result())
-            except Exception:
-                pass
-    # 按 URL 去重（保留首个），按发布时间倒序：最新条目优先
-    seen, merged = set(), []
-    for it in results:
-        if it["url"] not in seen:
-            seen.add(it["url"])
-            merged.append(it)
-    merged.sort(key=lambda x: x.get("ts", 0), reverse=True)
-    with RSS_LOCK:
-        RSS_CACHE = {"ts": time.time(), "items": merged}
-    print(f"[server] RSS 聚合: {len(merged)} 条（{len(FEEDS)} 源），按发布时间倒序")
-    return merged
+        cache_ts = RSS_CACHE["ts"]
+    # 尝试获得抓取权：拿不到说明已有请求正在抓取，等待其完成即可
+    if not RSS_FETCHING.acquire(blocking=False):
+        # 最多等待 RSS_INTERVAL 秒，期间缓存会被抓取线程更新
+        deadline = time.time() + RSS_INTERVAL
+        while time.time() < deadline:
+            time.sleep(0.2)
+            with RSS_LOCK:
+                if RSS_CACHE["ts"] > cache_ts and RSS_CACHE["items"]:
+                    return RSS_CACHE["items"]
+        # 超时兜底：直接返回旧缓存（可能为空）
+        with RSS_LOCK:
+            return RSS_CACHE["items"]
+    try:
+        FEEDS = _load_feeds()  # 缓存过期时重新加载 OPML
+        if not FEEDS:
+            return []
+        results = []
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            futures = {pool.submit(fetch_feed_items, f): f for f in FEEDS}
+            for fut in futures:
+                try:
+                    results.extend(fut.result())
+                except Exception:
+                    pass
+        # 按 URL 去重（保留首个），按发布时间倒序：最新条目优先
+        seen, merged = set(), []
+        for it in results:
+            if it["url"] not in seen:
+                seen.add(it["url"])
+                merged.append(it)
+        merged.sort(key=lambda x: x.get("ts", 0), reverse=True)
+        with RSS_LOCK:
+            RSS_CACHE = {"ts": time.time(), "items": merged}
+        print(f"[server] RSS 聚合: {len(merged)} 条（{len(FEEDS)} 源），按发布时间倒序")
+        return merged
+    finally:
+        RSS_FETCHING.release()
 
 
 def _rss_background_refresh():
