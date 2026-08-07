@@ -129,6 +129,18 @@ class TestServerHTTP(unittest.TestCase):
         data = json.loads(body.decode("utf-8"))
         self.assertFalse(data["success"])
 
+    def test_process_multipart_missing_boundary(self):
+        """POST /process multipart 缺 boundary 应返回错误而非崩溃。"""
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+        c.request("POST", "/process", body="x", headers={"Content-Type": "multipart/form-data"})
+        r = c.getresponse()
+        body = r.read()
+        c.close()
+        self.assertEqual(r.status, 200)
+        data = json.loads(body.decode("utf-8"))
+        self.assertFalse(data["success"])
+        self.assertIn("boundary", data["output"])
+
 
 class TestFetchRssSingleFlight(unittest.TestCase):
     """single-flight：缓存过期时并发请求只触发一次全量抓取。"""

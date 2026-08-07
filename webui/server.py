@@ -326,8 +326,15 @@ class Handler(BaseHTTPRequestHandler):
             ctype = self.headers.get("Content-Type", "")
             if "multipart/form-data" in ctype:
                 # 手动解析 multipart form data（Python 3.13 已移除 cgi 模块）
-                boundary = ctype.split("boundary=")[1].strip()
-                raw = self.rfile.read(int(self.headers.get("Content-Length", 0)))
+                if "boundary=" not in ctype:
+                    self._json_response(False, "multipart 缺少 boundary")
+                    return
+                try:
+                    boundary = ctype.split("boundary=")[1].strip()
+                    raw = self.rfile.read(int(self.headers.get("Content-Length", 0) or 0))
+                except (ValueError, TypeError):
+                    self._json_response(False, "无效的 Content-Length")
+                    return
                 parts = raw.split(b"--" + boundary.encode())
                 image_file = None
                 for part in parts:
