@@ -694,9 +694,10 @@ def process_content(args):
             if lines and lines[0].startswith('#'):
                 args.ai_content = lines[1].strip() if len(lines) > 1 else ''
         # 三段统一清洗：每段自身不能含 _ 空格 / - 全角括号等非法字符
+        # （先转空格为连字符再删连字符，等效于直接删空格，此处合并为一步删除）
         for _field in ['domain', 'subdomain', 'title']:
             val = getattr(args, _field, '') or ''
-            val = val.replace('_', '').replace(' ', '-').replace('/', '').replace('-', '').replace('（', '(').replace('）', ')')[:60]
+            val = val.replace('_', '').replace(' ', '').replace('/', '').replace('-', '').replace('（', '(').replace('）', ')')[:60]
             setattr(args, _field, val)
         # 构造标题并验证
         test_title = f"{args.domain}_{args.subdomain}_{args.title}"

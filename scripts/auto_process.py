@@ -37,6 +37,9 @@ if not FLOMO_TOKEN:
 # ---- 已处理记录 ----
 RECORD_FILE = SCRIPTS_DIR / ".auto_processed.json"
 RECORD_LOCK = threading.Lock()
+# 记录容量上限：只保留最近 PROCESSED_MAX 条 URL，防止文件无限膨胀
+# （前端 hn-processed 上限 600，这里给服务端更大的缓冲但仍有界）
+PROCESSED_MAX = 5000
 
 def load_processed():
     with RECORD_LOCK:
@@ -55,7 +58,12 @@ def save_processed(processed):
         _save_processed(processed)
 
 def _save_processed(processed):
-    RECORD_FILE.write_text(json.dumps(list(processed), ensure_ascii=False), encoding="utf-8")
+    # 容量保护：超过上限时截断到最多 PROCESSED_MAX 条，防止文件无限膨胀。
+    # 集合无序，截断不保证保留"最近"，但 mark_processed 单条追加时通常集合规模在上限内。
+    items = list(processed)
+    if len(items) > PROCESSED_MAX:
+        items = items[-PROCESSED_MAX:]
+    RECORD_FILE.write_text(json.dumps(items, ensure_ascii=False), encoding="utf-8")
 
 def mark_processed(url, processed=None):
     """原子标记已处理：读文件 → add → 写回，避免并发覆盖丢失其他线程/进程的标记。"""
