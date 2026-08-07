@@ -4,7 +4,7 @@ mynews Web UI 服务器
 启动: python3 server.py [端口]
 前端: http://localhost:8080
 """
-import os, sys, json, subprocess, urllib.parse, threading, tempfile, re, random, time, socket
+import os, sys, json, subprocess, threading, re, time, socket
 from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 import xml.etree.ElementTree as ET
@@ -253,9 +253,6 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path.startswith("/favicon"):
             self.send_response(204)
             self.end_headers()
-        elif self.path.startswith("/api/hn/newest"):
-            # HN 最新文章列表：/api/hn/newest
-            self._json_response(True, self._fetch_hn_newest())
         elif self.path.startswith("/api/auto-bg"):
             # 查询后台自动处理开关状态：/api/auto-bg
             self._json_response(True, {"enabled": _auto_bg_status()})
@@ -505,32 +502,6 @@ class Handler(BaseHTTPRequestHandler):
                 return out
         except: pass
         return ""
-
-    def _fetch_hn_newest(self) -> list:
-        """通过 Algolia HN API 获取最新文章，返回 [{title, url}]。"""
-        import urllib.request as _ur, json as _json
-        try:
-            req = _ur.Request(
-                "https://hn.algolia.com/api/v1/search_by_date?tags=story&hitsPerPage=30",
-                headers={"User-Agent": "Mozilla/5.0"}
-            )
-            with _ur.urlopen(req, timeout=30) as resp:
-                data = _json.loads(resp.read().decode("utf-8", errors="replace"))
-            items = []
-            for hit in data.get("hits", []):
-                url = (hit.get("url") or "").strip()
-                title = (hit.get("title") or "").strip()
-                if url and title:
-                    items.append({
-                        "title": title,
-                        "url": url,
-                        "id": str(hit.get("objectID") or "")
-                    })
-            print(f"[server] HN newest 抓取成功: {len(items)} 条")
-            return items[:30]
-        except Exception as e:
-            print(f"[server] HN 抓取失败: {e}")
-            return []
 
     def log_message(self, format, *args):
         # 参数数量不固定（如 send_error 只传 2 个），不能硬编码下标，否则 IndexError 导致请求线程崩溃
