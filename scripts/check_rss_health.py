@@ -16,8 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import rss_utils
-from rss_utils import _read_http, local_tag
-import xml.etree.ElementTree as ET
+from rss_utils import _read_http, local_tag, parse_feed_xml
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OPML_PATH = os.path.join(BASE_DIR, "rss_sources.opml")
@@ -32,10 +31,10 @@ def check_one(feed: dict) -> dict:
         result["elapsed"] = round(time.time() - t0, 2)
         result["size"] = len(raw)
         try:
-            root = ET.fromstring(raw.decode("utf-8", errors="replace"))
-        except ET.ParseError as e:
+            root = parse_feed_xml(raw.decode("utf-8", errors="replace"))
+        except Exception as e:
             result["status"] = "parse_error"
-            result["detail"] = str(e)[:100]
+            result["detail"] = f"{type(e).__name__}: {str(e)[:100]}"
             return result
         # 统计条目数
         n_items = sum(1 for c in root.iter() if local_tag(c.tag) in ("item", "entry"))

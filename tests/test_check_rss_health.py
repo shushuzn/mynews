@@ -60,6 +60,19 @@ class TestCheckOne(unittest.TestCase):
         self.assertEqual(r["status"], "error")
         self.assertIn("OSError", r["detail"])
 
+    # 源侧未转义的裸 &（如爱范儿 feed 的 &</image>）：应通过 parse_feed_xml 修复而非误报 parse_error
+    RSS_RAW_AMP = b"""<?xml version="1.0"?><rss version="2.0"><channel>
+      <title>Tech &amp; Science</title>
+      <image>https://a.com/logo.png&</image>
+      <item><title>a</title><link>https://a.com/1</link></item>
+    </channel></rss>"""
+
+    def test_raw_amp_not_misreported(self):
+        with mock.patch("urllib.request.urlopen", return_value=FakeResp(self.RSS_RAW_AMP)):
+            r = crh.check_one({"name": "A", "url": "https://a.com/feed"})
+        self.assertEqual(r["status"], "ok")
+        self.assertEqual(r["items"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

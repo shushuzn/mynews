@@ -87,6 +87,18 @@ def _read_http(url: str, timeout: int = 15) -> bytes:
         return raw
 
 
+def parse_feed_xml(xml: str):
+    """解析 RSS/Atom XML，返回 ElementTree 根节点；失败抛异常。
+
+    内置防御性清理：修复源侧未转义的裸 &（如 爱范儿 feed 中 &</image>），
+    否则 ET.fromstring 会因 XML 非法报错。供抓取与健康检查复用。
+    """
+    # 防御性清理：修复源侧未转义的裸 &
+    if "&" in xml:
+        xml = re.sub(r"&(?!amp;|lt;|gt;|quot;|apos;|#\d+;|#x[0-9a-fA-F]+;)", "&amp;", xml)
+    return ET.fromstring(xml)
+
+
 def fetch_feed_items(feed: dict, limit: int = 2) -> list:
     """抓取单个 RSS/Atom 源的最新条目，返回 [{title, url, source, ts}]。
 
@@ -97,10 +109,7 @@ def fetch_feed_items(feed: dict, limit: int = 2) -> list:
     """
     try:
         xml = _read_http(feed["url"], timeout=15).decode("utf-8", errors="replace")
-        # 防御性清理：修复源侧未转义的裸 &（如 爱范儿 feed 中 &</image>）
-        if "&" in xml:
-            xml = re.sub(r"&(?!amp;|lt;|gt;|quot;|apos;|#\d+;|#x[0-9a-fA-F]+;)", "&amp;", xml)
-        root = ET.fromstring(xml)
+        root = parse_feed_xml(xml)
         items = []
         for child in root.iter():
             if local_tag(child.tag) not in ("item", "entry"):
