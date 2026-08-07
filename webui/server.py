@@ -517,10 +517,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def _analyze_image(self, img_path: Path) -> str:
         """尝试用 kimi 分析图片内容，返回提取的文字。失败返回空字符串。"""
+        import shutil as _shutil
         from pathlib import Path as _P
-        kimi_bin = str(_P.home() / ".kimi-code" / "bin" / "kimi")
-        if not _P(kimi_bin).exists():
-            kimi_bin = "kimi"
+        # 优先复用 process_inbox 的查找逻辑（含常见安装目录）；失败回退 PATH 查找
+        kimi_bin = None
+        try:
+            kimi_bin = _ap()._find_kimi_bin()
+        except Exception:
+            kimi_bin = None
+        if not kimi_bin:
+            kimi_bin = _shutil.which("kimi") or str(_P.home() / ".kimi-code" / "bin" / "kimi")
         prompt = f"请分析这张图片，提取其中的文字内容（保持原文的语言）。图片路径: {img_path}"
         try:
             r = subprocess.run(
@@ -532,7 +538,8 @@ class Handler(BaseHTTPRequestHandler):
             if out and "error" not in out[:50]:
                 print(f"[server] 图片分析完成 ({len(out)} chars)")
                 return out
-        except: pass
+        except Exception as e:
+            print(f"[server] 图片分析失败: {e}")
         return ""
 
     def log_message(self, format, *args):
