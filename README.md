@@ -1,5 +1,7 @@
 # mynews
 
+[![CI](https://github.com/shushuzn/mynews/actions/workflows/test.yml/badge.svg)](https://github.com/shushuzn/mynews/actions/workflows/test.yml)
+
 AI 内容处理管道：输入正文 → 自动分析 → 生成 flomo 格式笔记 → 上传 flomo。
 
 ## 快速开始
