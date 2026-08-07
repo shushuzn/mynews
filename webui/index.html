@@ -185,11 +185,6 @@ body {
 .stat-card .sg-item:hover { background: rgba(255, 255, 255, .24); transform: translateY(-1px); }
 .stat-card .sg-num { font-size: 19px; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
 .stat-card .sg-label { font-size: 10px; opacity: .8; margin-top: 1px; }
-.tip-card {
-  background: var(--surface-2); border: 1px solid var(--separator-light); border-radius: var(--radius-md);
-  padding: 14px; font-size: 12px; color: var(--text-2); line-height: 1.7;
-}
-.tip-card .t-title { font-weight: 700; color: var(--text); font-size: 12.5px; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
 
 /* ============ Main ============ */
 .main { flex: 1; min-width: 0; }
@@ -233,20 +228,6 @@ body {
 .hero-stats .st:hover { transform: translateY(-2px); background: rgba(255, 255, 255, .26); }
 
 /* 侧栏 Hero 紧凑适配 */
-.sidebar-hero {
-  padding: 20px 18px 16px; margin-bottom: 12px; border-radius: var(--radius-lg);
-}
-.sidebar-hero::before { width: 180px; height: 180px; top: -90px; right: -60px; }
-.sidebar-hero::after { width: 90px; height: 90px; bottom: -40px; right: 40px; }
-.sidebar-hero .h-ico { width: 36px; height: 36px; border-radius: 11px; font-size: 17px; margin-bottom: 10px; }
-.sidebar-hero h2 { font-size: 19px; }
-.sidebar-hero p { font-size: 12px; line-height: 1.7; }
-.sidebar-hero .hero-stats { gap: 6px; margin-top: 12px; }
-.sidebar-hero .hero-stats .st { font-size: 10.5px; padding: 4px 10px; gap: 4px; }
-.sidebar-hero .h-spark.s1 { right: 20%; }
-.sidebar-hero .h-spark.s2 { right: 34%; }
-.sidebar-hero .h-spark.s3 { right: 10%; }
-
 .card {
   background: var(--surface); border-radius: var(--radius-lg);
   border: 1px solid var(--separator-light); padding: 20px; margin-bottom: 18px;
@@ -947,43 +928,46 @@ textarea:focus, input[type="text"]:focus {
   </div>
 </div>
 
+<!-- RSS 源管理弹层 -->
+<div class="shortcut-overlay" id="feedsOverlay" onclick="if(event.target===this)hideFeeds()">
+  <div class="shortcut-panel" style="width:min(560px,92vw)">
+    <h3>📡 RSS 源管理</h3>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+      <input id="feedSearch" placeholder="🔍 搜索源名称/域名…" oninput="renderFeedList()"
+        style="flex:1;min-width:160px;padding:8px 12px;border-radius:8px;border:1px solid var(--separator-light);background:var(--surface-2);color:var(--text);font-size:12.5px;outline:none">
+      <button class="rf-btn" id="feedToggleAll" onclick="toggleAllFeeds()">全部禁用</button>
+      <span style="font-size:11.5px;color:var(--text-3)" id="feedCountLabel"></span>
+    </div>
+    <div id="feedList" style="max-height:52vh;overflow-y:auto;padding-right:4px;display:flex;flex-direction:column;gap:6px">
+      <div class="recent-empty">加载中…</div>
+    </div>
+    <button class="sc-close" onclick="hideFeeds()">关闭</button>
+  </div>
+</div>
+
 <!-- 侧栏弹层（菜单 / 概览） -->
 <div class="shortcut-overlay" id="sidebarOverlay" onclick="if(event.target===this)hideSidebar()">
   <div class="shortcut-panel sidebar-panel">
-    <h3>☰ 菜单</h3>
-    <div class="hero sidebar-hero">
-      <div class="h-ico">✦</div>
-      <span class="h-spark s1"></span>
-      <span class="h-spark s2"></span>
-      <span class="h-spark s3"></span>
-      <span style="position:absolute;top:14px;right:16px;font-size:11px;font-weight:700;color:rgba(255,255,255,.9);background:rgba(255,255,255,.18);padding:4px 11px;border-radius:999px;backdrop-filter:blur(8px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.22);font-variant-numeric:tabular-nums" id="heroDate"></span>
-      <h2>我的知识库</h2>
-      <p id="heroSub">粘贴文章、URL 或图片，AI 自动分析内容、查重去重，沉淀为 flomo 结构化笔记。</p>
-      <div class="hero-stats">
-        <span class="st">🤖 AI 自动分析</span>
-        <span class="st">📡 RSS 聚合</span>
-        <span class="st">⚡ 自动处理</span>
-        <span class="st" id="heroToday">📈 今日 0 条</span>
+    <div style="display:flex;align-items:center;gap:10px;padding:2px 2px 4px">
+      <div style="width:34px;height:34px;border-radius:10px;background:var(--grad-hero);color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">✦</div>
+      <div style="min-width:0">
+        <div style="font-size:15px;font-weight:800;color:var(--text);line-height:1.2">mynews</div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:1px" id="sidebarDate"></div>
       </div>
     </div>
     <div class="nav">
       <button class="nav-item active" onclick="goNewNote()"><span class="n-ico">📝</span> 新建笔记</button>
       <button class="nav-item" onclick="toggleAuto();hideSidebar()"><span class="n-ico">⚡</span> 自动处理 <span class="n-badge" id="navAutoState">关</span></button>
       <button class="nav-item" onclick="showRecent()"><span class="n-ico">🕘</span> 最近处理 <span class="n-badge" id="navRecentCount">0</span></button>
+      <button class="nav-item" onclick="showFeedManager()"><span class="n-ico">📡</span> RSS 源 <span class="n-badge" id="navFeedCount">–</span></button>
       <button class="nav-item" onclick="showSettings()"><span class="n-ico">⚙️</span> 设置</button>
     </div>
     <div class="stat-card">
       <div class="sc-label">📊 统计概览</div>
-      <div class="stat-grid">
+      <div class="stat-grid" style="grid-template-columns:1fr 1fr">
         <div class="sg-item"><div class="sg-num" id="statToday">0</div><div class="sg-label">今日</div></div>
-        <div class="sg-item"><div class="sg-num" id="statWeek">0</div><div class="sg-label">本周</div></div>
         <div class="sg-item"><div class="sg-num" id="statTotal">0</div><div class="sg-label">累计</div></div>
-        <div class="sg-item"><div class="sg-num" id="statStreak">1</div><div class="sg-label">连续天数</div></div>
       </div>
-    </div>
-    <div class="tip-card">
-      <div class="t-title" id="tipTitle">💡 使用提示</div>
-      <div id="tipBody">支持正文、URL、图片三种输入；AI 自动分类并查重，相同主题会合并或跳过。</div>
     </div>
     <button class="sc-close" onclick="hideSidebar()">关闭</button>
   </div>
@@ -1005,6 +989,89 @@ function showRecent() {
   hideSidebar();
   renderRecent();
   document.getElementById('recentOverlay').classList.add('show');
+}
+
+/* ============ RSS 源管理 ============ */
+let _feedData = { feeds: [], total: 0, enabled_count: 0 };
+async function showFeedManager() {
+  hideSidebar();
+  document.getElementById('feedsOverlay').classList.add('show');
+  document.getElementById('feedSearch').value = '';
+  await refreshFeedList();
+}
+function hideFeeds() { document.getElementById('feedsOverlay').classList.remove('show'); }
+async function refreshFeedList() {
+  try {
+    const r = await fetch('/api/rss/feeds').then(res => res.json());
+    if (r.success && r.output) {
+      _feedData = r.output;
+      updateFeedBadge();
+      renderFeedList();
+    }
+  } catch (e) {
+    document.getElementById('feedList').innerHTML = '<div class="recent-empty">加载失败：' + e.message + '</div>';
+  }
+}
+function updateFeedBadge() {
+  const b = document.getElementById('navFeedCount');
+  if (b) b.textContent = _feedData.enabled_count + '/' + _feedData.total;
+  const lbl = document.getElementById('feedCountLabel');
+  if (lbl) lbl.textContent = '已启用 ' + _feedData.enabled_count + ' / ' + _feedData.total;
+  const ta = document.getElementById('feedToggleAll');
+  if (ta) ta.textContent = _feedData.enabled_count > 0 ? '全部禁用' : '全部启用';
+}
+function renderFeedList() {
+  const q = (document.getElementById('feedSearch').value || '').trim().toLowerCase();
+  const wrap = document.getElementById('feedList');
+  const list = _feedData.feeds.filter(f =>
+    !q || (f.name || '').toLowerCase().includes(q) || (f.url || '').toLowerCase().includes(q)
+  );
+  if (!list.length) {
+    wrap.innerHTML = '<div class="recent-empty">没有匹配的 RSS 源</div>';
+    return;
+  }
+  wrap.innerHTML = list.map(f => `
+    <label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;border:1px solid var(--separator-light);background:var(--surface-2);cursor:pointer;opacity:${f.enabled ? 1 : .55};transition:opacity .2s">
+      <input type="checkbox" ${f.enabled ? 'checked' : ''} ${f.hard_locked ? 'disabled' : ''}
+        onchange="toggleFeed('${f.url.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', this.checked)" style="accent-color:var(--blue);width:15px;height:15px;flex-shrink:0">
+      <div style="min-width:0">
+        <div style="font-size:12.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.name || ''}</div>
+        <div style="font-size:10.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.url || ''}</div>
+      </div>
+      ${f.hard_locked ? '<span style="margin-left:auto;font-size:10px;color:var(--text-3)">受 MYNEWS_RSS_ONLY 限制</span>' : ''}
+    </label>`).join('');
+}
+async function toggleFeed(url, enabled) {
+  try {
+    const r = await fetch('/api/rss/feeds/toggle', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, enabled })
+    }).then(res => res.json());
+    if (r.success && r.output && r.output.feeds) {
+      _feedData = r.output.feeds;
+      updateFeedBadge();
+      renderFeedList();
+    } else {
+      refreshFeedList();
+    }
+  } catch (e) {
+    refreshFeedList();
+  }
+}
+async function toggleAllFeeds() {
+  const target = _feedData.enabled_count > 0 ? false : true;
+  try {
+    for (const f of _feedData.feeds) {
+      if (f.hard_locked || f.enabled === target) continue;
+      await fetch('/api/rss/feeds/toggle', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: f.url, enabled: target })
+      });
+    }
+    await refreshFeedList();
+  } catch (e) {
+    refreshFeedList();
+  }
 }
 function syncThemeBtns() {
   const t = localStorage.getItem('mynews-theme') || 'light';
@@ -1713,20 +1780,15 @@ function renderStats() {
   const list = getRecords();
   const now = new Date();
   const today = now.toDateString();
-  let todayN = 0, weekN = 0;
-  const weekStart = now.getTime() - (now.getDay() || 7) * 86400000;
+  let todayN = 0;
   for (const r of list) {
     const d = new Date(r.time);
     if (d.toDateString() === today) todayN++;
-    if (d.getTime() >= weekStart) weekN++;
   }
   animateNum(document.getElementById('statToday'), todayN);
-  document.getElementById('heroToday').textContent = '📈 今日 ' + todayN + ' 条';
   const navCount = document.getElementById('navRecentCount');
   if (navCount) navCount.textContent = list.length;
-  animateNum(document.getElementById('statWeek'), weekN);
   animateNum(document.getElementById('statTotal'), list.length);
-  renderStreak();
 }
 function goNewNote() {
   hideSidebar();
@@ -1735,19 +1797,6 @@ function goNewNote() {
     const c = document.getElementById('content');
     if (!c.disabled) c.focus();
   }, 350);
-}
-function renderStreak() {
-  const KEY = 'mynews-first-day';
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  let first = localStorage.getItem(KEY);
-  let days = 1;
-  if (first) {
-    const f = new Date(first); f.setHours(0, 0, 0, 0);
-    days = Math.max(1, Math.round((today - f) / 86400000) + 1);
-  } else {
-    localStorage.setItem(KEY, today.toISOString());
-  }
-  document.getElementById('statStreak').textContent = days;
 }
 function animateNum(el, target) {
   const start = parseInt(el.textContent.replace(/,/g, ''), 10) || 0;
@@ -2027,6 +2076,15 @@ async function autoTick() {
       _autoTimer = setTimeout(autoTick, 180000 + Math.floor(Math.random() * 30000));
       return;
     }
+    // 先认领服务端标记（后台线程只读服务端 .auto_processed.json），防止竞态重复处理同一条；
+    // 本地 localStorage 保持原语义不变（预检失败仍可重试）
+    try {
+      await fetch('/api/mark-processed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: next.url })
+      });
+    } catch (e) {}
     // 预检抓取：内容为空/被拦截/超时 → 直接标记跳过，不提交 AI
     setStatus('🔁 预检 [' + (next.source || '未知源') + ']：' + (next.title || next.url).slice(0, 40) + '…', 'running');
     _abortCtrl = new AbortController();
@@ -2288,6 +2346,13 @@ refreshRssStats();
 moveSegSlider('text');
 restoreDraft();
 loadRss();
+// 加载 RSS 源启用状态到侧边栏徽章（失败静默，不影响页面）
+fetch('/api/rss/feeds').then(r => r.json()).then(r => {
+  if (r.success && r.output) {
+    _feedData = r.output;
+    updateFeedBadge();
+  }
+}).catch(() => {});
 // 桌面端首屏自动聚焦正文（移动端避免弹出键盘）
 if (!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches)) {
   setTimeout(() => {
@@ -2309,26 +2374,11 @@ if (!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches)) {
 function updateDateBadge() {
   const now = new Date();
   const week = ['日','一','二','三','四','五','六'][now.getDay()];
-  document.getElementById('heroDate').textContent = (now.getMonth()+1) + '月' + now.getDate() + '日 · 周' + week;
-  const h = now.getHours();
-  const greet = h < 6 ? '夜深了' : h < 9 ? '早上好' : h < 12 ? '上午好' : h < 14 ? '中午好' : h < 18 ? '下午好' : '晚上好';
-  document.getElementById('heroSub').textContent = greet + '！粘贴文章、URL 或图片，AI 自动分析内容、查重去重，沉淀为 flomo 结构化笔记。';
+  const badge = document.getElementById('sidebarDate');
+  if (badge) badge.textContent = (now.getMonth()+1) + '月' + now.getDate() + '日 · 周' + week;
 }
 (function() {
   updateDateBadge();
-
-  // 提示轮换
-  const tips = [
-    ['💡 使用提示', '支持正文、URL、图片三种输入；AI 自动分类并查重，相同主题会合并或跳过。'],
-    ['⚡ 自动处理', '点击右上角闪电按钮，自动循环处理全部 RSS 源的最新未处理链接。'],
-    ['⌨️ 快捷操作', 'Ctrl+Enter 快速提交；正文与 URL 输入框按 Enter 也可提交。'],
-    ['🏷️ 标签规则', '首位为信号类型：#知识基座 / #趋势信号 / #信号笔记 / #分析框架 / #知识载体。'],
-    ['🔍 查重机制', 'relevance ≥ 0.9 时 AI 判定：假阳性新建、有增量合并、零增量跳过。'],
-    ['📝 格式要求', '允许加粗、<mark>高亮</mark>、列表；禁止标题、链接、表格、引用。']
-  ];
-  const tip = tips[Math.floor(Math.random() * tips.length)];
-  document.getElementById('tipTitle').textContent = tip[0];
-  document.getElementById('tipBody').textContent = tip[1];
 
   // 跨午夜自动刷新日期与统计
   let _lastDate = new Date().toDateString();

@@ -123,13 +123,30 @@ def fetch_all_rss_items(limit_per_feed=3):
     except Exception as e:
         print(f"[error] OPML 解析失败: {e}")
         return []
+    # 启用配置：scripts/.rss_feeds.json（{"url": bool}，缺省启用），与 Web UI 共用
+    prefs = {}
+    prefs_file = SCRIPTS_DIR / ".rss_feeds.json"
+    try:
+        if prefs_file.exists():
+            prefs = json.loads(prefs_file.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    # 可选过滤：MYNEWS_RSS_ONLY="https://hnrss.org/newest" 时只抓取该源（精确匹配，不含关键词变体）
+    only_filter = os.environ.get("MYNEWS_RSS_ONLY", "").strip()
     feeds = []
+    disabled = []
     for o in root.iter("outline"):
         url = (o.get("xmlUrl") or "").strip()
         name = (o.get("text") or o.get("title") or "").strip()
-        if url:
-            feeds.append({"name": name or url, "url": url})
-    print(f"[rss] 共 {len(feeds)} 个 RSS 源，并发抓取中...")
+        if not url:
+            continue
+        if only_filter and url != only_filter:
+            continue
+        if not prefs.get(url, True):
+            disabled.append(name or url)
+            continue
+        feeds.append({"name": name or url, "url": url})
+    print(f"[rss] 共 {len(feeds)} 个 RSS 源（过滤: {'无' if not only_filter else only_filter}，禁用: {len(disabled)}），并发抓取中...")
     from concurrent.futures import ThreadPoolExecutor, as_completed
     all_items = []
     with ThreadPoolExecutor(max_workers=16) as pool:
