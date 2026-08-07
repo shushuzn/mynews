@@ -43,15 +43,16 @@ def load_feeds(opml_path, prefs_path=None, only_filter=""):
     import json as _json
     try:
         if not _os.path.exists(str(opml_path)):
-            return []
+            return [], [], (only_filter or "").strip()
         root = ET.parse(str(opml_path)).getroot()
     except Exception:
-        return []
+        return [], [], (only_filter or "").strip()
     prefs = {}
     if prefs_path is not None:
         try:
             if _os.path.exists(str(prefs_path)):
-                prefs = _json.loads(open(str(prefs_path), encoding="utf-8").read())
+                with open(str(prefs_path), encoding="utf-8") as f:
+                    prefs = _json.loads(f.read())
         except Exception:
             pass
     only_filter = (only_filter or "").strip()

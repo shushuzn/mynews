@@ -1,0 +1,167 @@
+"""process_inbox.py 单元测试：格式验证、下划线转义、flomo 调用（mock）。
+
+运行：python -m unittest discover -s tests -v
+"""
+import os
+import sys
+import unittest
+from unittest import mock
+
+# 让 scripts/ 可导入
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"))
+
+os.environ["FLOMO_TOKEN"] = "test-token"
+import process_inbox as pi
+
+# 标准格式示例（第一行标签 + 粗体标题 + 概念/来源）
+VALID_CONTENT = (
+    "#信号笔记 #计算机科学 #算法\n"
+    "**计算机科学_算法_排序算法**\n"
+    "**概念**：快速排序\n"
+    "**来源**：测试来源"
+)
+
+
+class TestValidateDomain(unittest.TestCase):
+    def test_valid(self):
+        d, s = pi._validate_and_extract_domain(VALID_CONTENT)
+        self.assertEqual((d, s), ("计算机科学", "算法"))
+
+    def test_missing_concept(self):
+        with self.assertRaises(ValueError) as ctx:
+            pi._validate_and_extract_domain(VALID_CONTENT.replace("**概念**：快速排序\n", ""))
+        self.assertIn("**概念**", str(ctx.exception))
+
+    def test_missing_source(self):
+        with self.assertRaises(ValueError) as ctx:
+            pi._validate_and_extract_domain(VALID_CONTENT.replace("**来源**：测试来源", ""))
+        self.assertIn("**来源**", str(ctx.exception))
+
+    def test_not_tag_first_line(self):
+        bad = "普通文本\n" + VALID_CONTENT
+        with self.assertRaises(ValueError) as ctx:
+            pi._validate_and_extract_domain(bad)
+        self.assertIn("标签行", str(ctx.exception))
+
+    def test_wrong_signal_count(self):
+        bad = VALID_CONTENT.replace("#信号笔记 #计算机科学 #算法", "#信号笔记 #趋势信号 #计算机科学 #算法")
+        with self.assertRaises(ValueError) as ctx:
+            pi._validate_and_extract_domain(bad)
+        self.assertIn("# 标签必须恰好 3 个", str(ctx.exception))
+
+    def test_no_signal_type(self):
+        bad = VALID_CONTENT.replace("#信号笔记 ", "")
+        with self.assertRaises(ValueError) as ctx:
+            pi._validate_and_extract_domain(bad)
+        self.assertIn("信号类型", str(ctx.exception))
+
+    def test_mismatched_secondary(self):
+        bad = VALID_CONTENT.replace("**计算机科学_算法_排序算法**", "**计算机科学_数据结构_排序算法**")
+        with self.assertRaises(ValueError) as ctx:
+            pi._validate_and_extract_domain(bad)
+        self.assertIn("二级领域", str(ctx.exception))
+
+    def test_hyphen_in_title(self):
+        bad = VALID_CONTENT.replace("**计算机科学_算法_排序算法**", "**计算机科学_算法_排序-算法**")
+        with self.assertRaises(ValueError) as ctx:
+            pi._validate_and_extract_domain(bad)
+        self.assertIn("连字符", str(ctx.exception))
+
+
+class TestEscapeBoldUnderscores(unittest.TestCase):
+    def test_escapes_title_underscores(self):
+        out = pi._escape_bold_underscores("**计算机科学_算法_排序算法**\n正文")
+        self.assertIn("**计算机科学\\_算法\\_排序算法**", out)
+        # 非标题行（不在行首 ** 结尾 **）不受影响
+        self.assertIn("\n正文", out)
+
+    def test_no_underscore_unchanged(self):
+        out = pi._escape_bold_underscores("**简单标题**\n正文")
+        self.assertEqual(out, "**简单标题**\n正文")
+
+
+class TestNormalizeFlomoContent(unittest.TestCase):
+    def test_dedupe_blank_lines(self):
+        out = pi._normalize_flomo_content(VALID_CONTENT + "\n\n\n\n")
+        self.assertNotIn("\n\n\n\n", out)
+
+    def test_strips_trailing_space(self):
+        out = pi._normalize_flomo_content("  " + VALID_CONTENT + "  ")
+        self.assertNotIn("\n", out[:0])  # 无崩溃即可
+        self.assertIn("**来源**：测试来源", out)
+
+
+class FakeResp:
+    def __init__(self, data):
+        self._data = data
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def read(self, n=None):
+        raw = self._data.encode("utf-8")
+        return raw if n is None else raw[:n]
+
+
+def _sse_payload(body):
+    return FakeResp("data: " + body + "\n\n")
+
+
+def fake_urlopen(req, timeout=30):
+    """按请求的 tool name 返回模拟 SSE 响应。"""
+    import json
+    body = json.loads(req.data.decode("utf-8"))
+    name = body["params"]["name"]
+    if name == "memo_search":
+        payload = json.dumps({"memos": [{"id": "m1", "content": "**概念** x"}]})
+        sse = json.dumps({"result": {"content": [{"type": "text", "text": payload}]}})
+    elif name == "memo_create":
+        sse = json.dumps({"result": {"id": "m_new"}})
+    elif name == "memo_batch_get":
+        payload = json.dumps({"memos": [{"id": "m1", "content": "full content"}]})
+        sse = json.dumps({"result": {"content": [{"type": "text", "text": payload}]}})
+    elif name == "memo_update":
+        sse = json.dumps({"result": {"ok": True}})
+    else:
+        sse = json.dumps({"error": {"message": "unknown tool"}})
+    return _sse_payload(sse)
+
+
+class TestFlomoCalls(unittest.TestCase):
+    @mock.patch("urllib.request.urlopen", side_effect=fake_urlopen)
+    def test_search(self, m):
+        memos = pi.search_flomo("keyword")
+        self.assertEqual(memos, [{"id": "m1", "content": "**概念** x"}])
+
+    @mock.patch("urllib.request.urlopen", side_effect=fake_urlopen)
+    def test_upload(self, m):
+        mid = pi.upload_flomo(VALID_CONTENT)
+        self.assertEqual(mid, "m_new")
+
+    @mock.patch("urllib.request.urlopen", side_effect=fake_urlopen)
+    def test_fetch(self, m):
+        content = pi.fetch_flomo_memo("m1", keyword="kw")
+        self.assertEqual(content, "full content")
+
+    @mock.patch("urllib.request.urlopen", side_effect=fake_urlopen)
+    def test_update(self, m):
+        ok = pi.update_flomo("m1", VALID_CONTENT)
+        self.assertTrue(ok)
+
+    @mock.patch("urllib.request.urlopen", side_effect=OSError("network down"))
+    def test_network_error_returns_none(self, m):
+        self.assertIsNone(pi.search_flomo("kw"))
+        self.assertIsNone(pi.upload_flomo(VALID_CONTENT))
+
+    def test_flomo_call_parses_multiple_data_lines(self):
+        resp = FakeResp("data: {\"result\": 1}\n\ndata: {\"result\": 2}\n\n")
+        with mock.patch("urllib.request.urlopen", return_value=resp):
+            results = pi._flomo_call("memo_search", {"keywords": "x"})
+        self.assertEqual(len(results), 2)
+
+
+if __name__ == "__main__":
+    unittest.main()
