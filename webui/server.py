@@ -413,11 +413,14 @@ class Handler(BaseHTTPRequestHandler):
                 if _ap_available():
                     _ap().mark_processed(url)
                 else:
-                    # 退化路径：直接写文件（尽力而为）
+                    # 退化路径：直接写文件（尽力而为；容量上限从 auto_process 常量取，避免两处维护不一致）
                     rec_file = SCRIPTS_DIR / ".auto_processed.json"
                     urls = json.loads(rec_file.read_text(encoding="utf-8")) if rec_file.exists() else []
                     if url not in urls:
                         urls.append(url)
+                    max_records = getattr(_ap(), "PROCESSED_MAX", 5000)
+                    if len(urls) > max_records:
+                        urls = urls[-max_records:]
                     rec_file.write_text(json.dumps(urls, ensure_ascii=False), encoding="utf-8")
                 self._json_response(True, "已记录")
             except Exception as e:
