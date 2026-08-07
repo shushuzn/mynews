@@ -32,6 +32,9 @@ import re
 import os
 from pathlib import Path
 
+# Windows 下禁止子进程弹出控制台窗口（避免终端闪现）
+CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+
 ALLOWED_ROOT_FILES = {
     "README.md", "SKILL.md", "AGENTS.md", "ROADMAP.md", "_sidebar.md",
     "_welcome.md", "P0Audit.md", "setup_hooks.sh", ".gitignore"
@@ -218,7 +221,7 @@ def check_similar_titles(decoded_file, filename):
         result = subprocess.run(
             ["git", "-c", "core.quotePath=false", "ls-files",
              f"answers/{domain}/{subdomain}/"],
-            capture_output=True, text=True, encoding="utf-8"
+            capture_output=True, text=True, encoding="utf-8", creationflags=CREATE_NO_WINDOW
         )
         if result.returncode != 0:
             return []
@@ -254,14 +257,14 @@ def get_staged_files(use_head=True):
         result = subprocess.run(
             ["git", "-c", "core.quotePath=false", "diff-index",
              "--cached", "--name-only", "--diff-filter=AM", "HEAD"],
-            capture_output=True, text=True, encoding="utf-8"
+            capture_output=True, text=True, encoding="utf-8", creationflags=CREATE_NO_WINDOW
         )
         return [f for f in result.stdout.split("\n") if f.strip()]
     else:
         # --staged mode without HEAD: use git status --porcelain -z (null-terminated, no quoting issues)
         result = subprocess.run(
             ["git", "status", "--porcelain", "-z"],
-            capture_output=True, text=True, encoding="utf-8"
+            capture_output=True, text=True, encoding="utf-8", creationflags=CREATE_NO_WINDOW
         )
         if not result.stdout:
             return []
@@ -336,7 +339,7 @@ def main():
             try:
                 content_result = subprocess.run(
                     ["git", "show", f":{file}"],
-                    capture_output=True, text=True, encoding="utf-8"
+                    capture_output=True, text=True, encoding="utf-8", creationflags=CREATE_NO_WINDOW
                 )
                 if content_result.returncode == 0:
                     content_errors = validate_content(content_result.stdout, filename)

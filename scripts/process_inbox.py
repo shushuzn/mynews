@@ -19,6 +19,9 @@ import io
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
+# Windows 下禁止子进程弹出控制台窗口（避免终端闪现）
+CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0
+
 
 def get_base_dir() -> Path:
     """返回项目根目录（scripts/ 的父目录）。"""
@@ -49,7 +52,7 @@ def _check_kimi():
     # 版本检查：本地 kimi --version ↔ 远端 latest，仅提示不阻断
     local_ver = ""
     try:
-        r = subprocess.run([kimi_bin, "--version"], capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=10)
+        r = subprocess.run([kimi_bin, "--version"], capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=10, creationflags=CREATE_NO_WINDOW)
         raw_ver = (r.stdout or r.stderr or "").strip()
         m = re.search(r"(\d+\.\d+\.\d+)", raw_ver)
         if m:
@@ -482,7 +485,8 @@ def _call_kimi(prompt: str, timeout: int = 180) -> str:
     try:
         r = _sp.run(
             [kimi_bin, "-p", prompt],
-            capture_output=True, text=True, encoding='utf-8', timeout=timeout
+            capture_output=True, text=True, encoding='utf-8', timeout=timeout,
+            creationflags=getattr(_sp, "CREATE_NO_WINDOW", 0) if _os.name == "nt" else 0
         )
         raw = r.stdout.strip() or r.stderr.strip() or ""
         # 过滤掉 "To resume this session: ..." 行和 v0.31 的 "• " 项目符号前缀
@@ -770,15 +774,15 @@ def process_content(args):
 
     # 6. 用 hook --staged 验证
     print("  [hook] 验证格式...")
-    subprocess.run(["git", "add", "-f", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR))
+    subprocess.run(["git", "add", "-f", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR), creationflags=CREATE_NO_WINDOW)
     hook_result = subprocess.run(
         [PYTHON_BIN, str(BASE_DIR / "hooks" / "pre-commit"), "--staged"],
         cwd=str(BASE_DIR),
-        capture_output=True, text=True
+        capture_output=True, text=True, creationflags=CREATE_NO_WINDOW
     )
     if hook_result.returncode != 0:
         print(f"  [error] 格式验证失败:\n{hook_result.stdout}")
-        subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR))
+        subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR), creationflags=CREATE_NO_WINDOW)
         # 保留文件让用户修正
         print(f"  [file] 文件保留在: {full_path}")
         return False
@@ -852,7 +856,7 @@ def process_content(args):
                             for _line in update_content.split('\n'):
                                 print(f"  | {_line}")
                             print(f"  [error] 无法自动更新，旧笔记 id={old_id} 保持不变")
-                            subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR))
+                            subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR), creationflags=CREATE_NO_WINDOW)
                             if full_path.exists(): full_path.unlink()
                             return False
                         # 确保 **概念**： 存在，否则回退到用新内容构造
@@ -878,12 +882,12 @@ def process_content(args):
                             print(f"  [auto] 更新失败")
                     else:
                         print(f"  [auto] 合并失败，跳过")
-                    subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR), capture_output=True)
+                    subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR), capture_output=True, creationflags=CREATE_NO_WINDOW)
                     if full_path.exists(): full_path.unlink()
                     return True
                 else:
                     print("  [auto] AI 决定：无增量 → 跳过")
-                    subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR), capture_output=True)
+                    subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR), capture_output=True, creationflags=CREATE_NO_WINDOW)
                     if full_path.exists(): full_path.unlink()
                     return True
             else:
@@ -896,7 +900,7 @@ def process_content(args):
     if flomo_id:
         print(f"  [flomo] 上传成功 id={flomo_id}")
         # 清理
-        subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR))
+        subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR), creationflags=CREATE_NO_WINDOW)
         full_path.unlink()
         print(f"  [cleanup] 已删除本地文件")
     else:

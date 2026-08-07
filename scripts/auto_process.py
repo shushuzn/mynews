@@ -8,6 +8,9 @@ import os, sys, json, subprocess, time, re, tempfile, argparse, threading
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
+# Windows 下禁止子进程弹出控制台窗口（避免终端闪现）
+CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+
 # ---- 路径配置 ----
 BASE_DIR = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = BASE_DIR / "scripts"
@@ -178,7 +181,7 @@ def process_article(content, url):
     cmd = [sys.executable, str(PROCESSOR), "--content", content, "--auto"]
     try:
         r = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace",
-                          timeout=600, env=env, cwd=str(SCRIPTS_DIR))
+                          timeout=600, env=env, cwd=str(SCRIPTS_DIR), creationflags=CREATE_NO_WINDOW)
         out = (r.stdout or "") + ("\n--- stderr ---\n" + r.stderr if r.stderr else "")
         success = any(k in out for k in ("上传成功", "更新成功", "处理完成", "无增量 → 跳过"))
         return success, out

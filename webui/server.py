@@ -423,7 +423,8 @@ class Handler(BaseHTTPRequestHandler):
 
         try:
             r = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace',
-                               timeout=600, env=env, cwd=str(SCRIPTS_DIR))
+                               timeout=600, env=env, cwd=str(SCRIPTS_DIR),
+                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0)
             full_output = r.stdout or ""
             if r.stderr:
                 full_output += "\n--- stderr ---\n" + r.stderr
@@ -476,7 +477,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             r = subprocess.run(
                 [kimi_bin, "-p", prompt, "--output-format", "text"],
-                capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=60
+                capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=60,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
             )
             out = (r.stdout or r.stderr or "").strip()
             if out and "error" not in out[:50]:
