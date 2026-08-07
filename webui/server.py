@@ -402,6 +402,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", mime)
         self.send_header("Access-Control-Allow-Origin", "*")
+        # HTML 每次重新验证（no-cache），前端新版本发布后能及时生效
+        self.send_header("Cache-Control", "no-cache")
         self.end_headers()
         self.wfile.write(path.read_bytes())
 
@@ -458,6 +460,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Access-Control-Allow-Origin", "*")
+        # 动态 API 响应禁止缓存（浏览器/代理缓存会卡住旧数据）
+        self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(json.dumps({"success": success, "output": output}, ensure_ascii=False).encode("utf-8"))
 
