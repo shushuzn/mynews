@@ -228,7 +228,7 @@ def _auto_background_process():
                 if err or not content:
                     print(f"  [auto] 抓取失败，标记跳过: {err or '空内容'} | {it['title'][:40]}")
                     continue
-                ok, out = ap.process_article(content, it["url"])
+                ok, out = ap.process_article(content)
                 done += 1
                 print(f"  [auto] {'成功' if ok else '失败'}: {it['title'][:40]}")
             print(f"[auto] 后台处理完成: {done} 条新条目")
@@ -432,31 +432,9 @@ class Handler(BaseHTTPRequestHandler):
             self._json_response(False, "请提供正文内容、URL 或图片")
             return
 
-        # 构建命令
-        cmd = [
-            sys.executable, str(SCRIPTS_DIR / "process_inbox.py"),
-            "--content", content,
-            "--auto"
-        ]
-
-        env = os.environ.copy()
-        if FLOMO_TOKEN:
-            env["FLOMO_TOKEN"] = FLOMO_TOKEN
-
-        try:
-            r = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace',
-                               timeout=600, env=env, cwd=str(SCRIPTS_DIR),
-                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0)
-            full_output = r.stdout or ""
-            if r.stderr:
-                full_output += "\n--- stderr ---\n" + r.stderr
-
-            success = "上传成功" in full_output or "更新成功" in full_output or "处理完成" in full_output or "无增量 → 跳过" in full_output
-            self._json_response(success, full_output)
-        except subprocess.TimeoutExpired:
-            self._json_response(False, "处理超时（>10分钟）")
-        except Exception as e:
-            self._json_response(False, f"执行错误: {e}")
+        # 复用 auto_process 的处理逻辑（调用 process_inbox.py 子进程）
+        success, full_output = ap.process_article(content)
+        self._json_response(success, full_output)
 
     def _json_response(self, success, output):
         self.send_response(200)

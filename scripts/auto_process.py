@@ -116,7 +116,8 @@ def fetch_article(url, timeout=15):
     return result, err
 
 # ---- 运行处理 ----
-def process_article(content, url):
+def process_article(content):
+    """调用 process_inbox.py 处理单条内容，返回 (success, output)。"""
     env = os.environ.copy()
     env["FLOMO_TOKEN"] = FLOMO_TOKEN
     cmd = [sys.executable, str(PROCESSOR), "--content", content, "--auto"]
@@ -162,7 +163,7 @@ def main():
             fail += 1
             continue
 
-        ok, out = process_article(content, url)
+        ok, out = process_article(content)
         total += 1
         if ok:
             success += 1
