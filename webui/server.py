@@ -4,8 +4,7 @@ mynews Web UI 服务器
 启动: python3 server.py [端口]
 前端: http://localhost:8080
 """
-import os, sys, json, subprocess, urllib.parse, threading, tempfile, re, random, time, datetime, socket
-from email.utils import parsedate_to_datetime
+import os, sys, json, subprocess, urllib.parse, threading, tempfile, re, random, time, socket
 from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 import xml.etree.ElementTree as ET
@@ -14,6 +13,10 @@ from concurrent.futures import ThreadPoolExecutor
 BASE_DIR = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = BASE_DIR / "scripts"
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
+
+# 共享 RSS / 网页抓取工具（scripts/rss_utils.py）
+sys.path.insert(0, str(SCRIPTS_DIR))
+from rss_utils import local_tag, parse_ts, fetch_feed_items, fetch_article_text
 
 # 优先环境变量，其次 .env 文件
 FLOMO_TOKEN = os.environ.get("FLOMO_TOKEN")
@@ -111,78 +114,6 @@ def _load_feeds() -> list:
 
 FEEDS = _load_feeds()
 
-def _local(tag: str) -> str:
-    """去掉 XML 命名空间前缀。"""
-    return tag.split("}")[-1]
-
-def _parse_ts(text: str) -> float:
-    """解析 RSS pubDate（RFC822）或 Atom published/updated（ISO8601）为时间戳，失败返回 0。"""
-    if not text:
-        return 0
-    try:
-        return parsedate_to_datetime(text.strip()).timestamp()
-    except Exception:
-        pass
-    try:
-        s = text.strip().replace("Z", "+00:00")
-        return datetime.datetime.fromisoformat(s).timestamp()
-    except Exception:
-        return 0
-
-def _fetch_feed_items(feed: dict, limit: int = 2) -> list:
-    """抓取单个源的最新条目，返回 [{title, url, source, ts}]。"""
-    import urllib.request as _ur, gzip as _gz
-    try:
-        req = _ur.Request(feed["url"], headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36", "Accept-Encoding": "gzip"})
-        with _ur.urlopen(req, timeout=15) as resp:
-            raw = resp.read(10_000_000)
-            # 处理 gzip 压缩响应（Swift.org 等返回 Content-Encoding: gzip）
-            if (resp.headers.get("Content-Encoding", "") or "").lower() == "gzip":
-                try:
-                    raw = _gz.decompress(raw)
-                except Exception:
-                    pass
-            xml = raw.decode("utf-8", errors="replace")
-        # 防御性清理：修复源侧未转义的裸 &（如 爱范儿 feed 中 &</image>）
-        if "&" in xml:
-            xml = re.sub(r"&(?!amp;|lt;|gt;|quot;|apos;|#\d+;|#x[0-9a-fA-F]+;)", "&amp;", xml)
-        root = ET.fromstring(xml)
-        items = []
-        for child in root.iter():
-            if _local(child.tag) not in ("item", "entry"):
-                continue
-            title = link = ts_text = ""
-            for sub in child:
-                ln = _local(sub.tag)
-                if ln == "title":
-                    title = (sub.text or "").strip()
-                elif ln == "link":
-                    href = sub.get("href")
-                    if href:
-                        link = href.strip()
-                    elif sub.text:
-                        link = sub.text.strip()
-                elif ln == "guid" and not link:
-                    # 部分源无 <link> 元素（如安全客），回退用 <guid> 作为 URL
-                    link = (sub.text or "").strip()
-                elif ln in ("pubDate", "published", "updated", "date"):
-                    ts_text = (sub.text or "").strip()
-            if title and link:
-                items.append({
-                    "title": title,
-                    "url": link,
-                    "source": feed["name"],
-                    "ts": _parse_ts(ts_text)
-                })
-            if len(items) >= limit:
-                break
-        return items
-    except ET.ParseError as e:
-        print(f"[server] RSS 解析失败: {feed['name']} ({feed['url']}): {e}")
-        return []
-    except Exception:
-        return []
-
 def _fetch_rss_items(force: bool = False) -> list:
     """并发抓取所有源最新条目，合并去重并打乱，带缓存（RSS_INTERVAL*2 秒）。每次刷新重读 OPML（新增源即时生效）。"""
     global RSS_CACHE, FEEDS
@@ -194,7 +125,7 @@ def _fetch_rss_items(force: bool = False) -> list:
         return []
     results = []
     with ThreadPoolExecutor(max_workers=8) as pool:
-        futures = {pool.submit(_fetch_feed_items, f): f for f in FEEDS}
+        futures = {pool.submit(fetch_feed_items, f): f for f in FEEDS}
         for fut in futures:
             try:
                 results.extend(fut.result())
@@ -544,35 +475,13 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps({"success": success, "output": output}, ensure_ascii=False).encode("utf-8"))
 
     def _fetch_url(self, url: str, timeout: int = 30) -> str:
-        """从 URL 抓取正文，返回提取的文本内容。失败返回空字符串。"""
-        import urllib.request as _ur, re as _re, gzip as _gz
-        try:
-            req = _ur.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36", "Accept-Encoding": "gzip"})
-            with _ur.urlopen(req, timeout=timeout) as resp:
-                raw = resp.read(10_000_000)
-                # 处理 gzip 压缩响应
-                if (resp.headers.get("Content-Encoding", "") or "").lower() == "gzip":
-                    try:
-                        raw = _gz.decompress(raw)
-                    except Exception:
-                        pass
-                html = raw.decode("utf-8", errors="replace")
-            # 提取 title
-            title_m = _re.search(r'<title[^>]*>([^<]+)</title>', html, _re.IGNORECASE)
-            title = title_m.group(1).strip() if title_m else ""
-            # 提取正文：先去掉 script/style，再取 body 或全文文本
-            clean = _re.sub(r'<script[^>]*>.*?</script>', '', html, flags=_re.DOTALL)
-            clean = _re.sub(r'<style[^>]*>.*?</style>', '', clean, flags=_re.DOTALL)
-            clean = _re.sub(r'<[^>]+>', '\n', clean)
-            clean = _re.sub(r'\n{3,}', '\n\n', clean).strip()
-            # 截断过长的内容（取前 8000 字符）
-            body = clean[:8000]
-            result = (f"标题: {title}\n\n{body}" if title else body).strip()
+        """从 URL 抓取正文（复用 rss_utils），返回提取的文本内容。失败返回空字符串。"""
+        result, err = fetch_article_text(url, timeout=timeout)
+        if result and not err:
             print(f"[server] URL 抓取成功: {url} ({len(result)} chars)")
             return result
-        except Exception as e:
-            print(f"[server] URL 抓取失败: {e}")
-            return ""
+        print(f"[server] URL 抓取失败: {err or '反爬拦截'} ({url})")
+        return ""
 
     def _analyze_image(self, img_path: Path) -> str:
         """尝试用 kimi 分析图片内容，返回提取的文字。失败返回空字符串。"""

@@ -8,6 +8,10 @@ import os, sys, json, subprocess, time, re, tempfile, argparse, threading
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
+# 共享 RSS / 网页抓取工具（rss_utils.py 与 server.py 同目录/被 webui 复用）
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from rss_utils import local_tag, parse_ts, fetch_feed_items, fetch_article_text
+
 # Windows 下禁止子进程弹出控制台窗口（避免终端闪现）
 CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
 
@@ -63,56 +67,6 @@ def mark_processed(url, processed=None):
         processed.add(url)
 
 # ---- RSS 抓取 ----
-def _local(tag):
-    return tag.split("}")[-1]
-
-def _parse_ts(text):
-    if not text:
-        return 0
-    try:
-        from email.utils import parsedate_to_datetime
-        return parsedate_to_datetime(text.strip()).timestamp()
-    except Exception:
-        pass
-    try:
-        text = text.strip().replace("Z", "+00:00")
-        import datetime
-        return datetime.datetime.fromisoformat(text).timestamp()
-    except Exception:
-        return 0
-
-def _fetch_feed_items(feed, limit=3):
-    import urllib.request as _ur
-    try:
-        req = _ur.Request(feed["url"],
-            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
-        with _ur.urlopen(req, timeout=5) as resp:
-            xml = resp.read(300000).decode("utf-8", errors="replace")
-        root = ET.fromstring(xml)
-        items = []
-        for child in root.iter():
-            if _local(child.tag) not in ("item", "entry"):
-                continue
-            title = link = ts_text = ""
-            for sub in child:
-                ln = _local(sub.tag)
-                if ln == "title":
-                    title = (sub.text or "").strip()
-                elif ln == "link":
-                    href = sub.get("href")
-                    if href:
-                        link = href.strip()
-                    elif sub.text:
-                        link = sub.text.strip()
-                elif ln in ("pubDate", "published", "updated", "date"):
-                    ts_text = (sub.text or "").strip()
-            if title and link:
-                items.append({"title": title, "url": link, "source": feed["name"], "ts": _parse_ts(ts_text)})
-            if len(items) >= limit:
-                break
-        return items
-    except Exception:
-        return []
 
 def fetch_all_rss_items(limit_per_feed=3):
     if not OPML_PATH.exists():
@@ -150,7 +104,7 @@ def fetch_all_rss_items(limit_per_feed=3):
     from concurrent.futures import ThreadPoolExecutor, as_completed
     all_items = []
     with ThreadPoolExecutor(max_workers=16) as pool:
-        futures = {pool.submit(_fetch_feed_items, f, limit_per_feed): f for f in feeds}
+        futures = {pool.submit(fetch_feed_items, f, limit_per_feed): f for f in feeds}
         for fut in as_completed(futures):
             try:
                 all_items.extend(fut.result())
@@ -168,36 +122,11 @@ def fetch_all_rss_items(limit_per_feed=3):
 
 # ---- 抓取正文 ----
 def fetch_article(url, timeout=15):
-    import urllib.request as _ur, re as _re, gzip as _gz
-    try:
-        req = _ur.Request(url,
-            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                     "Accept-Encoding": "gzip"})
-        with _ur.urlopen(req, timeout=timeout) as resp:
-            raw = resp.read(10_000_000)
-            # 处理 gzip 压缩响应（多数现代站点默认返回 gzip）
-            if (resp.headers.get("Content-Encoding", "") or "").lower() == "gzip":
-                try:
-                    raw = _gz.decompress(raw)
-                except Exception:
-                    pass
-            html = raw.decode("utf-8", errors="replace")
-        title_m = _re.search(r'<title[^>]*>([^<]+)</title>', html, _re.IGNORECASE)
-        title = title_m.group(1).strip() if title_m else ""
-        clean = _re.sub(r'<script[^>]*>.*?</script>', '', html, flags=_re.DOTALL)
-        clean = _re.sub(r'<style[^>]*>.*?</style>', '', clean, flags=_re.DOTALL)
-        clean = _re.sub(r'<[^>]+>', '\n', clean)
-        clean = _re.sub(r'\n{3,}', '\n\n', clean).strip()
-        body = clean[:8000]
-        result = (f"标题: {title}\n\n{body}" if title else body).strip()
-        # 检测反爬
-        for pat in ['环境异常', 'captcha', 'verify you are human', 'access denied']:
-            if pat in body[:200].lower():
-                return None, "反爬拦截"
+    """抓取网页正文（复用 rss_utils），返回 (content, err)。"""
+    result, err = fetch_article_text(url, timeout=timeout)
+    if result and not err:
         print(f"  [fetch] 抓取成功: {len(result)} 字符")
-        return result, None
-    except Exception as e:
-        return None, str(e)
+    return result, err
 
 # ---- 运行处理 ----
 def process_article(content, url):
