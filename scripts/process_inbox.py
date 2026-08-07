@@ -514,6 +514,10 @@ def _auto_decide(old_note: str, new_note: str) -> str:
 """
 
     out = _call_kimi(prompt)
+    if not out:
+        # AI 调用失败：返回 None 让调用方走保守路径（不静默丢弃内容）
+        print("  [auto] _auto_decide: AI 返回空，按跳过处理")
+        return None
     import re as _re
     m = _re.search(r'"action"\s*:\s*"(force-new|update|skip)"', out)
     if m:
@@ -554,6 +558,10 @@ flomo 笔记固定格式如下（原文格式可能不同，必须转为这个�
 """
 
     out = _call_kimi(prompt)
+    if not out:
+        # AI 调用失败：返回 None 让调用方回退为新建/跳过，不产生损坏的合并结果
+        print("  [auto] _auto_merge: AI 返回空")
+        return None
     import re as _re
     # 清理行首项目符号和缩进：只剥 • 和空格，不剥 - /* 等内容符号
     cleaned = '\n'.join(

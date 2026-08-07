@@ -191,5 +191,31 @@ class TestFlomoCalls(unittest.TestCase):
         self.assertEqual(len(results), 2)
 
 
+class TestAutoAiFailure(unittest.TestCase):
+    """AI 调用失败（_call_kimi 返回空）时 _auto_decide/_auto_merge 不应崩溃。"""
+
+    def test_decide_empty_returns_none(self):
+        with mock.patch.object(pi, "_call_kimi", return_value=None):
+            self.assertIsNone(pi._auto_decide("old", "new"))
+
+    def test_decide_none_input(self):
+        with mock.patch.object(pi, "_call_kimi", return_value=None):
+            self.assertIsNone(pi._auto_decide("old", "new"))
+
+    def test_merge_empty_returns_none(self):
+        with mock.patch.object(pi, "_call_kimi", return_value=None):
+            self.assertIsNone(pi._auto_merge("old", "new"))
+
+    def test_decide_valid_action(self):
+        with mock.patch.object(pi, "_call_kimi", return_value='{"action": "update"}'):
+            self.assertEqual(pi._auto_decide("old", "new"), "update")
+
+    def test_merge_valid_markdown(self):
+        out = "#信号笔记 #计算机科学 #测试\n**计算机科学_测试_知识点**\n**概念**：合并内容"
+        with mock.patch.object(pi, "_call_kimi", return_value=out):
+            merged = pi._auto_merge("old", "new")
+        self.assertIn("**概念**", merged)
+
+
 if __name__ == "__main__":
     unittest.main()
