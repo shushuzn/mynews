@@ -193,6 +193,20 @@ class TestFetchArticleText(unittest.TestCase):
         self.assertIn("正文段落", text)
         self.assertNotIn("var x=1", text)
 
+    HTML_WITH_NAV = ("<html><head><title>标题</title></head><body>"
+                     "<nav>导航导航</nav>"
+                     "<article><p>主文正文第一段</p><p>主文正文第二段</p></article>"
+                     "<footer>页脚版权</footer></body></html>").encode("utf-8")
+
+    @mock.patch("urllib.request.urlopen", side_effect=_fake_urlopen(HTML_WITH_NAV))
+    def test_extract_strips_nav_and_uses_article(self, m):
+        text, err = rss_utils.fetch_article_text("https://x.com/a")
+        self.assertIsNone(err)
+        self.assertIn("主文正文第一段", text)
+        self.assertIn("主文正文第二段", text)
+        self.assertNotIn("导航导航", text)
+        self.assertNotIn("页脚版权", text)
+
     @mock.patch("urllib.request.urlopen", side_effect=_fake_urlopen(b"<html><title>Anti-Bot</title><body>verify you are human to continue</body></html>"))
     def test_anti_bot(self, m):
         text, err = rss_utils.fetch_article_text("https://x.com/a")

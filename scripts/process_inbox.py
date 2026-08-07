@@ -571,7 +571,7 @@ flomo 笔记固定格式如下（原文格式可能不同，必须转为这个�
     start = -1
     for i, line in enumerate(lines):
         s = line.strip()
-        if s.startswith('#') and ('#信号' in s or '#知识' in s or '#趋势' in s or '#分析' in s or '#趋势' in s):
+        if s.startswith('#') and ('#信号' in s or '#知识' in s or '#趋势' in s or '#分析' in s):
             start = i
             break
     if start >= 0:

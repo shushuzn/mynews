@@ -149,6 +149,17 @@ def fetch_article_text(url: str, timeout: int = 15):
         title = title_m.group(1).strip() if title_m else ""
         clean = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL)
         clean = re.sub(r'<style[^>]*>.*?</style>', '', clean, flags=re.DOTALL)
+        # 剥离常见导航/辅助区域，减少正文提取噪声（针对单篇正文抓取）
+        clean = re.sub(
+            r'<(nav|footer|aside)[^>]*>.*?</\1>',
+            '', clean, flags=re.DOTALL | re.IGNORECASE
+        )
+        # 尝试优先提取 <article> / <main> 主区域（存在时用主区域，否则用全文）
+        main_m = re.search(
+            r'<(article|main)[^>]*>([\s\S]*?)</\1>', clean, re.IGNORECASE
+        )
+        if main_m:
+            clean = main_m.group(2)
         clean = re.sub(r'<[^>]+>', '\n', clean)
         clean = re.sub(r'\n{3,}', '\n\n', clean).strip()
         body = clean[:8000]
