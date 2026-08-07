@@ -669,7 +669,7 @@ def process_content(args):
         print(f"  [auto] 二级领域: {args.subdomain}")
         print(f"  [auto] 标题: {args.title}")
         print(f"  [auto] 标签: {args.tags}")
-        print(f"  [auto] ai-content 已生成（{len(args.ai_content)} 字符）")
+        print(f"  [auto] ai-content 已生成（{len(getattr(args, 'ai_content', '') or '')} 字符）")
         break
     else:
         print("  [auto] 重试耗尽，跳过")
@@ -688,7 +688,8 @@ def process_content(args):
     knowledge = args.title
 
     # 4. 正文内容
-    body_text = args.ai_content
+    # 用 getattr 兜底：--auto 模式 AI 重试耗尽时 ai_content 可能从未生成
+    body_text = getattr(args, 'ai_content', '')
     print(f"  [ai] 使用 AI 生成内容（{len(body_text)} 字符）")
 
     if not body_text:
