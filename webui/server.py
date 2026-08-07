@@ -545,11 +545,18 @@ class Handler(BaseHTTPRequestHandler):
 
     def _fetch_url(self, url: str, timeout: int = 30) -> str:
         """从 URL 抓取正文，返回提取的文本内容。失败返回空字符串。"""
-        import urllib.request as _ur, re as _re
+        import urllib.request as _ur, re as _re, gzip as _gz
         try:
-            req = _ur.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
+            req = _ur.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36", "Accept-Encoding": "gzip"})
             with _ur.urlopen(req, timeout=timeout) as resp:
-                html = resp.read().decode("utf-8", errors="replace")
+                raw = resp.read(10_000_000)
+                # 处理 gzip 压缩响应
+                if (resp.headers.get("Content-Encoding", "") or "").lower() == "gzip":
+                    try:
+                        raw = _gz.decompress(raw)
+                    except Exception:
+                        pass
+                html = raw.decode("utf-8", errors="replace")
             # 提取 title
             title_m = _re.search(r'<title[^>]*>([^<]+)</title>', html, _re.IGNORECASE)
             title = title_m.group(1).strip() if title_m else ""

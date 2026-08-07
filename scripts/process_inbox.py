@@ -190,7 +190,6 @@ def _validate_and_extract_domain(content):
     if len(parsed_tags.get('#', [])) != 3:
         raise ValueError(f"第一行 # 标签必须恰好 3 个（信号类型 + 一级领域 + 二级领域），当前 {len(parsed_tags.get('#', []))} 个：{parsed_tags.get('#', [])}")
     # 信号类型校验：必须有一个且仅一个（必须属于 SIGNAL_TYPES）
-    SIGNAL_TYPES = {'信号笔记', '趋势信号', '知识基座', '分析框架', '知识载体'}
     matched_signal = [t for t in parsed_tags.get('#', []) if t in SIGNAL_TYPES]
     if not matched_signal:
         raise ValueError(f"缺少信号类型标签（{', '.join(SIGNAL_TYPES)} 中任选一个），当前：'{first_line}'")
@@ -225,6 +224,13 @@ def _validate_and_extract_domain(content):
     return domain, subdomain
 
 
+def _escape_bold_underscores(content: str) -> str:
+    """将加粗标题中的下划线转义为 \\_（flomo MCP 会转义下划线）。"""
+    def escape_underscore_in_bold(match):
+        return "**" + match.group(1).replace("_", "\\_") + "**"
+    return re.sub(r'^\*\*([^*]+)\*\*$', escape_underscore_in_bold, content, flags=re.MULTILINE)
+
+
 def upload_flomo(content):
     """上传到 flomo"""
     # 归一化格式：确保符合当前标准
@@ -232,11 +238,7 @@ def upload_flomo(content):
     # 验证 domain/subdomain
     _validate_and_extract_domain(content)
     # 转义 content 中的下划线
-    def escape_underscore_in_bold(match):
-        return "**" + match.group(1).replace("_", "\\_") + "**"
-    content_escaped = re.sub(
-        r'^\*\*([^*]+)\*\*$', escape_underscore_in_bold, content, flags=re.MULTILINE
-    )
+    content_escaped = _escape_bold_underscores(content)
 
     payload = json.dumps({
         "jsonrpc": "2.0",
@@ -374,11 +376,8 @@ def update_flomo(memo_id, content):
     content = _normalize_flomo_content(content)
     # 验证 domain/subdomain
     _validate_and_extract_domain(content)
-    def escape_underscore_in_bold(match):
-        return "**" + match.group(1).replace("_", "\\_") + "**"
-    content_escaped = re.sub(
-        r'^\*\*([^*]+)\*\*$', escape_underscore_in_bold, content, flags=re.MULTILINE
-    )
+    # 转义 content 中的下划线
+    content_escaped = _escape_bold_underscores(content)
 
     # === update_flomo 安全约束 ===
     # 此函数用 memo_update 把传入 content 整体覆盖写入 flomo。

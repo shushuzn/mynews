@@ -168,12 +168,20 @@ def fetch_all_rss_items(limit_per_feed=3):
 
 # ---- 抓取正文 ----
 def fetch_article(url, timeout=15):
-    import urllib.request as _ur, re as _re
+    import urllib.request as _ur, re as _re, gzip as _gz
     try:
         req = _ur.Request(url,
-            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                     "Accept-Encoding": "gzip"})
         with _ur.urlopen(req, timeout=timeout) as resp:
-            html = resp.read().decode("utf-8", errors="replace")
+            raw = resp.read(10_000_000)
+            # 处理 gzip 压缩响应（多数现代站点默认返回 gzip）
+            if (resp.headers.get("Content-Encoding", "") or "").lower() == "gzip":
+                try:
+                    raw = _gz.decompress(raw)
+                except Exception:
+                    pass
+            html = raw.decode("utf-8", errors="replace")
         title_m = _re.search(r'<title[^>]*>([^<]+)</title>', html, _re.IGNORECASE)
         title = title_m.group(1).strip() if title_m else ""
         clean = _re.sub(r'<script[^>]*>.*?</script>', '', html, flags=_re.DOTALL)
