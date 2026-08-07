@@ -6,6 +6,7 @@ data/
 __pycache__/
 .mcp.json
 .flomo_env
+miniflux.env
 scripts/.rss_feeds.json
 scripts/.auto_processed.json
 scripts/.auto_bg.json
