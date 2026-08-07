@@ -402,7 +402,7 @@ def _normalize_flomo_content(content: str) -> str:
         return f'{prefix}<mark>{keyword}</mark>{rest}'
 
     content = _re.sub(
-        r'^(- )([^<：:]+?)([：:].*)$',
+        r'^(- )([^<：:\n]+?)([：:][^\n]*)$',
         _auto_mark, content, flags=_re.MULTILINE
     )
     content = _re.sub(r'\n{3,}', '\n\n', content)

@@ -90,6 +90,34 @@ class TestNormalizeFlomoContent(unittest.TestCase):
         self.assertNotIn("\n", out[:0])  # 无崩溃即可
         self.assertIn("**来源**：测试来源", out)
 
+    def test_removes_forbidden_syntax(self):
+        raw = VALID_CONTENT + "\n\n## 二级标题\n> 引用\n```python\ncode\n```\n[链接](https://x.com)\n---\n|表|格|\n"
+        out = pi._normalize_flomo_content(raw)
+        # 二级及以上标题 / 引用 / 代码块 / 分隔线 / 表格被移除
+        self.assertNotIn("## 二级标题", out)
+        self.assertNotIn("> 引用", out)
+        self.assertNotIn("```python", out)
+        self.assertNotIn("code", out)
+        self.assertNotIn("---", out)
+        self.assertNotIn("|表|格|", out)
+        # 链接转为纯文本保留（移除 URL 语法，保留显示文本）
+        self.assertIn("链接", out)
+        self.assertNotIn("[链接](https://x.com)", out)
+
+    def test_list_unification_and_mark(self):
+        # 注：• / 数字列表项被统一为 - 前缀；<mark> 高亮仅对"关键词：说明"行生效
+        raw = VALID_CONTENT + "\n\n• 要点一\n1. 要点二\n- 关键词：说明文字"
+        out = pi._normalize_flomo_content(raw)
+        self.assertIn("- 要点一", out)
+        self.assertIn("- 要点二", out)
+        self.assertNotIn("•", out)
+        self.assertNotIn("1. 要点二", out)
+        self.assertIn("<mark>关键词</mark>：说明文字", out)
+
+    def test_empty_content(self):
+        out = pi._normalize_flomo_content("")
+        self.assertIsInstance(out, str)
+
 
 class FakeResp:
     def __init__(self, data):
