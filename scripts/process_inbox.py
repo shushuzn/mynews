@@ -604,9 +604,7 @@ def process_content(args):
         print("  [error] 需要提供 --content 参数")
         return False
     text = args.content
-    source = None  # will default to "网络"
     source_title = None
-    wx_title = ""
     print(f"\n[文本模式] 使用提供的 --content（{len(text)} 字符）")
 
     # 取首行做标题参考
