@@ -1943,7 +1943,7 @@ document.addEventListener('drop', e => {
   }
 });
 
-/* ============ 自动处理（Hacker News）============ */
+/* ============ 自动处理（RSS 源）============ */
 let _autoMode = false;
 let _autoCurrentUrl = '';
 let _autoCurrentId = '';
@@ -2034,7 +2034,7 @@ function renderRss() {
   }
   // 合并已处理集合（localStorage + 服务端记录）后一次性渲染，避免闪烁
   const localDone = new Set();
-  try { JSON.parse(localStorage.getItem('hn-processed') || '[]').forEach(k => localDone.add(k.replace(/^url:/, ''))); } catch (e) {}
+  try { readProcessedList().forEach(k => localDone.add(k.replace(/^url:/, ''))); } catch (e) {}
   el.innerHTML = '<div class="empty-state" style="padding:14px 0">⏳ 加载已处理状态…</div>';
   fetch('/api/processed').then(r => r.json()).then(d => {
     if (d.success && Array.isArray(d.output.urls)) {
@@ -2092,7 +2092,7 @@ function toggleAuto() {
     document.getElementById('content').disabled = true;
     document.getElementById('url').disabled = true;
     document.querySelectorAll('.seg-btn').forEach(b => b.disabled = true);
-    setStatus('🔁 自动模式已开启，获取 HN 最新…', 'running');
+    setStatus('🔁 自动模式已开启，正在获取最新 RSS 条目…', 'running');
     autoTick();
   } else {
     // 关闭自动模式：清除轮询定时器、中断正在处理/预检
@@ -2119,8 +2119,8 @@ async function autoTick() {
       toggleAuto(); // _autoMode 此刻仍为 true，翻转后即关闭并复位 UI
       return;
     }
-    let processed = JSON.parse(localStorage.getItem('hn-processed') || '[]');
-    const tempSkipped = JSON.parse(sessionStorage.getItem('hn-temp-skip') || '[]');
+    let processed = readProcessedList();
+    const tempSkipped = readTempSkipList();
     // 合并服务端已处理记录（后台自动处理共用），避免重复
     try {
       const pr = await fetch('/api/processed').then(r => r.json());
@@ -2207,12 +2207,12 @@ async function autoTick() {
 }
 async function markAutoProcessed(item) {
   try {
-    const p = JSON.parse(localStorage.getItem('hn-processed') || '[]');
+    const p = readProcessedList();
     const idKey = 'id:' + (item.id || '');
     const urlKey = 'url:' + item.url;
     if (item.id && !p.includes(idKey)) p.push(idKey);
     if (!p.includes(urlKey)) p.push(urlKey);
-    localStorage.setItem('hn-processed', JSON.stringify(p.slice(-600)));
+    writeProcessedList(p);
     // 同步到服务端，与后台自动处理共用记录；失败重试一次，避免后台重复处理
     if (item.url) {
       const sync = () => fetch('/api/mark-processed', {
@@ -2225,9 +2225,10 @@ async function markAutoProcessed(item) {
   } catch (err) {}
 }
 function clearAutoHistory() {
-  if (!localStorage.getItem('hn-processed')) { setStatus('没有自动处理记录', 'done'); return; }
+  if (!readProcessedList().length) { setStatus('没有自动处理记录', 'done'); return; }
   if (!confirm('确定清空自动处理的已处理记录吗？之后这些链接会被重新处理。')) return;
-  localStorage.removeItem('hn-processed');
+  localStorage.removeItem(LS_PROCESSED_KEY);
+  localStorage.removeItem(LS_PROCESSED_OLD_KEY);
   setStatus('自动处理记录已清空', 'done');
 }
 async function refreshBgAutoState() {
@@ -2240,6 +2241,32 @@ async function refreshBgAutoState() {
     }
   } catch (e) {}
 }
+// 已处理记录 / 临时跳过 的存储键（由旧 HN 时代命名迁移为 RSS 语义，读取兼容旧键）
+const LS_PROCESSED_KEY = 'rss-processed';
+const LS_PROCESSED_OLD_KEY = 'hn-processed';
+const SS_SKIP_KEY = 'rss-temp-skip';
+const SS_SKIP_OLD_KEY = 'hn-temp-skip';
+
+function readProcessedList() {
+  // 优先新键；旧键存在时迁移（读到新键后续写入即用新键）
+  let raw = localStorage.getItem(LS_PROCESSED_KEY);
+  if (raw === null) raw = localStorage.getItem(LS_PROCESSED_OLD_KEY);
+  try { return JSON.parse(raw || '[]'); } catch (e) { return []; }
+}
+function writeProcessedList(list) {
+  localStorage.setItem(LS_PROCESSED_KEY, JSON.stringify(list.slice(-600)));
+  localStorage.removeItem(LS_PROCESSED_OLD_KEY);
+}
+function readTempSkipList() {
+  let raw = sessionStorage.getItem(SS_SKIP_KEY);
+  if (raw === null) raw = sessionStorage.getItem(SS_SKIP_OLD_KEY);
+  try { return JSON.parse(raw || '[]'); } catch (e) { return []; }
+}
+function writeTempSkipList(list) {
+  sessionStorage.setItem(SS_SKIP_KEY, JSON.stringify(list.slice(-200)));
+  sessionStorage.removeItem(SS_SKIP_OLD_KEY);
+}
+
 // 服务端 RSS 刷新间隔（秒），从 /api/rss/stats 读取；默认 180 兜底
 let _serverRssInterval = 180;
 async function refreshRssStats() {
@@ -2279,11 +2306,11 @@ async function toggleBgAuto() {
 }
 function addTempSkip(url) {
   try {
-    const s = JSON.parse(sessionStorage.getItem('hn-temp-skip') || '[]');
+    const s = readTempSkipList();
     const key = 'url:' + url;
     if (!s.includes(key)) {
       s.push(key);
-      sessionStorage.setItem('hn-temp-skip', JSON.stringify(s.slice(-200)));
+      writeTempSkipList(s);
     }
   } catch (err) {}
 }
