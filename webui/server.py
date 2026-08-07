@@ -345,8 +345,12 @@ class Handler(BaseHTTPRequestHandler):
                 self._handle_process({"content": "", "url": "", "image": image_file})
             else:
                 length = int(self.headers.get("Content-Length", 0))
-                body = self.rfile.read(length).decode("utf-8")
-                data = json.loads(body)
+                body = self.rfile.read(length).decode("utf-8", errors="replace")
+                try:
+                    data = json.loads(body)
+                except json.JSONDecodeError:
+                    self._json_response(False, "无效的 JSON 请求体")
+                    return
                 self._handle_process(data)
         elif self.path.startswith("/api/auto-bg"):
             # 运行时切换后台自动处理：POST {"enabled": true|false}

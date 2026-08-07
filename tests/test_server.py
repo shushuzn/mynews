@@ -82,6 +82,29 @@ class TestServerHTTP(unittest.TestCase):
         self.assertEqual(headers.get("cache-control"), "no-cache")
         self.assertIn(b"<!DOCTYPE html>", body)
 
+    def test_process_invalid_json_returns_error(self):
+        """POST /process 传无效 JSON 应返回错误响应而非崩溃。"""
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+        c.request("POST", "/process", body="{invalid json", headers={"Content-Type": "application/json"})
+        r = c.getresponse()
+        body = r.read()
+        c.close()
+        self.assertEqual(r.status, 200)  # HTTP 层不 500
+        data = json.loads(body.decode("utf-8"))
+        self.assertFalse(data["success"])
+        self.assertIn("无效的 JSON", data["output"])
+
+    def test_process_empty_body_returns_error(self):
+        """POST /process 传空 body 应返回错误响应而非崩溃。"""
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+        c.request("POST", "/process", body="", headers={"Content-Type": "application/json"})
+        r = c.getresponse()
+        body = r.read()
+        c.close()
+        self.assertEqual(r.status, 200)
+        data = json.loads(body.decode("utf-8"))
+        self.assertFalse(data["success"])
+
 
 class TestFetchRssSingleFlight(unittest.TestCase):
     """single-flight：缓存过期时并发请求只触发一次全量抓取。"""
