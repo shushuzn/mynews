@@ -460,7 +460,13 @@ class Handler(BaseHTTPRequestHandler):
         # 图片上传处理
         if image_file and hasattr(image_file, "file") and image_file.filename:
             img_data = image_file.file.read()
-            img_ext = Path(image_file.filename).suffix or ".jpg"
+            # 安全校验：大小上限 20MB，扩展名白名单（防任意文件写入临时目录）
+            if len(img_data) > 20 * 1024 * 1024:
+                self._json_response(False, "图片超过 20MB 大小限制")
+                return
+            img_ext = Path(image_file.filename).suffix.lower() or ".jpg"
+            if img_ext not in (".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"):
+                img_ext = ".jpg"  # 非白名单扩展名一律按 jpg 处理，防路径注入
             import tempfile as _tf
             img_path = Path(_tf.gettempdir()) / f"mynews_upload_{os.urandom(4).hex()}{img_ext}"
             img_path.write_bytes(img_data)
