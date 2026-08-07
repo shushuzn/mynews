@@ -176,6 +176,20 @@ class TestFetchFeedItems(unittest.TestCase):
         items = rss_utils.fetch_feed_items({"name": "A", "url": "https://a.com/feed"})
         self.assertEqual(items, [])
 
+    ENTITY_XML = """<?xml version="1.0"?><rss version="2.0"><channel>
+      <item>
+        <title>Apple&#39;s &quot;New&quot; Product &amp; Review</title>
+        <link>https://a.com/1</link>
+      </item>
+    </channel></rss>
+    """
+
+    @mock.patch("urllib.request.urlopen", side_effect=_fake_urlopen(ENTITY_XML.encode("utf-8")))
+    def test_html_entity_decode(self, m):
+        """标题中的 HTML 实体应被解码为正常字符。"""
+        items = rss_utils.fetch_feed_items({"name": "A", "url": "https://a.com/feed"})
+        self.assertEqual(items[0]["title"], "Apple's \"New\" Product & Review")
+
     @mock.patch("urllib.request.urlopen", side_effect=_fake_urlopen(b"not xml at all"))
     def test_parse_error(self, m):
         items = rss_utils.fetch_feed_items({"name": "A", "url": "https://a.com/feed"})

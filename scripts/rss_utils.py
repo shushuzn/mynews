@@ -4,6 +4,7 @@ RSS / 网页抓取共享工具（供 auto_process.py 与 webui/server.py 复用�
 集中了 RSS 解析、时间戳解析、单源条目抓取、网页正文提取的逻辑，消除两份重复实现。
 """
 import re
+import html
 import datetime
 import xml.etree.ElementTree as ET
 from email.utils import parsedate_to_datetime
@@ -120,6 +121,9 @@ def fetch_feed_items(feed: dict, limit: int = 2) -> list:
                     link = (sub.text or "").strip()
                 elif ln in ("pubDate", "published", "updated", "date"):
                     ts_text = (sub.text or "").strip()
+            # 解码 HTML 实体（XML 解析器只解码 XML 实体；&#39;/&#x27;/双重转义需这里处理）
+            title = html.unescape(title)
+            link = html.unescape(link)
             if title and link:
                 items.append({
                     "title": title,
