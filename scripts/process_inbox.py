@@ -647,6 +647,21 @@ flomo 笔记固定格式如下（原文格式可能不同，必须转为这个�
     return cleaned.strip()
 
 
+def _git_unstage(full_path: Path, *, quiet: bool = True):
+    """将已 git add 的草稿文件取消暂存（hook 验证/上传完成后的清理步骤）。
+
+    - 捕获输出避免污染 stdout（否则 hook 校验、日志解析可能误判）
+    - 静默失败：文件未被 add 时 git reset 也会成功，无需抛错
+    """
+    try:
+        subprocess.run(
+            ["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))],
+            cwd=str(BASE_DIR), capture_output=quiet, creationflags=CREATE_NO_WINDOW
+        )
+    except Exception:
+        pass
+
+
 def process_content(args):
     """处理 --content 正文，直接完成 → 构建 → 验证 → 上传全流程。"""
     if not (hasattr(args, 'content') and args.content):
@@ -782,7 +797,7 @@ def process_content(args):
     )
     if hook_result.returncode != 0:
         print(f"  [error] 格式验证失败:\n{hook_result.stdout}")
-        subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR), creationflags=CREATE_NO_WINDOW)
+        _git_unstage(full_path, quiet=False)
         # 保留文件让用户修正
         print(f"  [file] 文件保留在: {full_path}")
         return False
@@ -856,7 +871,7 @@ def process_content(args):
                             for _line in update_content.split('\n'):
                                 print(f"  | {_line}")
                             print(f"  [error] 无法自动更新，旧笔记 id={old_id} 保持不变")
-                            subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR), creationflags=CREATE_NO_WINDOW)
+                            _git_unstage(full_path)
                             if full_path.exists(): full_path.unlink()
                             return False
                         # 确保 **概念**： 存在，否则回退到用新内容构造
@@ -882,12 +897,12 @@ def process_content(args):
                             print(f"  [auto] 更新失败")
                     else:
                         print(f"  [auto] 合并失败，跳过")
-                    subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR), capture_output=True, creationflags=CREATE_NO_WINDOW)
+                    _git_unstage(full_path)
                     if full_path.exists(): full_path.unlink()
                     return True
                 else:
                     print("  [auto] AI 决定：无增量 → 跳过")
-                    subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR), capture_output=True, creationflags=CREATE_NO_WINDOW)
+                    _git_unstage(full_path)
                     if full_path.exists(): full_path.unlink()
                     return True
             else:
@@ -900,7 +915,7 @@ def process_content(args):
     if flomo_id:
         print(f"  [flomo] 上传成功 id={flomo_id}")
         # 清理
-        subprocess.run(["git", "reset", "HEAD", "--", str(full_path.relative_to(BASE_DIR))], cwd=str(BASE_DIR), creationflags=CREATE_NO_WINDOW)
+        _git_unstage(full_path)
         full_path.unlink()
         print(f"  [cleanup] 已删除本地文件")
     else:
