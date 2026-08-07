@@ -1102,14 +1102,17 @@ async function toggleFeed(url, enabled) {
 async function toggleAllFeeds() {
   const target = _feedData.enabled_count > 0 ? false : true;
   try {
-    for (const f of _feedData.feeds) {
-      if (f.hard_locked || f.enabled === target) continue;
-      await fetch('/api/rss/feeds/toggle', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: f.url, enabled: target })
-      });
+    const r = await fetch('/api/rss/feeds/toggle-all', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: target })
+    }).then(res => res.json());
+    if (r.success && r.output && r.output.feeds) {
+      _feedData = r.output.feeds;
+      updateFeedBadge();
+      renderFeedList();
+    } else {
+      refreshFeedList();
     }
-    await refreshFeedList();
     // 联动：刷新信息流与统计
     if (_rssLoaded) setTimeout(() => { renderRss(); refreshRssStats(); }, 300);
   } catch (e) {

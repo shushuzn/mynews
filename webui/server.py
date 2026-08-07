@@ -335,6 +335,24 @@ class Handler(BaseHTTPRequestHandler):
                 self._json_response(True, {"enabled": _auto_bg_status()})
             except Exception as e:
                 self._json_response(False, f"切换失败: {e}")
+        elif self.path.startswith("/api/rss/feeds/toggle-all"):
+            # 批量切换全部源启用状态：POST {"enabled": true|false}（跳过 MYNEWS_RSS_ONLY 硬锁定的源）
+            try:
+                body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8"))
+                target = bool(body.get("enabled", True))
+                prefs = _load_feed_prefs()
+                for f in _feed_list()["feeds"]:
+                    if f["hard_locked"]:
+                        continue
+                    prefs[f["url"]] = target
+                _save_feed_prefs(prefs)
+                # 原地更新全局（切片赋值/清空，避免 global 声明与同方法内其他分支冲突）
+                FEEDS[:] = _load_feeds()
+                RSS_CACHE["ts"] = 0.0
+                RSS_CACHE["items"] = []
+                self._json_response(True, {"enabled": target, "feeds": _feed_list()})
+            except Exception as e:
+                self._json_response(False, f"批量切换失败: {e}")
         elif self.path.startswith("/api/rss/feeds/toggle"):
             # 切换单个源启用状态：POST {"url": "...", "enabled": true|false}
             try:
@@ -346,9 +364,9 @@ class Handler(BaseHTTPRequestHandler):
                 prefs = _load_feed_prefs()
                 prefs[url] = bool(body.get("enabled", True))
                 _save_feed_prefs(prefs)
-                global FEEDS, RSS_CACHE
-                FEEDS = _load_feeds()
-                RSS_CACHE = {"ts": 0.0, "items": []}
+                FEEDS[:] = _load_feeds()
+                RSS_CACHE["ts"] = 0.0
+                RSS_CACHE["items"] = []
                 self._json_response(True, {"url": url, "enabled": prefs[url], "feeds": _feed_list()})
             except Exception as e:
                 self._json_response(False, f"切换失败: {e}")
