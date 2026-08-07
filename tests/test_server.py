@@ -31,17 +31,22 @@ class TestServerHTTP(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.port = _free_port()
+        # stderr 保留到临时文件，启动失败时可给出具体诊断信息
+        import tempfile
+        cls._err_fd, cls._err_path = tempfile.mkstemp(suffix=".log", prefix="server_test_")
         cls.proc = subprocess.Popen(
             [sys.executable, os.path.join(WEBUI, "server.py"), str(cls.port)],
             cwd=WEBUI,
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stderr=cls._err_fd,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
         )
         # 等待服务就绪
-        deadline = time.time() + 10
+        deadline = time.time() + 15
         cls.ready = False
         while time.time() < deadline:
+            if cls.proc.poll() is not None:
+                break  # 进程提前退出（通常是启动报错）
             try:
                 c = http.client.HTTPConnection("127.0.0.1", cls.port, timeout=1)
                 c.request("GET", "/api/auto-bg")
@@ -53,12 +58,31 @@ class TestServerHTTP(unittest.TestCase):
                 time.sleep(0.3)
         if not cls.ready:
             cls.proc.kill()
-            raise RuntimeError("server.py 启动失败")
+            os.close(cls._err_fd)
+            err_info = ""
+            try:
+                with open(cls._err_path, encoding="utf-8", errors="replace") as f:
+                    err_info = f.read()[:500]
+            except Exception:
+                pass
+            os.unlink(cls._err_path)
+            raise RuntimeError(f"server.py 启动失败: {err_info}")
 
     @classmethod
     def tearDownClass(cls):
-        cls.proc.kill()
-        cls.proc.wait(timeout=5)
+        try:
+            cls.proc.terminate()
+            cls.proc.wait(timeout=5)
+        except Exception:
+            try:
+                cls.proc.kill()
+            except Exception:
+                pass
+        try:
+            os.close(cls._err_fd)
+            os.unlink(cls._err_path)
+        except Exception:
+            pass
 
     def _get(self, path):
         c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
