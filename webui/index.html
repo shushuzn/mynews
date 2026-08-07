@@ -631,6 +631,7 @@ textarea:focus, input[type="text"]:focus {
   font-size: 11px; font-weight: 700; color: var(--text-3); background: var(--surface-2);
   padding: 3px 10px; border-radius: 999px; font-variant-numeric: tabular-nums;
 }
+.rss-enabled { background: rgba(52,199,89,.12); color: var(--green); }
 .rss-list { display: flex; flex-direction: column; gap: 6px; max-height: 420px; overflow-y: auto; padding-right: 4px; }
 .rss-item {
   display: flex; align-items: center; gap: 11px; padding: 9px 13px;
@@ -822,6 +823,7 @@ textarea:focus, input[type="text"]:focus {
     <div class="card fade-in" id="rssCard">
       <div class="card-title"><span class="t-ico purple">📡</span> RSS 最新
         <span class="t-side">
+          <button class="sample-btn" onclick="showFeedManager()" title="管理 RSS 源启用状态">源管理</button>
           <button class="sample-btn" onclick="refreshRss()">刷新</button>
         </span>
       </div>
@@ -830,6 +832,7 @@ textarea:focus, input[type="text"]:focus {
           <option value="">全部来源</option>
         </select>
         <span class="rss-count" id="rssCount"></span>
+        <span class="rss-count rss-enabled" id="rssEnabled" style="display:none"></span>
         <span style="margin-left:auto;font-size:11px;color:var(--text-3)" id="rssUpdated"></span>
       </div>
       <div class="rss-list" id="rssList">
@@ -1023,23 +1026,59 @@ function updateFeedBadge() {
 function renderFeedList() {
   const q = (document.getElementById('feedSearch').value || '').trim().toLowerCase();
   const wrap = document.getElementById('feedList');
-  const list = _feedData.feeds.filter(f =>
+  let list = _feedData.feeds.filter(f =>
     !q || (f.name || '').toLowerCase().includes(q) || (f.url || '').toLowerCase().includes(q)
   );
   if (!list.length) {
     wrap.innerHTML = '<div class="recent-empty">没有匹配的 RSS 源</div>';
     return;
   }
-  wrap.innerHTML = list.map(f => `
-    <label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;border:1px solid var(--separator-light);background:var(--surface-2);cursor:pointer;opacity:${f.enabled ? 1 : .55};transition:opacity .2s">
-      <input type="checkbox" ${f.enabled ? 'checked' : ''} ${f.hard_locked ? 'disabled' : ''}
-        onchange="toggleFeed('${f.url.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', this.checked)" style="accent-color:var(--blue);width:15px;height:15px;flex-shrink:0">
-      <div style="min-width:0">
-        <div style="font-size:12.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.name || ''}</div>
-        <div style="font-size:10.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.url || ''}</div>
+  // 搜索时按启用状态排序（启用的在前）；无搜索词时按域分组
+  if (q) {
+    list.sort((a, b) => (b.enabled - a.enabled));
+    wrap.innerHTML = list.map(feedItemHtml).join('');
+    return;
+  }
+  // 按域分组：arXiv 大类 → 域名 → 其他
+  const groups = {};
+  const domainOf = f => {
+    const name = f.name || '';
+    const url = f.url || '';
+    if (/arxiv/i.test(url) || /arXiv/i.test(name)) return 'arXiv 论文';
+    const m = url.match(/^https?:\/\/([^/]+)/);
+    return m ? m[1].replace(/^www\./, '') : '其他';
+  };
+  for (const f of list) {
+    const g = domainOf(f);
+    (groups[g] = groups[g] || []).push(f);
+  }
+  const sortedGroups = Object.keys(groups).sort((a, b) => {
+    const fa = groups[a][0], fb = groups[b][0];
+    return (fb.enabled - fa.enabled) || a.localeCompare(b);
+  });
+  wrap.innerHTML = sortedGroups.map(g => {
+    const items = groups[g];
+    const on = items.filter(i => i.enabled).length;
+    return `<div style="margin:4px 0 2px">
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 4px;cursor:pointer;user-select:none" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'flex' : 'none'">
+        <span style="font-size:10px;color:var(--text-3);transition:transform .2s">▸</span>
+        <span style="font-size:12px;font-weight:800;color:var(--text-2);letter-spacing:.02em">${g}</span>
+        <span style="font-size:10.5px;color:var(--text-3);font-variant-numeric:tabular-nums">${on}/${items.length}</span>
       </div>
-      ${f.hard_locked ? '<span style="margin-left:auto;font-size:10px;color:var(--text-3)">受 MYNEWS_RSS_ONLY 限制</span>' : ''}
-    </label>`).join('');
+      <div style="display:flex;flex-direction:column;gap:6px;padding-left:14px">${items.map(feedItemHtml).join('')}</div>
+    </div>`;
+  }).join('');
+}
+function feedItemHtml(f) {
+  return `<label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;border:1px solid var(--separator-light);background:var(--surface-2);cursor:pointer;opacity:${f.enabled ? 1 : .55};transition:opacity .2s">
+    <input type="checkbox" ${f.enabled ? 'checked' : ''} ${f.hard_locked ? 'disabled' : ''}
+      onchange="toggleFeed('${f.url.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', this.checked)" style="accent-color:var(--blue);width:15px;height:15px;flex-shrink:0">
+    <div style="min-width:0">
+      <div style="font-size:12.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.name || ''}</div>
+      <div style="font-size:10.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.url || ''}</div>
+    </div>
+    ${f.hard_locked ? '<span style="margin-left:auto;font-size:10px;color:var(--text-3)">受 MYNEWS_RSS_ONLY 限制</span>' : ''}
+  </label>`;
 }
 async function toggleFeed(url, enabled) {
   try {
@@ -1054,6 +1093,8 @@ async function toggleFeed(url, enabled) {
     } else {
       refreshFeedList();
     }
+    // 联动：源启用状态变化后刷新信息流与统计
+    if (_rssLoaded) setTimeout(() => { renderRss(); refreshRssStats(); }, 300);
   } catch (e) {
     refreshFeedList();
   }
@@ -1069,6 +1110,8 @@ async function toggleAllFeeds() {
       });
     }
     await refreshFeedList();
+    // 联动：刷新信息流与统计
+    if (_rssLoaded) setTimeout(() => { renderRss(); refreshRssStats(); }, 300);
   } catch (e) {
     refreshFeedList();
   }
@@ -1958,6 +2001,7 @@ async function loadRss() {
 
 function renderRss() {
   const filter = document.getElementById('rssSourceFilter').value;
+  if (_rssShowAll && !filter) _rssShowAll = false;  // 切回"全部来源"时重置展开
   // 来源下拉选项（保持当前选中）
   const sources = [...new Set(_rssItems.map(i => i.source || '未知'))].sort();
   const sel = document.getElementById('rssSourceFilter');
@@ -1976,6 +2020,15 @@ function renderRss() {
   }
   document.getElementById('rssCount').textContent = items.length + ' 条';
   document.getElementById('rssUpdated').textContent = '更新于 ' + new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+  // 已启用源计数徽标（_feedData 已加载时显示）
+  const enEl = document.getElementById('rssEnabled');
+  if (enEl && _feedData && _feedData.total > 0) {
+    enEl.style.display = '';
+    enEl.textContent = '已启用 ' + _feedData.enabled_count + '/' + _feedData.total;
+    enEl.title = '点击管理 RSS 源';
+    enEl.style.cursor = 'pointer';
+    enEl.onclick = () => showFeedManager();
+  }
   // 合并已处理集合（localStorage + 服务端记录）后一次性渲染，避免闪烁
   const localDone = new Set();
   try { JSON.parse(localStorage.getItem('hn-processed') || '[]').forEach(k => localDone.add(k.replace(/^url:/, ''))); } catch (e) {}
@@ -1988,8 +2041,11 @@ function renderRss() {
   }).catch(() => renderRssList(el, items, localDone));
 }
 
+let _rssShowAll = false;  // 信息流是否已展开显示全部
 function renderRssList(el, items, processed) {
-  el.innerHTML = items.slice(0, 30).map(i => {
+  const shown = _rssShowAll ? items.length : 30;
+  const more = items.length - shown;
+  el.innerHTML = items.slice(0, shown).map(i => {
     const isDone = processed.has(i.url);
     const t = i.ts ? new Date(i.ts * 1000) : null;
     const timeStr = t ? (t.toDateString() === new Date().toDateString()
@@ -2005,6 +2061,12 @@ function renderRssList(el, items, processed) {
       <button class="rss-go ${isDone ? 'done' : ''}" onclick="event.stopPropagation();useRssItem('${escapeHtml(i.url).replace(/'/g, "\\'")}')" title="填入 URL 处理">${isDone ? '✓' : '→'}</button>
     </div>`;
   }).join('');
+  // 未展开且有剩余条目 → 显示"加载更多"按钮
+  if (more > 0) {
+    el.innerHTML += `<div style="text-align:center;padding:8px 0 2px">
+      <button class="rf-btn" onclick="_rssShowAll=true;renderRss()">显示全部 ${more} 条剩余…</button>
+    </div>`;
+  }
 }
 
 function useRssItem(url) {
