@@ -161,7 +161,7 @@ mynews/
 │   ├── rss_utils.py          # RSS/网页抓取共享模块
 │   ├── check_rss_health.py   # RSS 源健康检查工具
 │   └── check_frontend_js.mjs # 前端 JS 语法检查（CI/本地复用）
-├── tests/                    # 单元测试（python -m unittest discover -s tests，52 用例）
+├── tests/                    # 单元测试（python -m unittest discover -s tests，64 用例）
 │   ├── test_rss_utils.py
 │   ├── test_process_inbox.py
 │   ├── test_auto_process.py
@@ -180,7 +180,8 @@ mynews/
 ### 运行测试
 
 ```bash
-python -m unittest discover -s tests -v
+python -m unittest discover -s tests -v     # Python 单元测试（64 用例）
+node scripts/check_frontend_js.mjs          # 前端 JS 语法检查
 ```
 
 ### RSS 源健康检查
