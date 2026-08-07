@@ -20,9 +20,17 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       - name: Syntax check all Python files
         run: |
           python -m py_compile scripts/*.py webui/*.py tests/*.py
+
+      - name: Syntax check frontend JS (index.html)
+        run: node scripts/check_frontend_js.mjs
 
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
