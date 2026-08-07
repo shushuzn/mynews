@@ -70,6 +70,7 @@ python3 process_inbox.py --auto --content "文章正文"
 ```bash
 python3 scripts/auto_process.py              # 处理全部（跳过已处理的）
 python3 scripts/auto_process.py --limit 20  # 最多处理 20 条
+python3 scripts/auto_process.py --force      # 忽略已处理记录，强制处理全部
 python3 scripts/auto_process.py --delay 5    # 每条间隔 5 秒
 ```
 

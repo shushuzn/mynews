@@ -33,9 +33,8 @@ def get_temp_dir() -> Path:
     return Path(tempfile.gettempdir())
 
 
-def _check_kimi():
-    """启动检查：kimi 是否存在、是否最新版。
-    找不到 → 报错退出（脚本依赖 kimi CLI）；版本过旧 → 警告不阻断。返回 kimi 二进制路径。"""
+def _find_kimi_bin():
+    """查找 kimi CLI 二进制路径：PATH → 常见安装目录。找不到返回 None。"""
     kimi_bin = shutil.which("kimi")
     if not kimi_bin:
         for cand in (os.path.expanduser("~/.kimi-code/bin/kimi"),
@@ -44,6 +43,13 @@ def _check_kimi():
             if os.path.isfile(cand) and os.access(cand, os.X_OK):
                 kimi_bin = cand
                 break
+    return kimi_bin
+
+
+def _check_kimi():
+    """启动检查：kimi 是否存在、是否最新版。
+    找不到 → 报错退出（脚本依赖 kimi CLI）；版本过旧 → 警告不阻断。返回 kimi 二进制路径。"""
+    kimi_bin = _find_kimi_bin()
     if not kimi_bin:
         print("[error] 未找到 kimi 命令，脚本依赖 kimi CLI 才能运行。")
         print("  安装: curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash")
@@ -470,15 +476,9 @@ def _normalize_flomo_content(content: str) -> str:
 def _call_kimi(prompt: str, timeout: int = 180) -> str:
     """调用本地 kimi CLI 处理提示，返回 stdout。"""
     import os as _os
-    import shutil as _shutil
     import subprocess as _sp
     # 优先用绝对路径，避免子进程 PATH 缺失时找不到命令
-    kimi_bin = _shutil.which("kimi")
-    if not kimi_bin:
-        for cand in (_os.path.expanduser("~/.kimi-code/bin/kimi"), _os.path.expanduser("~/.local/bin/kimi"), "/usr/local/bin/kimi"):
-            if _os.path.isfile(cand) and _os.access(cand, _os.X_OK):
-                kimi_bin = cand
-                break
+    kimi_bin = _find_kimi_bin()
     if not kimi_bin:
         return "[error] kimi 调用失败: 未找到 kimi 命令"
     try:

@@ -2,7 +2,7 @@
 """
 非交互式自动处理器
 从 OPML RSS 源循环抓取最新条目，自动处理直到全部完成。
-用法: python auto_process.py [--limit N] [--skip-existing]
+用法: python auto_process.py [--limit N] [--force] [--delay S]
 """
 import os, sys, json, subprocess, time, re, tempfile, argparse, threading
 from pathlib import Path
@@ -218,12 +218,12 @@ def process_article(content, url):
 def main():
     parser = argparse.ArgumentParser(description="mynews 非交互式自动处理器")
     parser.add_argument("--limit", type=int, default=0, help="最多处理多少条（0=不限）")
-    parser.add_argument("--skip-existing", action="store_true", help="跳过本地记录中已处理过的 URL")
+    parser.add_argument("--force", action="store_true", help="强制处理全部条目（忽略已处理记录，默认跳过已处理）")
     parser.add_argument("--delay", type=int, default=3, help="处理间隔秒数（默认3）")
     args = parser.parse_args()
 
-    processed = load_processed() if args.skip_existing else set()
-    print(f"[start] 已跳过 {len(processed)} 条历史记录")
+    processed = set() if args.force else load_processed()
+    print(f"[start] 已跳过 {len(processed)} 条历史记录" if not args.force else "[start] --force 模式：忽略历史记录，处理全部")
 
     items = fetch_all_rss_items(limit_per_feed=3)
     print(f"[rss] 共获取 {len(items)} 条条目")
