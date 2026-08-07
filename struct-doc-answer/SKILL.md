@@ -56,6 +56,8 @@ description: Use when creating, generating, or producing structured theoretical/
 ```bash
 cd /d/OpenClaw/mynews/scripts && python3 process_inbox.py \
   --auto --content "正文"
+# 超长文本推荐走 stdin（避免命令行长度限制）：
+# cat article.txt | python3 process_inbox.py --auto --content-stdin
 ```
 
 ---
