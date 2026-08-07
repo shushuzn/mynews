@@ -47,14 +47,18 @@ def _find_kimi_bin():
 
 def _check_kimi():
     """启动检查：kimi 是否存在、是否最新版。
-    找不到 → 报错退出（脚本依赖 kimi CLI）；版本过旧 → 警告不阻断。返回 kimi 二进制路径。"""
+    找不到 → 报错退出（脚本依赖 kimi CLI）；版本过旧 → 警告不阻断。返回 kimi 二进制路径。
+
+    版本检查的远端请求在网络不可用时以 2 秒快速失败；也可用环境变量
+    MYNEWS_SKIP_KIMI_CHECK=1 完全跳过网络检查（无网络/离线环境提速）。
+    """
     kimi_bin = _find_kimi_bin()
     if not kimi_bin:
         print("[error] 未找到 kimi 命令，脚本依赖 kimi CLI 才能运行。")
         print("  安装: curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash")
         sys.exit(1)
 
-    # 版本检查：本地 kimi --version ↔ 远端 latest，仅提示不阻断
+    # 本地版本检查（仅提示不阻断）
     local_ver = ""
     try:
         r = subprocess.run([kimi_bin, "--version"], capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=10, creationflags=CREATE_NO_WINDOW)
@@ -64,9 +68,12 @@ def _check_kimi():
             local_ver = m.group(1)
     except Exception:
         pass
+    if os.environ.get("MYNEWS_SKIP_KIMI_CHECK") == "1":
+        return kimi_bin
+    # 远端版本检查（2 秒超时快速失败，离线环境不阻塞）
     latest_ver = ""
     try:
-        with urllib.request.urlopen("https://code.kimi.com/kimi-code/latest", timeout=5) as resp:
+        with urllib.request.urlopen("https://code.kimi.com/kimi-code/latest", timeout=2) as resp:
             latest_ver = resp.read().decode("utf-8").strip()
     except Exception:
         pass
