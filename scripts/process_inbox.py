@@ -877,11 +877,15 @@ def main():
                         help="标签（第一个为信号类型标签：#知识基座/#趋势信号/#信号笔记/#分析框架/#知识载体，其余为领域/二级领域标签，如 --tags '#知识基座 #技术 #AI'）")
     parser.add_argument("--content", type=str,
                         help="原材料正文（必填，传递给 AI 处理的文本）")
+    parser.add_argument("--content-stdin", action="store_true",
+                        help="从 stdin 读取原材料正文（超长文本推荐，避免命令行长度限制）")
     args = parser.parse_args()
 
-    # auto 模式：--content 必填
+    # 从 stdin 读取时覆盖 --content（auto 模式：--content 或 --content-stdin 必填其一）
+    if args.content_stdin:
+        args.content = sys.stdin.read()
     if not (hasattr(args, 'content') and args.content):
-        print("错误：--content 必填（auto 模式的原材料正文）")
+        print("错误：--content 或 --content-stdin 必填（auto 模式的原材料正文）")
         return
 
     process_content(args)

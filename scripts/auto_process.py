@@ -116,12 +116,16 @@ def fetch_article(url, timeout=15):
 
 # ---- 运行处理 ----
 def process_article(content):
-    """调用 process_inbox.py 处理单条内容，返回 (success, output)。"""
+    """调用 process_inbox.py 处理单条内容，返回 (success, output)。
+
+    内容通过 stdin 传递（--content-stdin），避免 Windows 命令行长度限制
+    （超长正文走 --content 参数会抛 WinError 206）。
+    """
     env = os.environ.copy()
     env["FLOMO_TOKEN"] = FLOMO_TOKEN
-    cmd = [sys.executable, str(PROCESSOR), "--content", content, "--auto"]
+    cmd = [sys.executable, str(PROCESSOR), "--content-stdin", "--auto"]
     try:
-        r = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace",
+        r = subprocess.run(cmd, input=content, capture_output=True, encoding="utf-8", errors="replace",
                           timeout=600, env=env, cwd=str(SCRIPTS_DIR), creationflags=CREATE_NO_WINDOW)
         out = (r.stdout or "") + ("\n--- stderr ---\n" + r.stderr if r.stderr else "")
         success = any(k in out for k in ("上传成功", "更新成功", "处理完成", "无增量 → 跳过"))
