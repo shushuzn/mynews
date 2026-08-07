@@ -97,18 +97,18 @@ if not FLOMO_TOKEN:
 
 
 
-def search_flomo(keyword):
-    """搜索 flomo"""
+def _flomo_call(name: str, arguments: dict, tag: str = "", timeout: int = 30):
+    """调用 flomo MCP tools/call，返回所有 SSE data 行解析后的 JSON 对象列表。
+
+    - 成功：返回 data 行 JSON 列表（可能为空列表）
+    - 网络/超时失败：返回 None（调用方据此区分"无结果"与"请求失败"）
+    """
     payload = json.dumps({
         "jsonrpc": "2.0",
         "id": 1,
         "method": "tools/call",
-        "params": {
-            "name": "memo_search",
-            "arguments": {"keywords": keyword}
-        }
+        "params": {"name": name, "arguments": arguments}
     }).encode("utf-8")
-
     req = urllib.request.Request(
         FLOMO_API_URL,
         data=payload,
@@ -120,34 +120,46 @@ def search_flomo(keyword):
         method="POST"
     )
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = resp.read().decode("utf-8")
-            # Parse SSE format
-            for line in data.split("\n"):
-                if line.startswith("data:"):
-                    json_str = line[5:].strip()
-                    if json_str:
-                        result = json.loads(json_str)
-                        if "result" in result:
-                            raw = result["result"]
-                            # 解析外层：content 是 [{"type":"text","text":"{\"memos\":[...]}"}]
-                            content_list = raw.get("content", []) if isinstance(raw, dict) else []
-                            all_memos = []
-                            for item in content_list:
-                                if isinstance(item, dict) and item.get("type") == "text":
-                                    text_str = item.get("text", "")
-                                    if text_str:
-                                        try:
-                                            inner = json.loads(text_str)
-                                            memos = inner.get("memos", [])
-                                            all_memos.extend(memos)
-                                        except json.JSONDecodeError:
-                                            pass
-                            return all_memos
-            return None
     except Exception as e:
-        print(f"    [flomo search] error: {e}")
+        print(f"    [flomo {tag or name}] error: {e}")
         return None
+    results = []
+    for line in data.split("\n"):
+        if line.startswith("data:"):
+            json_str = line[5:].strip()
+            if json_str:
+                try:
+                    results.append(json.loads(json_str))
+                except json.JSONDecodeError:
+                    pass
+    return results
+
+
+def search_flomo(keyword):
+    """搜索 flomo"""
+    results = _flomo_call("memo_search", {"keywords": keyword}, tag="search")
+    if results is None:
+        return None
+    for result in results:
+        if "result" in result:
+            raw = result["result"]
+            # 解析外层：content 是 [{"type":"text","text":"{\"memos\":[...]}"}]
+            content_list = raw.get("content", []) if isinstance(raw, dict) else []
+            all_memos = []
+            for item in content_list:
+                if isinstance(item, dict) and item.get("type") == "text":
+                    text_str = item.get("text", "")
+                    if text_str:
+                        try:
+                            inner = json.loads(text_str)
+                            memos = inner.get("memos", [])
+                            all_memos.extend(memos)
+                        except json.JSONDecodeError:
+                            pass
+            return all_memos
+    return None
 
 
 def _validate_and_extract_domain(content):
@@ -246,54 +258,26 @@ def upload_flomo(content):
     # 转义 content 中的下划线
     content_escaped = _escape_bold_underscores(content)
 
-    payload = json.dumps({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "tools/call",
-        "params": {
-            "name": "memo_create",
-            "arguments": {"content": content_escaped}
-        }
-    }).encode("utf-8")
-
-    req = urllib.request.Request(
-        FLOMO_API_URL,
-        data=payload,
-        headers={
-            "Content-Type": "application/json",
-            "Accept": "application/json, text/event-stream",
-            "Authorization": f"Bearer {FLOMO_TOKEN}"
-        },
-        method="POST"
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            data = resp.read().decode("utf-8")
-            # Parse SSE format
-            for line in data.split("\n"):
-                if line.startswith("data:"):
-                    json_str = line[5:].strip()
-                    if json_str:
-                        result = json.loads(json_str)
-                        # 检查是否是错误响应
-                        if result.get("error"):
-                            err = result["error"]
-                            print(f"    [flomo upload] API error: {err.get('message', err)}")
-                            return None
-                        if "result" in result:
-                            memo = result["result"]
-                            if isinstance(memo, dict) and memo.get("isError"):
-                                print(f"    [flomo upload] API error: {memo}")
-                                return None
-                            if "id" in memo:
-                                return memo["id"]
-                            # Check structuredContent
-                            if "structuredContent" in memo and "id" in memo["structuredContent"]:
-                                return memo["structuredContent"]["id"]
-            return None
-    except Exception as e:
-        print(f"    [flomo upload] error: {e}")
+    results = _flomo_call("memo_create", {"content": content_escaped}, tag="upload")
+    if results is None:
         return None
+    for result in results:
+        # 检查是否是错误响应
+        if result.get("error"):
+            err = result["error"]
+            print(f"    [flomo upload] API error: {err.get('message', err)}")
+            return None
+        if "result" in result:
+            memo = result["result"]
+            if isinstance(memo, dict) and memo.get("isError"):
+                print(f"    [flomo upload] API error: {memo}")
+                return None
+            if "id" in memo:
+                return memo["id"]
+            # Check structuredContent
+            if "structuredContent" in memo and "id" in memo["structuredContent"]:
+                return memo["structuredContent"]["id"]
+    return None
 
 
 def fetch_flomo_memo(memo_id, keyword=None):
@@ -304,55 +288,28 @@ def fetch_flomo_memo(memo_id, keyword=None):
     memo_batch_get 累计长度上限 30000 字——本项目单条 ai-content < 5000 字直接够用。
     """
     # 优先：memo_batch_get 直接按 id 拉完整内容（不受 keyword 长度限制）
-    payload = json.dumps({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "tools/call",
-        "params": {
-            "name": "memo_batch_get",
-            "arguments": {"ids": [memo_id]}
-        }
-    }).encode("utf-8")
-    req = urllib.request.Request(
-        FLOMO_API_URL,
-        data=payload,
-        headers={
-            "Content-Type": "application/json",
-            "Accept": "application/json, text/event-stream",
-            "Authorization": f"Bearer {FLOMO_TOKEN}"
-        },
-        method="POST"
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            data = resp.read().decode("utf-8")
-            for line in data.split("\n"):
-                if line.startswith("data:"):
-                    json_str = line[5:].strip()
-                    if not json_str:
-                        continue
-                    result = json.loads(json_str)
-                    if result.get("error"):
-                        print(f"    [flomo fetch] batch_get error: {result['error'].get('message', result['error'])}")
-                    else:
-                        raw = result.get("result", {})
-                        if isinstance(raw, dict) and not raw.get("isError"):
-                            content_list = raw.get("content", [])
-                            for item in content_list:
-                                if isinstance(item, dict) and item.get("type") == "text":
-                                    text_str = item.get("text", "")
-                                    if text_str:
-                                        try:
-                                            inner = json.loads(text_str)
-                                            if isinstance(inner, dict):
-                                                memos = inner.get("memos", [])
-                                                for m in memos:
-                                                    if isinstance(m, dict) and "content" in m:
-                                                        return m["content"]
-                                        except json.JSONDecodeError:
-                                            return text_str
-    except Exception as e:
-        print(f"    [flomo fetch] batch_get error: {e}")
+    results = _flomo_call("memo_batch_get", {"ids": [memo_id]}, tag="fetch")
+    if results:
+        for result in results:
+            if result.get("error"):
+                print(f"    [flomo fetch] batch_get error: {result['error'].get('message', result['error'])}")
+            else:
+                raw = result.get("result", {})
+                if isinstance(raw, dict) and not raw.get("isError"):
+                    content_list = raw.get("content", [])
+                    for item in content_list:
+                        if isinstance(item, dict) and item.get("type") == "text":
+                            text_str = item.get("text", "")
+                            if text_str:
+                                try:
+                                    inner = json.loads(text_str)
+                                    if isinstance(inner, dict):
+                                        memos = inner.get("memos", [])
+                                        for m in memos:
+                                            if isinstance(m, dict) and "content" in m:
+                                                return m["content"]
+                                except json.JSONDecodeError:
+                                    return text_str
 
     # fallback：memo_search（仅在 batch_get 失败时使用）
     if not keyword or keyword == memo_id or len(keyword) < 4:
@@ -391,50 +348,23 @@ def update_flomo(memo_id, content):
     print(f"  [warning] update_flomo 是覆盖操作（flomo MCP 无版本控制、不可逆）")
     print(f"  调用方必须已 fetch_flomo_memo({memo_id}) 拉旧内容 + 构造合并 markdown 传入 content")
 
-    payload = json.dumps({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "tools/call",
-        "params": {
-            "name": "memo_update",
-            "arguments": {"id": memo_id, "content": content_escaped}
-        }
-    }).encode("utf-8")
-
-    req = urllib.request.Request(
-        FLOMO_API_URL,
-        data=payload,
-        headers={
-            "Content-Type": "application/json",
-            "Accept": "application/json, text/event-stream",
-            "Authorization": f"Bearer {FLOMO_TOKEN}"
-        },
-        method="POST"
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            data = resp.read().decode("utf-8")
-            for line in data.split("\n"):
-                if line.startswith("data:"):
-                    json_str = line[5:].strip()
-                    if json_str:
-                        result = json.loads(json_str)
-                        # 检查是否是错误响应
-                        if result.get("error"):
-                            err = result["error"]
-                            print(f"    [flomo update] API error: {err.get('message', err)}")
-                            return False
-                        # 检查 result 中是否包含 isError
-                        res_content = result.get("result", {})
-                        if isinstance(res_content, dict) and res_content.get("isError"):
-                            print(f"    [flomo update] API error: {res_content}")
-                            return False
-                        if "result" in result:
-                            return True
-            return False
-    except Exception as e:
-        print(f"    [flomo update] error: {e}")
+    results = _flomo_call("memo_update", {"id": memo_id, "content": content_escaped}, tag="update")
+    if results is None:
         return False
+    for result in results:
+        # 检查是否是错误响应
+        if result.get("error"):
+            err = result["error"]
+            print(f"    [flomo update] API error: {err.get('message', err)}")
+            return False
+        # 检查 result 中是否包含 isError
+        res_content = result.get("result", {})
+        if isinstance(res_content, dict) and res_content.get("isError"):
+            print(f"    [flomo update] API error: {res_content}")
+            return False
+        if "result" in result:
+            return True
+    return False
 
 
 def _normalize_flomo_content(content: str) -> str:
