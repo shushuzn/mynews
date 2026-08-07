@@ -67,6 +67,12 @@ cd webui && python3 server.py
 python3 process_inbox.py --auto --content "文章正文"
 ```
 
+超长文本（>2 万字符，避免 Windows 命令行长度限制）推荐从 stdin 传入：
+
+```bash
+cat article.txt | python3 process_inbox.py --auto --content-stdin
+```
+
 ### 非交互式批量处理
 
 从 `rss_sources.opml` 中的所有 RSS 源循环抓取最新条目，自动处理直到全部完成：
@@ -103,7 +109,8 @@ cd webui && python3 server.py
 
 | 参数 | 说明 |
 |------|------|
-| `--content TEXT` | 原材料正文（必填） |
+| `--content TEXT` | 原材料正文（`--content` 与 `--content-stdin` 必填其一） |
+| `--content-stdin` | 从 stdin 读取原材料正文（超长文本推荐，无命令行长度限制） |
 | `--auto` | 全自动模式（AI 自行分析/分类/生成/决策，默认行为） |
 | `--domain`, `--subdomain` | 可选：覆盖 AI 生成的领域 |
 | `--tags "T1 T2 T3"` | 可选：覆盖 AI 生成的标签（首位为信号类型） |
