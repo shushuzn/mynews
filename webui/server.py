@@ -167,41 +167,6 @@ def _rss_background_refresh():
         time.sleep(RSS_INTERVAL)
 
 
-# 后台自动处理开关：默认关闭；MYNEWS_AUTO_BG=1 强制开启 / =0 强制关闭（覆盖持久化状态）
-# 持久化状态存 scripts/.auto_bg.json，前端切换或 curl API 修改后重启服务依然保持
-AUTO_BG_STATE_FILE = SCRIPTS_DIR / ".auto_bg.json"
-AUTO_BG_LOCK = threading.Lock()
-
-def _load_auto_bg_state() -> bool:
-    """启动时读取开关状态：环境变量显式设置优先，其次持久化文件，默认关。"""
-    env = os.environ.get("MYNEWS_AUTO_BG")
-    if env is not None:
-        return env == "1"
-    try:
-        if AUTO_BG_STATE_FILE.exists():
-            return json.loads(AUTO_BG_STATE_FILE.read_text(encoding="utf-8")).get("enabled", False)
-    except Exception:
-        pass
-    return False
-
-AUTO_BG_ENABLED = _load_auto_bg_state()
-
-def _auto_bg_status() -> bool:
-    """读取当前后台自动处理开关状态（运行时可变）。"""
-    with AUTO_BG_LOCK:
-        return AUTO_BG_ENABLED
-
-def _set_auto_bg(enabled: bool):
-    """运行时切换后台自动处理开关，并持久化到文件（重启后保持）。"""
-    global AUTO_BG_ENABLED
-    with AUTO_BG_LOCK:
-        AUTO_BG_ENABLED = enabled
-    try:
-        AUTO_BG_STATE_FILE.write_text(json.dumps({"enabled": enabled}), encoding="utf-8")
-    except Exception as e:
-        print(f"[auto] 持久化开关状态失败: {e}")
-    print(f"[auto] 后台自动处理: {'开启' if enabled else '关闭'}")
-
 _AP_MODULE = None
 
 def _ap():
@@ -216,46 +181,13 @@ def _ap():
             import auto_process
             _AP_MODULE = auto_process
         except SystemExit as e:
-            print(f"[auto] auto_process.py 初始化退出（code={e}），后台自动处理不可用")
+            print(f"[auto] auto_process.py 初始化退出（code={e}），auto_process 模块不可用")
         except Exception as e:
             print(f"[auto] 无法加载 auto_process.py: {e}")
     return _AP_MODULE
 
 def _ap_available() -> bool:
     return _ap() is not None
-
-def _auto_background_process():
-    """后台守护线程：每 RSS_INTERVAL 秒拉取 RSS，自动处理未处理过的条目（复用 auto_process.py）。
-    已处理记录存 scripts/.auto_processed.json，成功/失败/抓取失败都会标记，避免重复。"""
-    ap = _ap()
-    if ap is None:
-        return
-    while True:
-        if not _auto_bg_status():
-            time.sleep(RSS_INTERVAL)
-            continue
-        try:
-            items = ap.fetch_all_rss_items(limit_per_feed=3)
-            # 本地缓存已处理集合：避免循环内每条都全量读文件+解析 JSON
-            # mark_processed 第二参数会同步更新缓存，保持内存与文件一致
-            processed = ap.load_processed()
-            done = 0
-            for it in items:
-                # 处理前实时复查记录；未处理则先认领标记（防止与前端 ⚡ 竞态重复处理），再抓取/处理
-                if it["url"] in processed:
-                    continue
-                ap.mark_processed(it["url"], processed)
-                content, err = ap.fetch_article(it["url"])
-                if err or not content:
-                    print(f"  [auto] 抓取失败，标记跳过: {err or '空内容'} | {it['title'][:40]}")
-                    continue
-                ok, out = ap.process_article(content)
-                done += 1
-                print(f"  [auto] {'成功' if ok else '失败'}: {it['title'][:40]}")
-            print(f"[auto] 后台处理完成: {done} 条新条目")
-        except Exception as e:
-            print(f"[auto] 后台处理异常: {e}")
-        time.sleep(RSS_INTERVAL)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -265,9 +197,6 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path.startswith("/favicon"):
             self.send_response(204)
             self.end_headers()
-        elif self.path.startswith("/api/auto-bg"):
-            # 查询后台自动处理开关状态：/api/auto-bg
-            self._json_response(True, {"enabled": _auto_bg_status()})
         elif self.path.startswith("/api/processed"):
             # 服务端已处理记录（与前端 localStorage 合并，避免重复处理）
             try:
@@ -292,7 +221,6 @@ class Handler(BaseHTTPRequestHandler):
                 "items": len(items),
                 "cache_ts": RSS_CACHE.get("ts", 0),
                 "interval": RSS_INTERVAL,
-                "auto_bg": _auto_bg_status(),
             })
         elif self.path.startswith("/api/rss/feeds"):
             # RSS 源列表及启用状态：GET /api/rss/feeds
@@ -359,14 +287,6 @@ class Handler(BaseHTTPRequestHandler):
                     self._json_response(False, "无效的 JSON 请求体")
                     return
                 self._handle_process(data)
-        elif self.path.startswith("/api/auto-bg"):
-            # 运行时切换后台自动处理：POST {"enabled": true|false}
-            try:
-                body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))).decode("utf-8"))
-                _set_auto_bg(bool(body.get("enabled")))
-                self._json_response(True, {"enabled": _auto_bg_status()})
-            except Exception as e:
-                self._json_response(False, f"切换失败: {e}")
         elif self.path.startswith("/api/rss/feeds/toggle-all"):
             # 批量切换全部源启用状态：POST {"enabled": true|false}（跳过 MYNEWS_RSS_ONLY 硬锁定的源）
             try:
@@ -553,9 +473,6 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     # 后台线程：每 10 分钟自动刷新 RSS 缓存
     threading.Thread(target=_rss_background_refresh, daemon=True).start()
-    if AUTO_BG_ENABLED:
-        threading.Thread(target=_auto_background_process, daemon=True).start()
-
     # IPv6 双栈监听（IPv4/IPv6 均可访问，兼容 localhost 解析为 ::1 的环境）
     class _DualStackHTTPServer(ThreadingHTTPServer):
         address_family = socket.AF_INET6
@@ -573,7 +490,6 @@ if __name__ == "__main__":
         server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     print(f"[mynews] Web UI 启动: http://localhost:{PORT}")
     print(f"   后台 RSS 自动刷新已启动（每 {RSS_INTERVAL} 秒）")
-    print(f"   后台自动处理: {'已启动' if AUTO_BG_ENABLED else '已关闭（MYNEWS_AUTO_BG=0）'}")
     print(f"   按 Ctrl+C 停止")
     try:
         server.serve_forever()
