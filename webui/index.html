@@ -686,6 +686,25 @@ textarea:focus, input[type="text"]:focus {
   .status-wrap { min-width: 0; width: 100%; }
   .res-tab { padding: 8px 10px; font-size: 12.5px; }
 }
+.sidebar-tabs {
+  display: flex; gap: 2px; background: var(--surface-2);
+  border: 1px solid var(--separator-light); border-radius: var(--radius-md);
+  padding: 4px; box-shadow: var(--shadow-sm);
+}
+.sidebar-tab {
+  flex: 1; padding: 8px 6px; border: none; background: none;
+  border-radius: var(--radius-sm); font-size: 12.5px; font-weight: 600;
+  color: var(--text-3); cursor: pointer; font-family: inherit;
+  transition: all .18s var(--ease);
+}
+.sidebar-tab:hover { color: var(--text); }
+.sidebar-tab.active {
+  background: var(--surface); color: var(--blue);
+  box-shadow: var(--shadow-sm);
+}
+.sidebar-panel .pane { display: none; }
+.sidebar-panel .pane.active { display: flex; flex-direction: column; gap: 10px; }
+.sidebar-panel .pane .rss-list { max-height: 50vh; }
 </style>
 </head>
 <body>
@@ -819,27 +838,6 @@ textarea:focus, input[type="text"]:focus {
       </div>
     </div>
 
-    <!-- RSS 信息流 -->
-    <div class="card fade-in" id="rssCard">
-      <div class="card-title"><span class="t-ico purple">📡</span> RSS 最新
-        <span class="t-side">
-          <button class="sample-btn" onclick="showFeedManager()" title="管理 RSS 源启用状态">源管理</button>
-          <button class="sample-btn" onclick="refreshRss()">刷新</button>
-        </span>
-      </div>
-      <div class="rss-toolbar">
-        <select id="rssSourceFilter" onchange="renderRss()">
-          <option value="">全部来源</option>
-        </select>
-        <span class="rss-count" id="rssCount"></span>
-        <span class="rss-count rss-enabled" id="rssEnabled" style="display:none"></span>
-        <span style="margin-left:auto;font-size:11px;color:var(--text-3)" id="rssUpdated"></span>
-      </div>
-      <div class="rss-list" id="rssList">
-        <div class="empty-state">⏳ 正在加载 RSS…</div>
-      </div>
-    </div>
-
     <!-- Result -->
     <div id="result-section" style="display:none">
       <div class="card fade-in">
@@ -947,7 +945,7 @@ textarea:focus, input[type="text"]:focus {
   </div>
 </div>
 
-<!-- 侧栏弹层（菜单 / 概览） -->
+<!-- 侧栏弹层（导航 / 统计 / RSS 三 Tab） -->
 <div class="shortcut-overlay" id="sidebarOverlay" onclick="if(event.target===this)hideSidebar()">
   <div class="shortcut-panel sidebar-panel">
     <div style="display:flex;align-items:center;gap:10px;padding:2px 2px 4px">
@@ -957,20 +955,50 @@ textarea:focus, input[type="text"]:focus {
         <div style="font-size:11px;color:var(--text-3);margin-top:1px" id="sidebarDate"></div>
       </div>
     </div>
-    <div class="nav">
-      <button class="nav-item active" onclick="goNewNote()"><span class="n-ico">📝</span> 新建笔记</button>
-      <button class="nav-item" onclick="toggleAuto();hideSidebar()"><span class="n-ico">⚡</span> 自动处理 <span class="n-badge" id="navAutoState">关</span></button>
-      <button class="nav-item" onclick="showRecent()"><span class="n-ico">🕘</span> 最近处理 <span class="n-badge" id="navRecentCount">0</span></button>
-      <button class="nav-item" onclick="showFeedManager()"><span class="n-ico">📡</span> RSS 源 <span class="n-badge" id="navFeedCount">–</span></button>
-      <button class="nav-item" onclick="showSettings()"><span class="n-ico">⚙️</span> 设置</button>
+    <div class="sidebar-tabs">
+      <button class="sidebar-tab active" data-tab="nav" onclick="switchSidebarTab('nav')">📋 导航</button>
+      <button class="sidebar-tab" data-tab="stats" onclick="switchSidebarTab('stats')">📊 统计</button>
+      <button class="sidebar-tab" data-tab="rss" onclick="switchSidebarTab('rss')">📡 RSS</button>
     </div>
-    <div class="stat-card">
-      <div class="sc-label">📊 统计概览</div>
-      <div class="stat-grid" style="grid-template-columns:1fr 1fr">
-        <div class="sg-item"><div class="sg-num" id="statToday">0</div><div class="sg-label">今日</div></div>
-        <div class="sg-item"><div class="sg-num" id="statTotal">0</div><div class="sg-label">累计</div></div>
+
+    <div class="pane active" id="pane-nav">
+      <div class="nav">
+        <button class="nav-item active" onclick="goNewNote()"><span class="n-ico">📝</span> 新建笔记</button>
+        <button class="nav-item" onclick="toggleAuto();hideSidebar()"><span class="n-ico">⚡</span> 自动处理 <span class="n-badge" id="navAutoState">关</span></button>
+        <button class="nav-item" onclick="showRecent()"><span class="n-ico">🕘</span> 最近处理 <span class="n-badge" id="navRecentCount">0</span></button>
+        <button class="nav-item" onclick="showFeedManager()"><span class="n-ico">📡</span> RSS 源 <span class="n-badge" id="navFeedCount">–</span></button>
+        <button class="nav-item" onclick="showSettings()"><span class="n-ico">⚙️</span> 设置</button>
       </div>
     </div>
+
+    <div class="pane" id="pane-stats">
+      <div class="stat-card">
+        <div class="sc-label">📊 统计概览</div>
+        <div class="stat-grid" style="grid-template-columns:1fr 1fr">
+          <div class="sg-item"><div class="sg-num" id="statToday">0</div><div class="sg-label">今日</div></div>
+          <div class="sg-item"><div class="sg-num" id="statTotal">0</div><div class="sg-label">累计</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pane" id="pane-rss">
+      <div class="rss-toolbar">
+        <select id="rssSourceFilter" onchange="renderRss()">
+          <option value="">全部来源</option>
+        </select>
+        <button class="sample-btn" onclick="refreshRss()" title="立即拉取">刷新</button>
+        <button class="sample-btn" onclick="showFeedManager()" title="管理 RSS 源">源管理</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-3)">
+        <span class="rss-count" id="rssCount"></span>
+        <span class="rss-count rss-enabled" id="rssEnabled" style="display:none"></span>
+        <span style="margin-left:auto" id="rssUpdated"></span>
+      </div>
+      <div class="rss-list" id="rssList">
+        <div class="empty-state">⏳ 切到 RSS 后自动加载</div>
+      </div>
+    </div>
+
     <button class="sc-close" onclick="hideSidebar()">关闭</button>
   </div>
 </div>
@@ -1184,8 +1212,19 @@ document.querySelectorAll('.btn-primary').forEach(function(b) {
 });
 
 /* ============ 侧栏弹层 ============ */
+function switchSidebarTab(name) {
+  document.querySelectorAll('.sidebar-tab').forEach(b =>
+    b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('.sidebar-panel .pane').forEach(p =>
+    p.classList.toggle('active', p.id === 'pane-' + name));
+  if (name === 'rss') {
+    refreshRssStats();
+    if (!_rssLoaded) loadRss(); else renderRss();
+  }
+}
 function showSidebar() {
   renderStats();
+  switchSidebarTab('nav');
   document.getElementById('sidebarOverlay').classList.add('show');
 }
 function hideSidebar() {
@@ -2078,7 +2117,6 @@ function useRssItem(url) {
   saveDraft();
   document.getElementById('urlPreview').style.display = 'block';
   previewUrl();
-  document.getElementById('rssCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
   setStatus('已填入 RSS 条目 URL', 'done');
 }
 function toggleAuto() {
@@ -2407,8 +2445,7 @@ updateSubmitState();
 refreshRssStats();
 moveSegSlider('text');
 restoreDraft();
-loadRss();
-// 加载 RSS 源启用状态到侧边栏徽章（失败静默，不影响页面）
+// 加载 RSS 源启用状态到侧边栏徽标（失败静默，不影响页面）
 fetch('/api/rss/feeds').then(r => r.json()).then(r => {
   if (r.success && r.output) {
     _feedData = r.output;
