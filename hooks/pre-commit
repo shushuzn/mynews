@@ -155,6 +155,14 @@ def validate_content(content, filename):
                 errors.append(f"标题禁止使用连字符（-）：'{title}'")
             if '/' in title:
                 errors.append(f"标题禁止使用半角斜杠（/）：'{title}'")
+            if ' ' in title:
+                errors.append(f"标题禁止使用空格：'{title}'")
+            if '+' in title:
+                errors.append(f"标题禁止使用加号（+）：'{title}'")
+            if '：' in title:
+                errors.append(f"标题禁止使用全角冒号（：）：'{title}'")
+            if '–' in title:
+                errors.append(f"标题禁止使用 en-dash（–）：'{title}'")
             name_no_ext = filename[:-3] if filename.endswith('.md') else filename
             file_prefix = '_'.join(name_no_ext.split('_')[:2])
             if not title.startswith(file_prefix + '_'):
