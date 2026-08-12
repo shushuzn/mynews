@@ -130,6 +130,12 @@ def validate_content(content, filename):
         if not any(t in tags for t in SIGNAL_TYPES):
             errors.append(f"标签必须含 #信号类型 之一: {SIGNAL_TYPES}")
 
+    # 除第一行外禁止出现 #（标签只允许在第一行，避免散落标签/误用 Markdown 标题）
+    for i, line in enumerate(lines[1:], start=1):
+        if '#' in line:
+            snippet = line.strip()[:60]
+            errors.append(f"除第一行（标签行）外禁止出现 '#'（第 {i+1} 行：{snippet}）")
+
     for pattern, msg in FORBIDDEN_PATTERNS:
         if pattern.search(content):
             errors.append(msg)
