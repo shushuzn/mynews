@@ -413,7 +413,11 @@ class Handler(BaseHTTPRequestHandler):
             self._json_response(False, "请提供正文内容、URL 或图片")
             return
 
-        # 复用 auto_process 的处理逻辑（调用 process_inbox.py 子进程）
+        # 懒加载 auto_process 模块（FLOMO_TOKEN 已注入，避免 auto_process 顶层 sys.exit(1) 杀死 server）
+        ap = _ap()
+        if ap is None:
+            self._json_response(False, "auto_process 模块加载失败（FLOMO_TOKEN 缺失？）")
+            return
         success, full_output = ap.process_article(content)
         self._json_response(success, full_output)
 
