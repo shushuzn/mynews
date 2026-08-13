@@ -250,10 +250,8 @@ def _validate_and_extract_domain(content):
 
 
 def _escape_bold_underscores(content: str) -> str:
-    """将加粗标题中的下划线转义为 \\_（flomo MCP 会转义下划线）。"""
-    def escape_underscore_in_bold(match):
-        return "**" + match.group(1).replace("_", "\\_") + "**"
-    return re.sub(r'^\*\*([^*]+)\*\*$', escape_underscore_in_bold, content, flags=re.MULTILINE)
+    """空操作：flomo MCP 自身会把 _ 转义为 \\_，服务器再预转义会变成 \\\_（用户看到像 /）。直接返回原内容，让 MCP 单层转义。"""
+    return content
 
 
 def upload_flomo(content):
@@ -262,7 +260,7 @@ def upload_flomo(content):
     content = _normalize_flomo_content(content)
     # 验证 domain/subdomain
     _validate_and_extract_domain(content)
-    # 转义 content 中的下划线
+    # 下划线转义：flomo MCP 自身单层转义，此处仅保留调用点（见 _escape_bold_underscores）
     content_escaped = _escape_bold_underscores(content)
 
     results = _flomo_call("memo_create", {"content": content_escaped}, tag="upload")
@@ -346,7 +344,7 @@ def update_flomo(memo_id, content):
     content = _normalize_flomo_content(content)
     # 验证 domain/subdomain
     _validate_and_extract_domain(content)
-    # 转义 content 中的下划线
+    # 下划线转义：flomo MCP 自身单层转义，此处仅保留调用点（见 _escape_bold_underscores）
     content_escaped = _escape_bold_underscores(content)
 
     # === update_flomo 安全约束 ===

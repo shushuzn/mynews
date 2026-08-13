@@ -70,11 +70,10 @@ class TestValidateDomain(unittest.TestCase):
 
 
 class TestEscapeBoldUnderscores(unittest.TestCase):
-    def test_escapes_title_underscores(self):
+    def test_title_underscores_unchanged(self):
+        # flomo MCP 自身会把 _ 转义为 \_，服务器端不再预转义（避免双重转义 \\\_）
         out = pi._escape_bold_underscores("**计算机科学_算法_排序算法**\n正文")
-        self.assertIn("**计算机科学\\_算法\\_排序算法**", out)
-        # 非标题行（不在行首 ** 结尾 **）不受影响
-        self.assertIn("\n正文", out)
+        self.assertEqual(out, "**计算机科学_算法_排序算法**\n正文")
 
     def test_no_underscore_unchanged(self):
         out = pi._escape_bold_underscores("**简单标题**\n正文")
