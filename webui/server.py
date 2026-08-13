@@ -369,7 +369,9 @@ class Handler(BaseHTTPRequestHandler):
 
         # URL 抓取：拉取网页正文
         if url and not content:
+            print(f"[handle] 开始抓取 URL: {url}", flush=True)
             content = self._fetch_url(url)
+            print(f"[handle] URL 抓取完成: {len(content)} 字" if content else "[handle] URL 抓取失败", flush=True)
         # 检测反爬关键词（开头区域）
         anti_patterns = ['环境异常', 'captcha', 'verify you are human', 'access denied']
         if url and not image_file and any(p in content[:200].lower() for p in anti_patterns):
@@ -418,7 +420,10 @@ class Handler(BaseHTTPRequestHandler):
         if ap is None:
             self._json_response(False, "auto_process 模块加载失败（FLOMO_TOKEN 缺失？）")
             return
+        t0 = time.time()
+        print(f"[handle] 开始处理 {len(content)} 字正文...", flush=True)
         success, full_output = ap.process_article(content)
+        print(f"[handle] 处理完成，耗时 {time.time()-t0:.1f}s, success={success}", flush=True)
         self._json_response(success, full_output)
 
     def _json_response(self, success, output):
