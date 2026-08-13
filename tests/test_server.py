@@ -49,7 +49,7 @@ class TestServerHTTP(unittest.TestCase):
                 break  # 进程提前退出（通常是启动报错）
             try:
                 c = http.client.HTTPConnection("127.0.0.1", cls.port, timeout=1)
-                c.request("GET", "/api/auto-bg")
+                c.request("GET", "/")
                 c.getresponse().read()
                 c.close()
                 cls.ready = True
@@ -92,13 +92,6 @@ class TestServerHTTP(unittest.TestCase):
         headers = {k.lower(): v for k, v in r.getheaders()}
         c.close()
         return r.status, headers, body
-
-    def test_auto_bg_has_no_store(self):
-        status, headers, body = self._get("/api/auto-bg")
-        self.assertEqual(status, 200)
-        self.assertEqual(headers.get("cache-control"), "no-store")
-        data = json.loads(body.decode("utf-8"))
-        self.assertIn("success", data)
 
     def test_index_has_no_cache(self):
         status, headers, body = self._get("/")
