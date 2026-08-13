@@ -34,9 +34,8 @@ class TestValidateDomain(unittest.TestCase):
         self.assertIn("**概念**", str(ctx.exception))
 
     def test_missing_source(self):
-        with self.assertRaises(ValueError) as ctx:
-            pi._validate_and_extract_domain(VALID_CONTENT.replace("**来源**：测试来源", ""))
-        self.assertIn("**来源**", str(ctx.exception))
+        # 来源已不强制校验，缺失不报错
+        pi._validate_and_extract_domain(VALID_CONTENT.replace("**来源**：测试来源", ""))  # 应正常通过
 
     def test_not_tag_first_line(self):
         bad = "普通文本\n" + VALID_CONTENT
